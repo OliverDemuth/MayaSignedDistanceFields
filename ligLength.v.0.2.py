@@ -58,12 +58,14 @@ T2 = 10.0**FP_TOLERANCE
 class nodePoint(object):
     __slots__ = ('parent', 'pos', 'uv', 'g', 'h', 'f', 'polyID')
 
-    def __init__(self, parent=None, pos=None, uv=None, dist = 0, g=0, h=0, f=0, polyID=-1):
+    def __init__(self, parent=None, pos=None, uv=None, dist = 0, g=0, h=0, f=0, neighbors=None, poly=None, ID=-1):
         self.parent = parent
         self.pos = pos # 3D position (x,y,z)
         self.uv = uv # 2D position (u,v,0)
         self.dist = dist #float value
-        self.polyID = polyID # ID of polygon mesh
+	self.neighbors = neighbors # neighboring nodes
+        self.poly = poly # polygon mesh
+	self.ID = ID # vertex ID
         
         # g, h and f values for A* search
 
@@ -229,7 +231,7 @@ def polyApproxSlice( oPos, cutDir, mesh, res ):
 
 			tVtx = tVtcs[j].split('.[ | ]')
 			pad = '{:05d}'.format(tVtx[2])
-			nNode = tVtx + '_node_' + pad
+			nNode = tVtx[0] + '_node_' + pad
 			
 			# calculate UV values
 
@@ -239,8 +241,19 @@ def polyApproxSlice( oPos, cutDir, mesh, res ):
 			u = pOffset.dot(LigDirNorm)
 			v = pOffset.dot(vCrossNorm)
 			nodeUV = (u,v,0)
-
-			nodePoint(nNode,pos=nodePos, uv=nodeUV, polyID=tempPlane)
+			
+			# the following might not be needed:
+			#
+			# vtxNeighbors = pm.MeshVertex(tVtcs[j]).connectedVertices()
+			#
+			# for k in range(len(vtxNeighbors)):
+			#	tVtxNeighbor= vtxNeighbors[k].split('.[ | ]')
+			#	padNeighbor = '{:05d}'.format(tVtxNeighbor[2])
+			#	nNeighbors[k] = tVtxNeighbor[0] + '_node_' + padNeighbor
+			# 
+			#nodePoint(nNode, pos=nodePos, uv=nodeUV, neighbors=nNeighbors, poly=tempPlane, ID= pad)
+			
+			nodePoint(nNode, pos=nodePos, uv=nodeUV, poly=tempPlane, ID= pad)
 
     	tempEdges = pm.polyListComponentConversion(tempPlaneF, ff = True, te = True)
     	tEdges = pm.filterExpand(tempEdges, sm = 32)
@@ -376,7 +389,8 @@ def intersect_point(p0, p1, edge):
     	return p1
 
     intersect_P = p0 + '_' + p1 + '_' + edge + '_intersection'
-    intersect_ID = edge.p1.polyID
+    intersect_ID = edge.p1.ID
+    intersectNeighbors = [edge.p1, edge.p2]
 
     if edge.p1.uv[0] == edge.p2.uv[0]:
         if p0.uv[0] == p1.uv[0]:
@@ -386,18 +400,18 @@ def intersect_point(p0, p1, edge):
         intersect_u = edge.p1.[0]
         intersect_v = pslope * (intersect_u - p0.uv[0]) + p0.uv[1]
         intersect_UV = (intersect_u,intersect_v,0)
-        intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, p0.uv[2] - 0).length()
+        intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
         
-        return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, polyID = intersect_ID)
+        return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_P, ID=intersect_ID)
 
     if p0.uv[0] == p1.uv[0]:
         eslope = (edge.p1.uv[1] - edge.p2.uv[1]) / (edge.p1.uv[0] - edge.p2.uv[0])
         intersect_u = p0.uv[0]
         intersect_v = eslope * (intersect_u - edge.p1.uv[0]) + edge.p1.uv[1]
 		intersect_UV = (intersect_u,intersect_v,0)
-        intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, p0.uv[2] - 0).length()
+        intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
         
-        return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, polyID = intersect_ID)
+        return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_P, ID=intersect_ID)
 
     pslope = (p0.uv[1] - p1.uv[1]) / (p0.uv[0] - p1.uv[0])
     eslope = (edge.p1.uv[1] - edge.p2.uv[1]) / (edge.p1.uv[0] - edge.p2.uv[0])
@@ -408,9 +422,9 @@ def intersect_point(p0, p1, edge):
     intersect_u = (eslope * edge.p1.uv[0] - pslope * p0.uv[0] + p0.uv[1] - edge.p1.uv[1]) / (eslope - pslope)
     intersect_v = eslope * (intersect_u - edge.p1.uv[0]) + edge.p1.uv[1]
     intersect_UV = (intersect_u,intersect_v,0)
-    intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, p0.uv[2] - 0).length()
+    intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
     
-    return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, polyID = intersect_ID)
+    return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_P, ID=intersect_ID)
 
 
 # ========== angle direction function ==========
@@ -455,21 +469,51 @@ def ShootRay(point,target,edgeSet)
 		return target
 
 
-# ========== scan function ========== # WIP
+# ========== scan function ==========
 
-def SCAN(u, p, I, F = AS(accw, acw), d) 
+def isOnPolygon(point,polygon): # check if point is part of polygon
+    return bool(point.poly == polygon)
 
-	# scan polygon 'p' from intersection 'I' in direction 'd' 
-	#	to find a turning point 'n' # (F is the arcsector 'AS' defined by (accw and acw))
+def SCAN(u, p, I, accw, acw, points)  # Find CCW and CW turningpoints of intersection polygon mesh 'p' from point 'u' within arc defined by accw and acw
 
+	# this appears to be rather brute force-ish as all angles of the pointSubset are calculated and then checked against the projection field defined by accw and acw
 	
-
-	if scan goes out of F or touches part of the outer-boundary 
-		then return
-
-	end if
-
-												
+	#get subset of points that lay on intersection polygon
+	
+	pointsSubset = [point for point in points if isOnPolygon(point,p)]
+	
+	iDir = dt.vector(I.uv-u.uv).normal()
+	pointAnlgeSet = []
+	
+	#sort by angles
+	
+	for point in pointsSubset:
+		
+		# CCW = 1
+		# CW = -1
+		
+		pDir = dt.vector(point.uv-u.uv).normal()
+		angle = CCW(u,I,point)*pm.dot(iDir,pDir) # does this work for angles 90° or does the sign become an issue??
+		
+		if angle <= accw or angle >= acw
+			point.angle = sign*angle
+			pointAngleSet.append(point)
+		else
+			point.angle = None
+		
+	pointAngleSet.sort(key=lambda x:x.angle) 
+	
+	if pointAngleSet[0].angle < 0: # find CW turningpoint 
+		turningPointCW = pointAngleSet[0]
+	else:
+		turningPointCW = None
+	
+	if pointAngleSet[len(pointsSubsetCCW)-1].angle > 0:  # find CCW turningpoint
+		turningPointCCW = pointsSubsetCCW[len(pointsSubsetCCW)-1]
+	else:
+		turningPointCCW = None
+	
+	return [turningPointCW,turningPointCCW] # return turningpoints
 
 
 # ========== A* search algorithm ========== // WIP
