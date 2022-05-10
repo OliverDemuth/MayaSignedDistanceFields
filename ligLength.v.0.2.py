@@ -43,6 +43,7 @@
 import pymel.core as pm
 import pymel.core.datatypes as dt
 
+PI = 3.141592653589793
 INF = 10000
 CCW = 1
 CW = -1
@@ -447,19 +448,17 @@ def ccw(A, B, C):
 
 def ShootRay(point,target,edgeSet)
 
-	counter = 0
 	intersectP = []
 
 	for edge in edgeSet:
 
 		if intersect( s, t, edgeSet[i] ) == 1: 
 
-			intersectP[counter] = intersect_point(s, t, edgeSet[i])
-			counter += 1
-
+			intersectP.append = intersect_point(s, t, edgeSet[i])
+			
 			# might also need to check for turning points, see Hechenberger et al. 2020 RayScan lines 25-28
 
-	intersectP.sort(key = dist)
+	intersectP.sort(key=lambda point:point.dist)
 
 	# if no intersection found returns target
 
@@ -469,46 +468,87 @@ def ShootRay(point,target,edgeSet)
 		return target
 
 
-# ========== scan function ==========
+# ========== point on polygon function =========
 
 def isOnPolygon(point,polygon): # check if point is part of polygon
-    return bool(point.poly == polygon)
+	return bool(point.poly == polygon)
 
-def SCAN(u, p, I, accw, acw, points)  # Find CCW and CW turningpoints of intersection polygon mesh 'p' from point 'u' within arc defined by accw and acw
+# ========== point in triangle function ==========
 
-	# this appears to be rather brute force-ish as all angles of the pointSubset are calculated and then checked against the projection field defined by accw and acw
+def PointInTriangle(p, p0, p1, p2): # check if point 'p' is within or outside the triangle (p0,p1,p2)
 	
-	#get subset of points that lay on intersection polygon
+	s = (p0.uv[0] - p2.uv[0]) * (p.uv[1] - p2.uv[1]) - (p0.uv[1] - p2.uv[1]) * (p.uv[0] - p2.uv[0])
+	t = (p1.uv[0] - p0.uv[0]) * (p.uv[1] - p0.uv[1]) - (p1.uv[1] - p0.uv[1]) * (p.uv[0] - p0.uv[0])
 	
-	pointsSubset = [point for point in points if isOnPolygon(point,p)]
+	if (s < 0) != (t < 0) and s != 0 and t != 0:
+		return false
+
+	d = (p2.uv[0] - p1.uv[0]) * (p.uv[1] - p1.uv[1]) - (p2.uv[1] - p1.uv[1]) * (p.uv[0] - p1.uv[0])
+	return d == 0 or (d < 0) == (s + t <= 0)
+
+
+# ========== scan function ========== 
+
+def SCAN(u, p, I, accwDir=None, acwDir=None, points)  # accwDir and acwDir are optional, if they are not supplied it is assumed that the arc sector is 2 PI
+
+	# Find CCW and CW turningpoints of intersection polygon mesh 'p' from point 'u' within arc defined by accw and acw
+	# first get all points within the arc sector described by 'accwDir' and 'acwDir' and then calculate their angles and sort them accoridingly to find turning points
+	
+	# accwDir = dt.vector(accw.uv-u.uv).normal()
+	# acwDir = dt.vector(acw.uv-u.uv).normal()
+	
+	# get subset of points that are part of intersection polygon
+	
+	polygonSubset = [point for point in points if isOnPolygon(point,p) == True]
+	
+	# check if accwDir and acwDir have been supplied
+	
+	if not accwDir:
+		if not acwDir:
+			pointWAS = polygonSubset # if angle sector is not suplied all points are within angle sector 
+		else:
+			accwDir == [-1,0,0]
+	else:
+		if not acwDir:
+			acwDir == [-1,0,0]
+			
+	# check if pointWAS exists, if it already does skip angle calculations
+			
+	if not pointWAS:
+		
+		angleAS = pm.atan2(acwDir[1], acwDir[0]) - pm.atan2(accwDir[1], accwDir[0]) # angle of the arc sector described by 
+
+		accw = (u.uv+accwDir)*INF
+		acw = (u.uv+acwDir)*INF
+
+		# get points in arc sector described by 'accw' and 'acw' and  exclude all other ones
+
+		if angleAS < PI and angleAS > 0 or anlgeAS > -PI and angleAS < 0: # check if angle sector is smaller than 180°
+			pointsWAS = [point for point in pointsSubset if PointInTriangle(point,u,accw,acw) == True] # get points within angle sector
+		elif angleAS > PI and angleAS < 2*PI or anlgeAS < -PI and anlgeAS > -2*PI: # check if angle sector is bigger than 180°
+			pointsWAS = [point for point in pointsSubset if PointInTriangle(point,u,accw,acw) == False] # get points outside angle sector
+		else:
+			pointWAS = pointsSubset # angle is either 0 or 2*PI
 	
 	iDir = dt.vector(I.uv-u.uv).normal()
+	
 	pointAnlgeSet = []
 	
 	#sort by angles
 	
-	for point in pointsSubset:
-		
-		# CCW = 1
-		# CW = -1
+	for point in pointsWAS: # Currently brute force, could be further sped up with Lee's scan alorigthm, however, since points hopefully already massively reduced less of an issue?
 		
 		pDir = dt.vector(point.uv-u.uv).normal()
-		angle = CCW(u,I,point)*pm.dot(iDir,pDir) # does this work for angles 90° or does the sign become an issue??
-		
-		if angle <= accw or angle >= acw
-			point.angle = sign*angle
-			pointAngleSet.append(point)
-		else
-			point.angle = None
-		
-	pointAngleSet.sort(key=lambda x:x.angle) 
+		point.angle = pm.atan2(pDir[1], pDir[0]) - pm.atan2(iDir[1], iDir[0]) # get angle from u between point and intersection
 	
-	if pointAngleSet[0].angle < 0: # find CW turningpoint 
+	pointsWAS.sort(key=lambda point:point.angle) 
+	
+	if pointsWAS[0].angle < 0: # find CW turningpoint 
 		turningPointCW = pointAngleSet[0]
 	else:
 		turningPointCW = None
 	
-	if pointAngleSet[len(pointsSubsetCCW)-1].angle > 0:  # find CCW turningpoint
+	if pointsWAS[len(pointsWAS)-1].angle > 0:  # find CCW turningpoint
 		turningPointCCW = pointsSubsetCCW[len(pointsSubsetCCW)-1]
 	else:
 		turningPointCCW = None
