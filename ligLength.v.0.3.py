@@ -266,14 +266,14 @@ def ShootRay(point,target,edgeSet)
 			
 			# might also need to check for turning points, see Hechenberger et al. 2020 RayScan lines 25-28
 
-	# get closest intersection point
-	intersectP.sort(key=lambda point:point.dist)
 
-	# if no intersection found returns target
-
-	if counter > 0:
+	if len(intersectP) > 0: # get closest intersection point
+		
+		intersectP.sort(key=lambda point:point.dist)
 		return intersectP[0]
-	else:
+		
+	else: # if no intersection found returns target
+
 		return target
 
 
@@ -615,9 +615,9 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 			if child in open_list: # if neighbor is already in open_list compare g values
 				if tempG < child.g:
 					child.g = tempG
-				else:
-					child.g = tempG
-					openlist.append(child)
+			else:
+				child.g = tempG #double check this
+				openlist.append(child)
 			
 			child.h = dt.vector(child.pos-end_node.pos).length
 			child.f = child.h + child.g
