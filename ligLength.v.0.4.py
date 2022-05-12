@@ -1,4 +1,4 @@
-#	ligLength.v.0.3.py 
+#	ligLength.v.0.4.py 
 #
 #   This script calculates the shortest path (length) of a ligament from origin to
 #   insertion wrapping around the proximal and distal bone meshes. It generates an
@@ -6,7 +6,7 @@
 #   shortest distance. 
 #
 #   Written by Oliver Demuth and Vittorio la Barbera 09.05.2022
-#   Last updated 11.05.2022 - Oliver Demuth
+#   Last updated 12.05.2022 - Oliver Demuth
 #
 #   SYNOPSIS:
 #
@@ -46,7 +46,6 @@ import pymel.core.datatypes as dt
 
 # ========== constants ==========
 
-PI = 3.141592653589793
 INF = 10000
 CCW = 1
 CW = -1
@@ -61,17 +60,18 @@ T2 = 10.0**FP_TOLERANCE
 #A Point class for A* Pathfinding
 
 class nodePoint(object):
-    __slots__ = ('name', 'parent', 'pos', 'uv', 'dist' 'g', 'h', 'f', 'poly', 'ID')
+    __slots__ = ('name', 'parent', 'pos', 'uv', 'dist', 'angle', 'g', 'h', 'f', 'poly', 'ID')
 
-    def __init__(self, name, parent=None, pos=None, uv=None, dist=0, g=0, h=0, f=0, neighbors=None, poly=-1, ID=-1):
+    def __init__(self, name, parent=None, pos=None, uv=None, dist=0, angle=0, g=0, h=0, f=0, neighbors=None, poly=-1, ID=-1):
         self.name = name
-	self.parent = parent
+		self.parent = parent
         self.pos = pos # 3D position (x,y,z)
         self.uv = uv # 2D position (u,v,0)
-        self.dist = dist #float value
-	self.neighbors = neighbors # neighboring nodes
+        self.dist = dist #distance to other point
+        self.angle = angle # angle in rad
+		self.neighbors = neighbors # neighboring nodes
         self.poly = poly # polygon mesh
-	self.ID = ID # vertex ID
+		self.ID = ID # vertex ID
         
         # g, h and f values for A* search
 
@@ -127,6 +127,11 @@ def intersect( p0, p1, edge ):
 	#	edge = line segment to check if it crosses (intersects) segment p0p1
 	# ======================================== #
 
+	# check if either point is in edge
+
+	if p0 in edge or p1 in edge: 
+		intersection = 1
+		return intersection
     
 	# get edge points from nodeEdge class
 
@@ -150,7 +155,6 @@ def intersect( p0, p1, edge ):
 	if (((-s2x * s1y + s1x * s2y)*T)/T2) == 0: # line segments are parallel
 
 		intersection = -1
-
 		return intersection
 
 	else: # line segments not parallel
@@ -179,15 +183,20 @@ def intersect_point(p0, p1, edge):
 	#	edge = line segment to calculate intersection point with 
 	# ======================================== #
 
-    
+    # check if either point is in intersection
+
 	if p0 in edge: 
 		return p0
 	if p1 in edge: 
 		return p1
 
+	# get name, polygon and neighbors
+
 	intersect_P = p0 + '_' + p1 + '_' + edge + '_intersection'
-	intersect_ID = edge.p1.ID
-	intersectNeighbors = [edge.p1, edge.p2]
+	intersect_Poly = edge.p1.poly
+	intersectNeighbors = (edge.p1, edge.p2)
+
+	# get intersection point uv coordinates
 
 	if edge.p1.uv[0] == edge.p2.uv[0]:
 		if p0.uv[0] == p1.uv[0]:
@@ -199,7 +208,7 @@ def intersect_point(p0, p1, edge):
 		intersect_UV = (intersect_u,intersect_v,0)
 		intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
         
-        return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_P, ID=intersect_ID)
+        return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_Poly)
 
     	if p0.uv[0] == p1.uv[0]:
 		eslope = (edge.p1.uv[1] - edge.p2.uv[1]) / (edge.p1.uv[0] - edge.p2.uv[0])
@@ -208,7 +217,7 @@ def intersect_point(p0, p1, edge):
 		intersect_UV = (intersect_u,intersect_v,0)
 		intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
 
-		return nodePoint(intersect_P, uv=intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_P, ID=intersect_ID)
+		return nodePoint(intersect_P, uv=intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_Poly)
 
 	pslope = (p0.uv[1] - p1.uv[1]) / (p0.uv[0] - p1.uv[0])
 	eslope = (edge.p1.uv[1] - edge.p2.uv[1]) / (edge.p1.uv[0] - edge.p2.uv[0])
@@ -221,7 +230,7 @@ def intersect_point(p0, p1, edge):
 	intersect_UV = (intersect_u,intersect_v,0)
 	intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
 
-	return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_P, ID=intersect_ID)
+	return nodePoint(intersect_P, uv = intersect_UV, dist=intersect_dist, neighbors=intersectNeighbors, poly=intersect_Poly)
 
 
 # ========== angle direction function ==========
@@ -248,7 +257,7 @@ def ccw(A, B, C):
 
 # ========== shoot ray function ==========
 
-def ShootRay(point,target,edgeSet)
+def ShootRay(point,target,edges)
 
 	# Input variables:
 	# 	point = origin point of ray
@@ -258,7 +267,7 @@ def ShootRay(point,target,edgeSet)
 
 	intersectP = []
 
-	for edge in edgeSet:
+	for edge in edges:
 
 		if intersect( point, target, edge ) == 1: 
 
@@ -277,43 +286,40 @@ def ShootRay(point,target,edgeSet)
 		return target
 
 
-# ========== point in triangle function ==========
+# ========== point in triangle function ========== # currently not needed
 
-def PointInTriangle(p, p0, p1, p2): # check if point 'p' is within or outside the triangle (p0,p1,p2)
+# def PointInTriangle(p, p0, p1, p2): # check if point 'p' is within or outside the triangle (p0,p1,p2)
 	
-	# Input variables:
-	# 	p = point to querry if it lies within triange (p0,p1,p2), (2D coordinates are stored in uv attribute in Point class)
-	#	p0 = first corner of triangle (2D coordinates are stored in uv attribute in Point class)
-	#	p1 = second corner of triangle (2D coordinates are stored in uv attribute in Point class)
-	#	p2 = third corner of triangle (2D coordinates are stored in uv attribute in Point class)
-	# ======================================== #
+# 	# Input variables:
+# 	# 	p = point to querry if it lies within triange (p0,p1,p2), (2D coordinates are stored in uv attribute in Point class)
+# 	#	p0 = first corner of triangle (2D coordinates are stored in uv attribute in Point class)
+# 	#	p1 = second corner of triangle (2D coordinates are stored in uv attribute in Point class)
+# 	#	p2 = third corner of triangle (2D coordinates are stored in uv attribute in Point class)
+# 	# ======================================== #
 	
-	s = (p0.uv[0] - p2.uv[0]) * (p.uv[1] - p2.uv[1]) - (p0.uv[1] - p2.uv[1]) * (p.uv[0] - p2.uv[0])
-	t = (p1.uv[0] - p0.uv[0]) * (p.uv[1] - p0.uv[1]) - (p1.uv[1] - p0.uv[1]) * (p.uv[0] - p0.uv[0])
+# 	s = (p0.uv[0] - p2.uv[0]) * (p.uv[1] - p2.uv[1]) - (p0.uv[1] - p2.uv[1]) * (p.uv[0] - p2.uv[0])
+# 	t = (p1.uv[0] - p0.uv[0]) * (p.uv[1] - p0.uv[1]) - (p1.uv[1] - p0.uv[1]) * (p.uv[0] - p0.uv[0])
 	
-	if (s < 0) != (t < 0) and s != 0 and t != 0:
-		return false
+# 	if (s < 0) != (t < 0) and s != 0 and t != 0:
+# 		return false
 
-	d = (p2.uv[0] - p1.uv[0]) * (p.uv[1] - p1.uv[1]) - (p2.uv[1] - p1.uv[1]) * (p.uv[0] - p1.uv[0])
-	return d == 0 or (d < 0) == (s + t <= 0)
+# 	d = (p2.uv[0] - p1.uv[0]) * (p.uv[1] - p1.uv[1]) - (p2.uv[1] - p1.uv[1]) * (p.uv[0] - p1.uv[0])
+# 	return d == 0 or (d < 0) == (s + t <= 0)
 
 
 # ========== scan function ========== 
 
-def SCAN(u, I, accwDir=None, acwDir=None, points, edges)
+def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 
 	# Input variables:
 	# 	u = starting point 
 	#	I = target point and/or intersection point
-	#	accwDir = normalised vector of the direction of the counter clockwise angle, i.e. accwDir = dt.vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle 
-	#	acwDir = normalised vector of the direction of the clockwise angle, i.e. acwDir = dt.vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
+	#	accwDir = normalised vector of the direction of the counter clockwise angle sector, i.e. accwDir = dt.vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle 
+	#	acwDir = normalised vector of the direction of the clockwise angle sector, i.e. acwDir = dt.vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
 	#	points = set of all points within path finding problem
 	#	edges = set of all edges within path finding problem
+	#	d = direction of scan, either CCW or CW
 	# ======================================== #
-	
-	# Find CCW and CW turning points of intersection polygon mesh 'I.id' from point 'u' within arc defined by accw and acw
-	# First, get all points within the arc sector described by 'accwDir' and 'acwDir'; second, get the points that are 
-	# visible from u; third, calculate the angles for all visible points and sort them accoridingly to find turning points
 	
 	# get subset of points that are part of intersection polygon
 	
@@ -324,117 +330,122 @@ def SCAN(u, I, accwDir=None, acwDir=None, points, edges)
 		for point in points:
 			if point.poly == I.poly:
 				polygonSubset.append(point)
-	
-	# further reduce point set based on arc sector defined by accwDir and acwDir
-	
-	if not accwDir: # check whether accwDir and acwDir have been supplied
-		if not acwDir:
-			pointsWAS = polygonSubset # if angle sector is not suplied arc sector is assumed to be a circle and all points in polygonSubSet are assumed to be within
-		else:
-			accwDir == [-1,0,0] # accwDir points into opposite direction from u to I resulting in a half circle on the ccw side
-	else:
-		if not acwDir:
-			acwDir == [-1,0,0] # acwDir points into opposite direction from u to I resulting in a half circle on the cw side
-			
-	# check if pointsWAS exists, if it already does skip angle calculations
-			
-	if not pointsWAS: # if subset of points within angle sector has not yet been defined then continue
-		
-		angleAS = pm.atan2(acwDir[1], acwDir[0]) - pm.atan2(accwDir[1], accwDir[0]) # angle of the arc sector described by 
 
-		accw = (u.uv+accwDir)*INF # define ccw triangle point 
-		acw = (u.uv+acwDir)*INF # define cw triangle point
-
-		# get points in arc sector described by 'accw' and 'acw' and  exclude all other ones
-
-		if angleAS < PI and angleAS > 0 or anlgeAS > -PI and angleAS < 0: # check if angle sector is smaller than 180°
-			
-			#pointsWAS = [point for point in pointsSubset if PointInTriangle(point,u,accw,acw) == True] # get all points within angle sector
-			
-			pointsWAS=[]
-			
-			# if angleAS is smaller than 180° (PI) check within angle sector
-			
-			for point in pointsSubset: # get points within angle sector
-				if PointInTriangle(point,u,accw,acw) == True: # check if point is within angle sector
-					pointsWAS.append(point) # if so, add it to points within angle sector subset
-				
-		elif angleAS > PI and angleAS < 2*PI or anlgeAS < -PI and anlgeAS > -2*PI: # check if angle sector is bigger than 180°
-			
-			#pointsWAS = [point for point in pointsSubset if PointInTriangle(point,u,accw,acw) == False] # get all points outside angle sector
-			
-			pointsWAS=[]
-			
-			# if angleAS is bigger than 180° (PI) reverse angle sector, i.e. check outside angle sector
-			
-			for point in pointsSubset: # get points outside angle sector
-				if PointInTriangle(point,u,accw,acw) == False: # check if point is outside angle sector
-					pointsWAS.append(point) # if so, add it to points within angle sector subset
-		else:
-			pointsWAS = pointsSubset # angle is either 0 or 2*PI and all points should be in subset
+	# ====================
 	
-	#sort visible points by angles
-	
-	iDir = dt.vector(I.uv-u.uv).normal()
-	
-	# Currently brute force, could be further sped up with Lee's scan alorigthm, however, since points hopefully already massively reduced, maybe less of an issue?
-	 
-	visiblePoints = pointsWAS
-	
-	for point in visiblePoints:
-	 	
-		pDir = dt.vector(point.uv-u.uv).normal()
-		point.angle = pm.atan2(pDir[1], pDir[0]) - pm.atan2(iDir[1], iDir[0]) # get angle from u between point and intersection
-			
-	visiblePoints.sort(key=lambda point:point.angle) 
-	
-	# calculate angle only for visible points determined by Lee's algorithm # visible points from u in pointWAS
+	# We cannot further reduce pointset based on arc sector defined by accwDir and acwDir at this time, otherwise points beyond will
+	# automatically be discarded and we will always find a "turning point" at the edge of the arc sector which, however, might not 
+	# actually be one. However, we could further reduce the pointset based on visible points from u using Lee's scan algorithm
 	#
-	# visiblePoints = visible_points(u, pointsWAS, edges)
-	
-	for point in visiblePoints: 
+	# visiblePoints = visible_points(u, pointsSubset, edges)
+
+	# ====================
+
+	# get subset of points on polygon I in direction d
+
+	for point in pointsSubset: # get points of pointsSubset in direction d
+		if CCW(u,I,point) == d: # check if point is in the same direction as d
+			pointsDir.append(point) # if so, add it to the pointsDir subset (in direction d)
+
+	# get direction of I
+
+	iDir = dt.vector(I.uv-u.uv).normal()
+
+	#accw = (u.uv+accwDir)*INF # define ccw triangle point 
+	#acw = (u.uv+acwDir)*INF # define cw triangle point
+
+	# get arc sector angles based on direction d
+
+	if d == CW:
+		dirAngle = dt.Vector(acwDir).angle(iDir) # arc sector angle in direction d
+	else:
+		dirAngle = dt.Vector(accwDir).angle(iDir) # arc sector angle in direction d
+
+	# loop through points in direction d to find turning point, however, if any angle falls outside the arc sector break loop
+
+	turningPoint = None # define turning point
+
+	for point in pointsDir: 
+	 	
+		# either comparing angles ========== (not sure which calculation is cheaper and faster)
+
+		pDir = dt.Vector(point.uv-u.uv).normal()
+		point.angle = dt.Vector(pDir).angle(iDir) # get angle between vectors u to p and u to i
+
+		if point.angle > dirAngle: # check if point.angle falls outside the arc sector, if so break loop
+			break
+
+		# or check if point is in arc sector ========== (not sure which calculation is cheaper and faster)
 		
-		pDir = dt.vector(point.uv-u.uv).normal()
-		point.angle = pm.atan2(pDir[1], pDir[0]) - pm.atan2(iDir[1], iDir[0]) # get angle between each point and intersection at point u
+		#if PointInTriangle(point,u,accw,acw) == True:
+		#	pDir = dt.Vector(point.uv-u.uv).normal()
+		#	point.angle = dt.Vector(pDir).angle(iDir) # get angle between vectors u to p and u to i
+		#else:
+		#	break
 
-	visiblePoints.sort(key=lambda point:point.angle) 
-	
-	if visiblePoints[0].angle < 0: # find CCW turningpoint 
-		turningPointCCW = visiblePoints[0]
+	else: # all points checked and they all are within arc sector
+
+		pointsDir.sort(key = lambda point:point.angle, reverse=True) # sort points to get point with largest angle, i.e. the turning point in direction d
+		turningPoint=pointsDir[0]
+
+	successors = []
+
+	# if a turning point was found, check if it is visible
+
+	if turningPoint is not None:
+
+		n = ShootRay(u,turningPointDir,edges)
+
+		if n == turningPoint: # turningPoint is visible
+
+			successors.append(n)
+
+		else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
+
+			nDir = dt.vector(n.uv-u.uv).normal() # vector from u to n
+
+			intersectionTurningPointsCW = SCAN(u, n, nDir, acwDir, points, edges, CW) # scan from n to acw
+			intersectionTurningPointsCCW = SCAN(u, n, accwDir, nDir, points, edges, CCW) # scan from n to accw
+
+			successors.extend(intersectionTurningPointsCW)
+			successors.extend(intersectionTurningPointsCCW)
+
+	# after checking in direction d and adding potential successors, scan in the opposite direction to find other successors
+
+	if d == CW: # scan opposite direction
+		otherTurningPoints = SCAN(u, I, iDir, accwDir, points, edges, CCW) # scan other direction to find additional turning points on mesh
+		successors.extend(otherTurningPoints)
 	else:
-		turningPointCCW = -1
-	
-	if visiblePoints[len(visiblePoints)-1].angle > 0:  # find CW turningpoint
-		turningPointCW = visiblePoints[len(visiblePoints)-1]
-	else:
-		turningPointCCW = -1
-	
-	return [turningPointCCW,turningPointCW] # return turningpoints
+		otherDirTurningPoints = SCAN(u, I, acwDir,iDir, points, edges, CW)
+		successors.extend(otherTurningPoints)
+
+	return successors
 
 
-# ========== find visible points Lee's scan algorithm ========== // heavy WIP
 
-def visible_points(u, points, edges):
-	
-	# Input variables:
-	# 	u = point from which points are checked if they are visible or not
-	#	points = set of all points within path finding problem
-	#	edges = set of all edges within path finding problem
-	# ======================================== #
-	
-	points.sort(key=lambda p: (dt.Vector(u.uv.angle(dt.Vector(p.uv))), dt.Vector(u.pos.distanceTo(dt.Vector(p.pos)))))
-	
-	# Initialize open_edges with any intersecting edges on the half line from
-	# point along the positive x-axis
-	open_edges = OpenEdges()
-	point_inf = Point(INF, point.y)
-	for edge in edges:
-		if point in edge: continue
-		if edge_intersect(point, point_inf, edge):
-			if on_segment(point, edge.p1, point_inf): continue
-			if on_segment(point, edge.p2, point_inf): continue
-			open_edges.insert(point, point_inf, edge)
-	
+# ========== find visible points Lee's scan algorithm ========== // heavy WIP but maybe not needed??
+
+# def visible_points(u, points, edges):
+#	
+# 	# Input variables:
+# 	# 	u = point from which points are checked if they are visible or not
+# 	#	points = set of all points within path finding problem
+# 	#	edges = set of all edges within path finding problem
+# 	# ======================================== #
+#	
+# 	points.sort(key=lambda p: (dt.Vector(u.uv.angle(dt.Vector(p.uv))), dt.Vector(u.pos.distanceTo(dt.Vector(p.pos)))))
+#	
+# 	# Initialize open_edges with any intersecting edges on the half line from
+# 	# point along the positive x-axis
+# 	open_edges = OpenEdges()
+# 	point_inf = Point(INF, point.y)
+# 	for edge in edges:
+# 		if point in edge: continue
+# 		if edge_intersect(point, point_inf, edge):
+# 			if on_segment(point, edge.p1, point_inf): continue
+# 			if on_segment(point, edge.p2, point_inf): continue
+# 			open_edges.insert(point, point_inf, edge)
+#	
 
 
 # ========== A* search algorithm ==========
@@ -522,11 +533,11 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 		
 		else: # end_node is not visible from current_node, thus need to define accwDir and acwDir for scan
 			
-			if current_node.parent is None: #
+			if current_node.parent is None: # current node has no parent, i.e. is starting point, thus arc sector is a circle
 				
 				accwDir == acwDir == None
 			
-			else: # 
+			else: # get accw and acw based on previous path point to define projection field
 				
 				# get parent_node of current_node and get previous direction
 
@@ -535,8 +546,8 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 
 				# get neighboring nodes of current_node and get their orientation in relation to the parent_node
 
-				neighborOne_node = current_node.neighbor[0]
-				neighborTwo_node = current_node.neighbor[1]
+				neighborOne_node = current_node.neighbors[0]
+				neighborTwo_node = current_node.neighbors[1]
 				neighborOneOrient = ccw(parent_node,current_node,neighborOne_node)
 				neighborTwoOrient = ccw(parent_node,current_node,neighborTwo_node)
 				neighborOneDir = dt.Vector(neighborOne_node.uv-current_node.uv).normal()
@@ -553,7 +564,7 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 						accwDir == neighborTwoDir
 
 				elif parent_node == neighborTwo_node: # neighbor two was previous step
-					if neighberOneOrient = CW:
+					if neighberOneOrient == CW:
 						acwDir == neighborOneDir
 						accwDir == parentDir
 					else:
@@ -568,7 +579,7 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 
 					if neighborOneOrient == CCW and neighborTwoOrient == CCW: 
 						
-						# both neighboring nodes are on the CCW side and the acw direction can, therefore, be restricted to the previous ray direction
+						# both neighboring nodes are on the CCW side and the acw direction can, therefore, be restricted to the previous ray direction
 						
 						acwDir = parentDir
 						
@@ -581,7 +592,7 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 							
 					elif neighborOneOrient == CW and neighborTwoOrient == CW:
 																	   
-						# both neighboring nodes are on the CW side and the accw direction can, therefore, be restricted to the previous ray direction
+						# both neighboring nodes are on the CW side and the accw direction can, therefore, be restricted to the previous ray direction
 
 						accwDir = parentDir
 						
@@ -594,18 +605,17 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 			
 			# find turningpoints on polygon hitPoint.poly
 			
-			turningPoints = SCAN(current_node, hitPoint, accwDir, acwDir, points, edges)
+			turningPoints = SCAN(current_node, hitPoint, accwDir, acwDir, points, edges, CW)
 			
 			for point in turningPoints:
-				if not point == -1:
-					point.parent = current_node
-					children.append(tP)
+				point.parent = current_node
+				children.append(point)
 		
 		# Loop through children
 		
 		for child in children:
 
-			# check if neighbor is in closed_list
+			# check if child is in closed_list
 			for closed_children in closed_list:
 				if child == closed_child:
 		    			continue
@@ -616,13 +626,13 @@ def astar(start, end, points, edges): #, EdgeCrossSet): # EdgeCrossSet probably 
 				if tempG < child.g:
 					child.g = tempG
 			else:
-				child.g = tempG #double check this
+				child.g = tempG
 				openlist.append(child)
 			
-			child.h = dt.vector(child.pos-end_node.pos).length
+			child.h = dt.vector(child.pos-end_node.pos).length()
 			child.f = child.h + child.g
 		
-	return [0, 0] #, 0] # no path found
+	return [0, -1] #, 0] # no path found
 		
 
 
@@ -726,157 +736,127 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 	for i in range(faceDiff):
 
-	newFaces[i] = mesh + '.f[' + (numPostSlice[0]-i-1) + ']'
-	tempCRV = mesh + '_CRV_' + i
-	tempPlane = mesh + '_plane_' + i
-	tempSliceEdges = pm.polyListComponentConversion(newFaces[i], ff = True, te = True )
+		newFaces[i] = mesh + '.f[' + (numPostSlice[0]-i-1) + ']'
+		tempCRV = mesh + '_CRV_' + i
+		tempPlane = mesh + '_plane_' + i
+		tempSliceEdges = pm.polyListComponentConversion(newFaces[i], ff = True, te = True )
 
-	# get slice area and translate it into resolution of curve circumscribing slice
+		# get slice area and translate it into resolution of curve circumscribing slice
 
-	pm.select(newFaces[i])
-	sliceArea = polyFacesTotArea(newFaces[i])
-	log = pm.log(sliceArea)
-	resolution = int(pm.ceil(res + (res *log)))
+		pm.select(newFaces[i])
+		sliceArea = polyFacesTotArea(newFaces[i])
+		log = pm.log(sliceArea)
+		resolution = int(pm.ceil(res + (res *log)))
 
-	if resolution < 4:
-		resolution = 4
+		if resolution < 4:
+			resolution = 4
 
-	# approximate slice surface and reduce number of vertices and edges to a more reasonable number based on slice area
+		# approximate slice surface and reduce number of vertices and edges to a more reasonable number based on slice area
 
-	pm.select(tempSliceEdges)
-	pm.polyToCurve(form = 2, degree = 1, conformToSmoothMeshPreview = 0, n = tempCRV)
-	pm.select(clear=True)
+		pm.select(tempSliceEdges)
+		pm.polyToCurve(form = 2, degree = 1, conformToSmoothMeshPreview = 0, n = tempCRV)
+		pm.select(clear=True)
 
-	# rebuild curve and approximate slice
+		# rebuild curve and approximate slice
 
-	pm.rebuildCurve(tempCRV, ch = 1, rpo = 1, rt = 0, end = 1, kr = 0, kcp = 0, kep = 1, kt = 1, s = resolution, d = 1 tol = 1e-08)
-	pm.nurbsToPolygonsPref(pt = 1, pc = 1)
-	pm.planarSrf(tempCRV, ch = 1, d = 1, ko = 0, tol = 1e-01, rn = 0, po = 1, n = tempPlane)
+		pm.rebuildCurve(tempCRV, ch = 1, rpo = 1, rt = 0, end = 1, kr = 0, kcp = 0, kep = 1, kt = 1, s = resolution, d = 1 tol = 1e-08)
+		pm.nurbsToPolygonsPref(pt = 1, pc = 1)
+		pm.planarSrf(tempCRV, ch = 1, d = 1, ko = 0, tol = 1e-01, rn = 0, po = 1, n = tempPlane)
 
-	# add curve and plane to temporary group
+		# add curve and plane to temporary group
 
-	if not pm.objExists('TempGRP'): # check if temporary group exists
-		tempGRP = 'TempGRP' # if it doesn't create empty group
-		pm.group(em = True, n=tempGRP)
+		if not pm.objExists('TempGRP'): # check if temporary group exists
+			tempGRP = 'TempGRP' # if it doesn't create empty group
+			pm.group(em = True, n=tempGRP)
 
-	pm.parent(tempCRV, tempGRP)
-	pm.parent(tempPlane, tempGRP)
+		pm.parent(tempCRV, tempGRP)
+		pm.parent(tempPlane, tempGRP)
 
-	# get vertices and edges from new slice
+		# get vertices and edges from new slice
 
-	tempPlaneF = tempPlane + '.f[0]'
-	tempVtcs = pm.polyListComponentConversion(tempPlaneF, ff = True, tv = True)
-	tVtcs = pm.filterExpand(tempVtcs, sm = 31)
-	vtcs += tVtcs
+		tempPlaneF = tempPlane + '.f[0]'
+		tempVtcs = pm.polyListComponentConversion(tempPlaneF, ff = True, tv = True)
+		tVtcs = pm.filterExpand(tempVtcs, sm = 31)
 
-	for j in range(len(tVtcs)):
+		for j in range(len(tVtcs)):
 
-		# extract vertex index and get name for node
+			# extract vertex index and get name for node
 
-		tVtx = tVtcs[j].split('.[ | ]')
-		pad = '{:05d}'.format(tVtx[2])
-		nNode = tVtx[0] + '_node_' + pad
+			tVtx = tVtcs[j].split('.[ | ]')
+			pad = '{:05d}'.format(tVtx[2])
+			nNode = tVtx[0] + '_node_' + pad
 
-		# calculate UV values
+			# calculate UV values
 
-		vtcPos = pm.xform(tVtcs[j], query=True, worldSpace=True, translation=True)
-		nodePos = (vtcPos[0],vtcPos[1],vtcPos[2])
-		pOffset = dt.Vector(oPos[0] - vtcPos[0], oPos[1] - vtcPos[1], oPos[2] - vtcPos[2])
-		u = pOffset.dot(uDir)
-		v = pOffset.dot(vDir)
-		nodeUV = (u,v,0)
+			vtcPos = pm.xform(tVtcs[j], query=True, worldSpace=True, translation=True)
+			nodePos = (vtcPos[0],vtcPos[1],vtcPos[2])
+			pOffset = dt.Vector(oPos[0] - vtcPos[0], oPos[1] - vtcPos[1], oPos[2] - vtcPos[2])
+			u = pOffset.dot(uDir)
+			v = pOffset.dot(vDir)
+			nodeUV = (u,v,0)
 
-		# get neighbors of each vertex
-		
-		vtxNeighbors = pm.MeshVertex(tVtcs[j]).connectedVertices()
-		
-		for k in range(len(vtxNeighbors)):
-			tVtxNeighbor= vtxNeighbors[k].split('.[ | ]')
-			padNeighbor = '{:05d}'.format(tVtxNeighbor[2])
-			nNeighbors[k] = tVtxNeighbor[0] + '_node_' + padNeighbor
-		 
-		nodePoint(nNode, pos=nodePos, uv=nodeUV, neighbors=nNeighbors, poly=tempPlane, ID= pad)
+			# get neighbors of each vertex
+			
+			vtxNeighbors = pm.MeshVertex(tVtcs[j]).connectedVertices()
+			
+			for k in range(len(vtxNeighbors)):
+				tVtxNeighbor= vtxNeighbors[k].split('.[ | ]')
+				padNeighbor = '{:05d}'.format(tVtxNeighbor[2])
+				nNeighbors[k] = tVtxNeighbor[0] + '_node_' + padNeighbor
 
-		nodePoint(nNode, pos=nodePos, uv=nodeUV, poly=tempPlane, ID= pad)
+			neighbors = (nNeighbors[0], nNeighbors[1])
+			 
+			nodePoints[j]= nodePoint(nNode, pos=nodePos, uv=nodeUV, neighbors=neighbors, poly=tempPlane, ID= pad)
 
-    	tempEdges = pm.polyListComponentConversion(tempPlaneF, ff = True, te = True)
-    	tEdges = pm.filterExpand(tempEdges, sm = 32)
-    	edges += tEdges
+		vtcs += nodePoints
 
-    	for j in range(len(tEdges)):
-
-		tEdgeVtcs = pm.polyListComponentConversion(tEdges[j], fe = True, tv = True)
-		tEdge = tEdges[j].split('.[ | ]')
-		pad0 = '{:05d}'.format(tEdge[2])
-		nEdge = tEdge[0] + '_edge_' + pad0
-
-		if len(tEdgeVtcs) == 1:
-
-			tempEdgeVtcs = pm.filterExpand(tEdgeVtcs[0], sm = 31)
-			tVtx1 = tempEdgeVtcs[0].split('.[ | ]')
-			tVtx2 = tempEdgeVtcs[1].split('.[ | ]')
-			pad1 = '{:05d}'.format(tVtx1[2])
-			pad2 = '{:05d}'.format(tVtx2[2])
-
-			edgeP1 = tVtx1[0] + '_node_' + pad1
-			edgeP2 = tVtx2[0] + '_node_' + pad2
-
-			nodeEdge(nEdge, p1=edgeP1, p2=edgeP2)
-
-		else:
-
-			tVtx1 = tEdgeVtcs[0].split('.[ | ]')
-			tVtx2 = tEdgeVtcs[1].split('.[ | ]')
-			pad1 = '{:05d}'.format(tVtx1[2])
-			pad2 = '{:05d}'.format(tVtx2[2])
-
-			edgeP1 = tVtx1[0] + '_node_' + pad1
-			edgeP2 = tVtx1[0] + '_node_' + pad2
-
-			nodeEdge(nEdge, p1=edgeP1, p2=edgeP2)
+		# triangulate plane to get all edges
 
     	pm.select(tempPlaneF)
     	pm.polyTriangulate(tempPlaneF)
     	tempFaces = pm.ls( selection=True )
     	pm.select(clear=True)
 
-    	tempAllEdges = pm.polyListComponentConversion(tempFaces, ff = True, te = True)
-    	tAllEdges = pm.filterExpand(tempAllEdges, sm = 32)
-    	allEdges += tAllEdges
+    	# get edges and creat their respective nodeEdges
 
-    	for j in range(len(tAllEdges)):
+    	tempEdges = pm.polyListComponentConversion(tempFaces, ff = True, te = True)
+    	tEdges = pm.filterExpand(tempEdges, sm = 32)
+    	
+    	for j in range(len(tEdges)):
 
-		tAllEdgeVtcs = pm.polyListComponentConversion(tAllEdges[j], fe = True, tv = True)
-		tAllEdge = tAllEdges[j].split('.[ | ]')
-		pad0 = '{:05d}'.format(tAllEdge[2])
-		nAllEdge = tAllEdge[0] + '_AllEdge_' + pad0
+				tEdgeVtcs = pm.polyListComponentConversion(tEdges[j], fe = True, tv = True)
+				tEdge = tEdges[j].split('.[ | ]')
+				pad0 = '{:05d}'.format(tEdge[2])
+				nEdge = tEdge[0] + '_Edge_' + pad0
 
-		if len(tAllEdgeVtcs) == 1:
+			if len(tEdgeVtcs) == 1: # if vertices are combined expand them
 
-			tempAllEdgeVtcs = pm.filterExpand(tAllEdgeVtcs[0], sm = 31)
-			tVtx1 = tempAllEdgeVtcs[0].split('.[ | ]')
-			tVtx2 = tempAllEdgeVtcs[1].split('.[ | ]')
-			pad1 = '{:05d}'.format(tVtx1[2])
-			pad2 = '{:05d}'.format(tVtx2[2])
+				tempEdgeVtcs = pm.filterExpand(tEdgeVtcs[0], sm = 31)
+				tVtx1 = tempEdgeVtcs[0].split('.[ | ]')
+				tVtx2 = tempEdgeVtcs[1].split('.[ | ]')
+				pad1 = '{:05d}'.format(tVtx1[2])
+				pad2 = '{:05d}'.format(tVtx2[2])
 
-			AllEdgeP1 = tVtx1[0] + '_node_' + pad1
-			AllEdgeP2 = tVtx2[0] + '_node_' + pad2
+				edgeP1 = tVtx1[0] + '_node_' + pad1
+				edgeP2 = tVtx2[0] + '_node_' + pad2
 
-			nodeEdge(nAllEdge, p1=AllEdgeP1, p2=AllEdgeP2)
+				nodeEdges[j] = nodeEdge(nEdge, p1=edgeP1, p2=edgeP2)
 
-		else:
+			else: # get vertices directly
 
-			tVtx1 = tAllEdgeVtcs[0].split('.[ | ]')
-			tVtx2 = tAllEdgeVtcs[1].split('.[ | ]')
-			pad1 = '{:05d}'.format(tVtx1[2])
-			pad2 = '{:05d}'.format(tVtx2[2])
+				tVtx1 = tEdgeVtcs[0].split('.[ | ]')
+				tVtx2 = tEdgeVtcs[1].split('.[ | ]')
+				pad1 = '{:05d}'.format(tVtx1[2])
+				pad2 = '{:05d}'.format(tVtx2[2])
 
-			AllEdgeP1 = tVtx1[0] + '_node_' + pad1
-			AllEdgeP2 = tVtx1[0] + '_node_' + pad2
+				edgeP1 = tVtx1[0] + '_node_' + pad1
+				edgeP2 = tVtx2[0] + '_node_' + pad2
 
-			nodeEdge(nAllEdge, p1=AllEdgeP1, p2=AllEdgeP2)
+				nodeEdges[j] = nodeEdge(nEdge, p1=edgeP1, p2=edgeP2)
 
-    return [vtcs, edges, allEdges]
+		edges += nodeEdges
+
+	return [vtcs, edges]
 
 
 # ========== ligament length function ==========
@@ -889,7 +869,7 @@ def ligLength (origin, insertion, jointCentre, proxMesh, distMesh, resolution )
 	# 	jointCentre = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
 	# 	proxMesh = name of proximal bone mesh to which ligament origin attaches
 	# 	distMesh = name of distal bone mesh to which ligament insertion attaches
-	# 	res = resolution for mesh slice approximation
+	#	res = resolution for mesh slice approximation
 	# ======================================== #
 	
 	# data house keeping
@@ -940,15 +920,9 @@ def ligLength (origin, insertion, jointCentre, proxMesh, distMesh, resolution )
 
 	VtxSet = proxSlice[0]
 	EdgeSet = proxSlice[1]
-	AllEdgeSet = proxSlice[2]
 
 	VtxSet += distSlice[0]
 	EdgeSet = distSlice[1]
-	AllEdgeSet += distSlice[2]
-
-	# get edges crossing the polygon
-
-	#EdgeCrossSet = [Edge for Edge in AllEdgeSet if Edge not in EdgeSet]
 
 	# run A* search
 
