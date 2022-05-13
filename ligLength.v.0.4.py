@@ -252,7 +252,7 @@ def ccw(A, B, C):
 
 # ========== shoot ray function ==========
 
-def ShootRay( point, target, edges ):
+def shoot_ray( point, target, edges ):
 
 	# Input variables:
 	# 	point = origin point of ray
@@ -278,7 +278,7 @@ def ShootRay( point, target, edges ):
 
 # ========== scan function ========== 
 
-def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
+def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 	# Input variables:
 	# 	u = starting point 
@@ -371,7 +371,7 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 	if turningPoint is not None:
 
-		n = ShootRay(u,turningPoint,edges)
+		n = shoot_ray(u,turningPoint,edges)
 
 		if n == turningPoint: # turningPoint is visible from u
 
@@ -381,8 +381,8 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 			nDir = dt.vector(n.uv-u.uv).normal() # vector from u to n
 
-			intersectionTurningPointsCW = SCAN(u, n, nDir, acwDir, points, edges, CW) # scan from n to acw to find potential successors
-			intersectionTurningPointsCCW = SCAN(u, n, accwDir, nDir, points, edges, CCW) # scan from n to accw to find potential successors
+			intersectionTurningPointsCW = scan(u, n, nDir, acwDir, points, edges, CW) # scan from n to acw to find potential successors
+			intersectionTurningPointsCCW = scan(u, n, accwDir, nDir, points, edges, CCW) # scan from n to accw to find potential successors
 			
 			# add potential successors to successors
 			
@@ -392,10 +392,10 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 	# after checking in direction d and adding potential successors, scan in the opposite direction to find other successors
 
 	if d == CW: # scan opposite direction
-		otherTurningPoints = SCAN(u, I, iDir, accwDir, points, edges, CCW) # scan other direction to find additional turning points on mesh
+		otherTurningPoints = scan(u, I, iDir, accwDir, points, edges, CCW) # scan other direction to find additional turning points on mesh
 		successors.extend(otherTurningPoints)
 	else: # d == CCW
-		otherDirTurningPoints = SCAN(u, I, acwDir,iDir, points, edges, CW)
+		otherDirTurningPoints = scan(u, I, acwDir,iDir, points, edges, CW)
 		successors.extend(otherTurningPoints)
 
 	return successors
@@ -475,7 +475,7 @@ def ASTAR( start, end, points, edges ):
 
 		# shoot ray from current_node to end_node
 		
-		hitPoint = ShootRay(current_node,end_node,edges)
+		hitPoint = shoot_ray(current_node,end_node,edges)
 		
 		# check if end_node is visible
 		
@@ -558,7 +558,7 @@ def ASTAR( start, end, points, edges ):
 			
 			# find turningpoints on polygon hitPoint.poly and if not visible on hitPoint'.poly
 			
-			turningPoints = SCAN(current_node, hitPoint, accwDir, acwDir, points, edges, CCW)
+			turningPoints = scan(current_node, hitPoint, accwDir, acwDir, points, edges, CCW)
 			
 			for point in turningPoints:
 				point.parent = current_node
