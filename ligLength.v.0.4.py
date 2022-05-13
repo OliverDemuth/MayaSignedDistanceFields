@@ -283,8 +283,8 @@ def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 	# Input variables:
 	# 	u = starting point 
 	#	I = target point and/or intersection point
-	#	accwDir = normalised vector of the direction of the counter clockwise angle sector border, i.e. accwDir = dt.vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle 
-	#	acwDir = normalised vector of the direction of the clockwise angle sector border, i.e. acwDir = dt.vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
+	#	accwDir = normalised vector of the direction of the counter clockwise angle sector border, i.e. accwDir = dt.Vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle 
+	#	acwDir = normalised vector of the direction of the clockwise angle sector border, i.e. acwDir = dt.Vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
 	#	points = set of all points within path finding problem
 	#	edges = set of all edges within path finding problem
 	#	d = direction of scan, either CCW or CW
@@ -326,7 +326,7 @@ def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 	# get direction of I
 
-	iDir = dt.vector(I.uv-u.uv).normal()
+	iDir = dt.Vector(I.uv-u.uv).normal()
 
 	#accw = (u.uv+accwDir)*INF # define ccw triangle point if checking for arc sector below, otherwise not needed 
 	#acw = (u.uv+acwDir)*INF # define cw triangle point if checking for arc sector below, otherwise not needed 
@@ -379,7 +379,7 @@ def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 		else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
 
-			nDir = dt.vector(n.uv-u.uv).normal() # vector from u to n
+			nDir = dt.Vector(n.uv-u.uv).normal() # vector from u to n
 
 			intersectionTurningPointsCW = scan(u, n, nDir, acwDir, points, edges, CW) # scan from n to acw to find potential successors
 			intersectionTurningPointsCCW = scan(u, n, accwDir, nDir, points, edges, CCW) # scan from n to accw to find potential successors
@@ -587,7 +587,7 @@ def astar( start, end, points, edges ):
 			
 			# calculate h and f values
 			
-			successor.h = dt.vector(successor.pos-end_node.pos).length()
+			successor.h = dt.Vector(successor.pos-end_node.pos).length()
 			successor.f = successor.h + successor.g
 		
 	return [0, -1] #, 0] # no path found
