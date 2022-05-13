@@ -7,7 +7,7 @@
 #   queue based on arc sectors to find the shortest distance. 
 #
 #   Written by Oliver Demuth and Vittorio la Barbera 09.05.2022
-#   Last updated 12.05.2022 - Oliver Demuth
+#   Last updated 13.05.2022 - Oliver Demuth
 #
 #   SYNOPSIS:
 #
