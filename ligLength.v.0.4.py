@@ -252,7 +252,7 @@ def ccw(A, B, C):
 
 # ========== shoot ray function ==========
 
-def ShootRay( point, target, edges )
+def ShootRay( point, target, edges ):
 
 	# Input variables:
 	# 	point = origin point of ray
@@ -278,7 +278,7 @@ def ShootRay( point, target, edges )
 
 # ========== scan function ========== 
 
-def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
+def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 	# Input variables:
 	# 	u = starting point 
@@ -321,7 +321,7 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 	# get subset of points on polygon I in direction d
 
 	for point in pointsSubset: # get points of pointsSubset in direction d
-		if CCW(u,I,point) == d: # check if point is in the same direction as d
+		if ccw(u,I,point) == d: # check if point is in the same direction as d
 			pointsDir.append(point) # if so, add it to the pointsDir subset (in direction d)
 
 	# get direction of I
