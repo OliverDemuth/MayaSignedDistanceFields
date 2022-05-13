@@ -403,7 +403,7 @@ def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 # ========== A* search algorithm ==========
 
-def ASTAR( start, end, points, edges ):
+def astar( start, end, points, edges ):
 
 	# Input variables:
 	# 	start = 3D position of the starting point
@@ -931,7 +931,7 @@ def ligLength (origin, insertion, jointCentre, proxMesh, distMesh, resolution )
 
 	# run A* search
 
-	ligLength = ASTAR(oPos, iPos, VtxSet, EdgeSet)
+	ligLength = astar(oPos, iPos, VtxSet, EdgeSet)
 
 	# clean up
 
