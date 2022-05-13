@@ -1,4 +1,4 @@
-#	ligLength.v.0.4.py 
+#   ligLength.v.0.4.py 
 #
 #   This script calculates the shortest path (length) of a ligament from origin to
 #   insertion wrapping around the proximal and distal bone meshes. It roughly follows
@@ -33,8 +33,7 @@
 #   Note, the accuracy of the reported length depends on the resolution of the curve 
 #   approximating the slices through the bone meshes. The lower the resolution 'res', 
 #   the faster the script runs; however, accuracy is also reduced. 
-#   
-#
+
 
 # ========== load pymel ==========
 
@@ -109,11 +108,9 @@ class nodeEdge(object):
         return False
 
 
-
 ################################################
 # ========== Path finding functions ========== #
 ################################################
-
 
 # ========== check intersection function ==========
 
@@ -194,7 +191,7 @@ def intersect_point(p0, p1, edge):
 	intersect_Poly = edge.p1.poly
 	intersectNeighbors = (edge.p1, edge.p2)
 
-	# get intersection point uv coordinates
+	# get intersection point uv coordinates and return nodePoint of intersection point
 
 	if edge.p1.uv[0] == edge.p2.uv[0]:
 		if p0.uv[0] == p1.uv[0]:
@@ -266,7 +263,7 @@ def ShootRay( point, target, edges )
 	intersectP = []
 
 	for edge in edges:
-		if intersect(point, target, edge) == 1: 
+		if intersect(point, target, edge) == 1: # if segments intersect get intersection point
 			intersectP.append = intersect_point(point,target,edge)
 
 	if len(intersectP) > 0: # get closest intersection point
@@ -314,7 +311,8 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 	
 	# We cannot further reduce pointset based on arc sector defined by accwDir and acwDir at this time, otherwise points beyond will
 	# automatically be discarded and we will always find a "turning point" at the edge of the arc sector which, however, might not 
-	# actually be one. However, we could further reduce the pointset based on visible points from u using Lee's scan algorithm
+	# actually be one. Nevertheless, we could further reduce the pointset based on visible points from u using Lee's scan algorithm, 
+	# but it might not be faster than directly using the arc sector based approach as angles are calculated for both
 	#
 	# visiblePoints = visible_points(u, pointsSubset, edges)
 
@@ -330,8 +328,8 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 
 	iDir = dt.vector(I.uv-u.uv).normal()
 
-	#accw = (u.uv+accwDir)*INF # define ccw triangle point 
-	#acw = (u.uv+acwDir)*INF # define cw triangle point
+	#accw = (u.uv+accwDir)*INF # define ccw triangle point if checking for arc sector below, otherwise not needed 
+	#acw = (u.uv+acwDir)*INF # define cw triangle point if checking for arc sector below, otherwise not needed 
 
 	# get arc sector angles based on direction d
 
@@ -346,7 +344,7 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 
 	for point in pointsDir: 
 	 	
-		# either comparing angles ========== (not sure which calculation is cheaper and faster)
+		# either comparing angles directly ========== (not sure which calculation is cheaper and faster, probably this)
 
 		pDir = dt.Vector(point.uv-u.uv).normal()
 		point.angle = dt.Vector(pDir).angle(iDir) # get angle between vectors u to p and u to i
@@ -354,7 +352,7 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 		if point.angle > dirAngle: # check if point.angle falls outside the arc sector, if so break loop
 			break
 
-		# or check if point is in arc sector ========== (not sure which calculation is cheaper and faster)
+		# or check if point is in arc sector first before calculating angles ========== (not sure which calculation is cheaper and faster, probably the former)
 		
 		#if PointInTriangle(point,u,accw,acw) == True:
 		#	pDir = dt.Vector(point.uv-u.uv).normal()
@@ -362,7 +360,7 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 		#else:
 		#	break
 
-	else: # all points checked and they all are within arc sector
+	else: # no break, i.e. all points checked and they all are within arc sector
 
 		pointsDir.sort(key = lambda point:point.angle, reverse=True) # sort points to get point with largest angle, i.e. the turning point in direction d
 		turningPoint=pointsDir[0]
@@ -375,17 +373,19 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 
 		n = ShootRay(u,turningPoint,edges)
 
-		if n == turningPoint: # turningPoint is visible
+		if n == turningPoint: # turningPoint is visible from u
 
-			successors.append(n)
+			successors.append(n) # add it to successor list
 
 		else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
 
 			nDir = dt.vector(n.uv-u.uv).normal() # vector from u to n
 
-			intersectionTurningPointsCW = SCAN(u, n, nDir, acwDir, points, edges, CW) # scan from n to acw
-			intersectionTurningPointsCCW = SCAN(u, n, accwDir, nDir, points, edges, CCW) # scan from n to accw
-
+			intersectionTurningPointsCW = SCAN(u, n, nDir, acwDir, points, edges, CW) # scan from n to acw to find potential successors
+			intersectionTurningPointsCCW = SCAN(u, n, accwDir, nDir, points, edges, CCW) # scan from n to accw to find potential successors
+			
+			# add potential successors to successors
+			
 			successors.extend(intersectionTurningPointsCW)
 			successors.extend(intersectionTurningPointsCCW)
 
@@ -394,7 +394,7 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 	if d == CW: # scan opposite direction
 		otherTurningPoints = SCAN(u, I, iDir, accwDir, points, edges, CCW) # scan other direction to find additional turning points on mesh
 		successors.extend(otherTurningPoints)
-	else:
+	else: # d == CCW
 		otherDirTurningPoints = SCAN(u, I, acwDir,iDir, points, edges, CW)
 		successors.extend(otherTurningPoints)
 
@@ -403,7 +403,7 @@ def SCAN(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d)
 
 # ========== A* search algorithm ==========
 
-def astar( start, end, points, edges ): #, EdgeCrossSet): # EdgeCrossSet probably not needed
+def ASTAR( start, end, points, edges ):
 
 	# Input variables:
 	# 	start = 3D position of the starting point
@@ -462,7 +462,7 @@ def astar( start, end, points, edges ): #, EdgeCrossSet): # EdgeCrossSet probabl
 			pathLength = current_node.g
 
 			# path might not be needed
-
+			#
 			# path = []
 			# current = current_node
 			#
@@ -558,7 +558,7 @@ def astar( start, end, points, edges ): #, EdgeCrossSet): # EdgeCrossSet probabl
 			
 			# find turningpoints on polygon hitPoint.poly and if not visible on hitPoint'.poly
 			
-			turningPoints = SCAN(current_node, hitPoint, accwDir, acwDir, points, edges, CW)
+			turningPoints = SCAN(current_node, hitPoint, accwDir, acwDir, points, edges, CCW)
 			
 			for point in turningPoints:
 				point.parent = current_node
@@ -569,26 +569,29 @@ def astar( start, end, points, edges ): #, EdgeCrossSet): # EdgeCrossSet probabl
 		for successor in successors:
 
 			# check if successor is in closed_list
+			
 			for closed_successors in closed_list:
 				if successor == closed_successors:
 		    			continue
-		
-			tempG = current_node.g+dt.Vector(current_node.pos-successor.pos).lenght()
 			
-			if successor in open_list: # if neighbor is already in open_list compare g values
+			# calculate temporary g value
+			
+			tempG = current_node.g + dt.Vector(current_node.pos-successor.pos).lenght()
+			
+			if successor in open_list: # if successor is already in open_list compare g values
 				if tempG < successor.g:
 					successor.g = tempG
-			else:
+			else: # successor is not yet in open_list, add it to open_list and set g value
 				successor.g = tempG
 				openlist.append(successor)
+			
+			# calculate h and f values
 			
 			successor.h = dt.vector(successor.pos-end_node.pos).length()
 			successor.f = successor.h + successor.g
 		
 	return [0, -1] #, 0] # no path found
 		
-
-
 
 ################################################
 # ====== functions currently not needed ====== #
@@ -613,7 +616,6 @@ def astar( start, end, points, edges ): #, EdgeCrossSet): # EdgeCrossSet probabl
 
 # 	d = (p2.uv[0] - p1.uv[0]) * (p.uv[1] - p1.uv[1]) - (p2.uv[1] - p1.uv[1]) * (p.uv[0] - p1.uv[0])
 # 	return d == 0 or (d < 0) == (s + t <= 0)
-
 
 
 # ========== find visible points Lee's scan algorithm ========== // heavy WIP
@@ -642,11 +644,9 @@ def astar( start, end, points, edges ): #, EdgeCrossSet): # EdgeCrossSet probabl
 
 
 
-
 ################################################
 # ========== MAYA specific functions ========= #
 ################################################
-
 
 # ========== face area function ==========
 
@@ -922,16 +922,16 @@ def ligLength (origin, insertion, jointCentre, proxMesh, distMesh, resolution )
 	distSlice = polyApproxSlice( oPos, cutAim, LigDirNorm, vCrossNorm, dist, resolution ) # approximated slice of distal bone mesh
 
 	# combine obstacle edge and vertex arrays
+	
+	VtxSet = proxSlice[0] # proximal vertex nodes
+	EdgeSet = proxSlice[1] # proximal edge nodes
 
-	VtxSet = proxSlice[0]
-	EdgeSet = proxSlice[1]
-
-	VtxSet += distSlice[0]
-	EdgeSet = distSlice[1]
+	VtxSet.extend(distSlice[0]) # add distal vertex nodes to list
+	EdgeSet.extend(distSlice[1]) # add distal edge nodes to list
 
 	# run A* search
 
-	ligLength = astar(oPos, iPos, VtxSet, EdgeSet) #, EdgeCrossSet) might not be needed
+	ligLength = ASTAR(oPos, iPos, VtxSet, EdgeSet)
 
 	# clean up
 
