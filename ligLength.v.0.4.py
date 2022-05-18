@@ -662,6 +662,8 @@ def polyFacesTotArea( faces ): # Requires faces to be selected
 	vertIndicesStr = pm.polyInfo(fv = True)
 	pm.select(clear = True)
 	
+	mesh = faces.split('.')
+	
 	# get number of faces
 	
 	faceNum = len(vertIndicesStr)
@@ -674,15 +676,15 @@ def polyFacesTotArea( faces ): # Requires faces to be selected
 
 		vertIndices = vertIndicesStr[i].split()
 
-		VtxA = prox + '.vtx[' + vertIndices[2] + ']'
-		VtxB = prox + '.vtx[' + vertIndices[3] + ']'
-		VtxC = prox + '.vtx[' + vertIndices[4] + ']'
+		VtxA = mesh[0] + '.vtx[' + vertIndices[2] + ']'
+		VtxB = mesh[0] + '.vtx[' + vertIndices[3] + ']'
+		VtxC = mesh[0] + '.vtx[' + vertIndices[4] + ']'
 
 		# querry position of each vertex and calculate distances between them
 
-		VtxAPos = pm.xForm(VtxA, query=True, worldSpace=True, translation=True)
-		VtxBPos = pm.xForm(VtxB, query=True, worldSpace=True, translation=True)
-		VtxCPos = pm.xForm(VtxC, query=True, worldSpace=True, translation=True)
+		VtxAPos = pm.xform(VtxA, query=True, worldSpace=True, translation=True)
+		VtxBPos = pm.xform(VtxB, query=True, worldSpace=True, translation=True)
+		VtxCPos = pm.xform(VtxC, query=True, worldSpace=True, translation=True)
 
 		DistA = dt.Vector(VtxBPos[0]-VtxCPos[0],VtxBPos[1]-VtxCPos[1],VtxBPos[2]-VtxCPos[2]).length()
 		DistB = dt.Vector(VtxAPos[0]-VtxCPos[0],VtxAPos[1]-VtxCPos[1],VtxAPos[2]-VtxCPos[2]).length()
@@ -691,7 +693,7 @@ def polyFacesTotArea( faces ): # Requires faces to be selected
 		# calculate area each triangle and sum it up
 
 		s = (DistA + DistB + DistC)/2
-		faceTotArea += pm.sqrt(s * (s-DistA) * (s-DistB) * (s-$istC))
+		faceArea = dt.sqrt(s * (s-DistA) * (s-DistB) * (s-DistC))
 
 	return faceTotArea
 
@@ -711,22 +713,22 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 	
 	# get number of faces
 
-	numFace = pm.polyEvaluate(f=True, mesh)
-	numF = numProxFace[0]-1
-	meshF = mesh + '.f[0:' + numF + ']'
+	numFace = pm.polyEvaluate(mesh, f=True)
+	numF = numFace - 1
+	meshF = mesh + '.f[0:' + str(numF) + ']'
 
 	# cut mesh
 
-	pm.polyCut( meshF, pc= (oPos[0],oPos[1],oPos[2]), ro = (cutDir[0],cutDir[1],cutDir[2]), ps = (1,1), ef = 1, eo = (0,0,0))
+	pm.polyCut( meshF, pc = (oPos[0],oPos[1],oPos[2]), ro = (cutDir[0],cutDir[1],cutDir[2]), ps = (1,1), eo = (0,0,0), ef = 1)
 
 	# get difference in face numbers of pre and post cutting
 
-	numPreSlice = pm.polyEvaluate(f=True, mesh)
+	numPreSlice = pm.polyEvaluate(mesh, f=True)
 
 	pm.select(mesh)
 	pm.polyCloseBorder()
 
-	numPostSlice = pm.polyEvaluate(f=True, mesh)
+	numPostSlice = pm.polyEvaluate(mesh, f=True)
 
 	pm.select(clear=True)
 
@@ -741,17 +743,17 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 	for i in range(faceDiff):
 
-		newFaces[i] = mesh + '.f[' + (numPostSlice[0]-i-1) + ']'
-		tempCRV = mesh + '_CRV_' + i
-		tempPlane = mesh + '_plane_' + i
-		tempSliceEdges = pm.polyListComponentConversion(newFaces[i], ff = True, te = True )
+		newFaces = mesh + '.f[' + str(numPostSlice-i-1) + ']'
+		tempCRV = mesh + '_CRV_' + str(i)
+		tempPlane = mesh + '_plane_' + str(i)
+		tempSliceEdges = pm.polyListComponentConversion(newFaces, ff = True, te = True )
 
 		# get slice area and translate it into resolution of curve circumscribing slice
 
-		pm.select(newFaces[i])
-		sliceArea = polyFacesTotArea(newFaces[i])
-		log = pm.log(sliceArea)
-		resolution = int(pm.ceil(res + (res * log)))
+		pm.select(newFaces)
+		sliceArea = polyFacesTotArea(newFaces)
+		log = dt.log(sliceArea)
+		resolution = dt.ceil(res + (res * log))
 
 		if resolution < 4:
 			resolution = 4
@@ -764,7 +766,7 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 		# rebuild curve and approximate slice
 
-		pm.rebuildCurve(tempCRV, ch = 1, rpo = 1, rt = 0, end = 1, kr = 0, kcp = 0, kep = 1, kt = 1, s = resolution, d = 1 tol = 1e-08)
+		pm.rebuildCurve(tempCRV, ch = 1, rpo = 1, rt = 0, end = 1, kr = 0, kcp = 0, kep = 1, kt = 1, s = resolution, d = 1, tol = 1e-08)
 		pm.nurbsToPolygonsPref(pt = 1, pc = 1)
 		pm.planarSrf(tempCRV, ch = 1, d = 1, ko = 0, tol = 1e-01, rn = 0, po = 1, n = tempPlane)
 
@@ -787,8 +789,9 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 			# extract vertex index and get name for node
 
-			tVtx = tVtcs[j].split('.[ | ]')
-			pad = '{:05d}'.format(tVtx[2])
+			tVtx = tVtcs[j].split('[ |]')
+			print (tVtx)
+			pad = '{:05d}'.format(tVtx[1])
 			nNode = tVtx[0] + '_node_' + pad
 
 			# calculate UV values
@@ -805,8 +808,8 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 			vtxNeighbors = pm.MeshVertex(tVtcs[j]).connectedVertices()
 			
 			for k in range(len(vtxNeighbors)):
-				tVtxNeighbor= vtxNeighbors[k].split('.[ | ]')
-				padNeighbor = '{:05d}'.format(tVtxNeighbor[2])
+				tVtxNeighbor= vtxNeighbors[k].split('[ |]')
+				padNeighbor = '{:05d}'.format(tVtxNeighbor[1])
 				nNeighbors[k] = tVtxNeighbor[0] + '_node_' + padNeighbor
 
 			neighbors = (nNeighbors[0], nNeighbors[1])
@@ -829,18 +832,18 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 		for j in range(len(tEdges)):
 
-				tEdgeVtcs = pm.polyListComponentConversion(tEdges[j], fe = True, tv = True)
-				tEdge = tEdges[j].split('.[ | ]')
-				pad0 = '{:05d}'.format(tEdge[2])
-				nEdge = tEdge[0] + '_Edge_' + pad0
+			tEdgeVtcs = pm.polyListComponentConversion(tEdges[j], fe = True, tv = True)
+			tEdge = tEdges[j].split('[ |]')
+			pad0 = '{:05d}'.format(tEdge[1])
+			nEdge = tEdge[0] + '_Edge_' + pad0
 
 			if len(tEdgeVtcs) == 1: # if vertices are combined expand them
 
 				tempEdgeVtcs = pm.filterExpand(tEdgeVtcs[0], sm = 31)
-				tVtx1 = tempEdgeVtcs[0].split('.[ | ]')
-				tVtx2 = tempEdgeVtcs[1].split('.[ | ]')
-				pad1 = '{:05d}'.format(tVtx1[2])
-				pad2 = '{:05d}'.format(tVtx2[2])
+				tVtx1 = tempEdgeVtcs[0].split('[ |]')
+				tVtx2 = tempEdgeVtcs[1].split('[ |]')
+				pad1 = '{:05d}'.format(tVtx1[1])
+				pad2 = '{:05d}'.format(tVtx2[1])
 
 				edgeP1 = tVtx1[0] + '_node_' + pad1
 				edgeP2 = tVtx2[0] + '_node_' + pad2
@@ -849,10 +852,10 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 			else: # get vertices directly
 
-				tVtx1 = tEdgeVtcs[0].split('.[ | ]')
-				tVtx2 = tEdgeVtcs[1].split('.[ | ]')
-				pad1 = '{:05d}'.format(tVtx1[2])
-				pad2 = '{:05d}'.format(tVtx2[2])
+				tVtx1 = tEdgeVtcs[0].split('[ |]')
+				tVtx2 = tEdgeVtcs[1].split('[ |]')
+				pad1 = '{:05d}'.format(tVtx1[1])
+				pad2 = '{:05d}'.format(tVtx2[1])
 
 				edgeP1 = tVtx1[0] + '_node_' + pad1
 				edgeP2 = tVtx2[0] + '_node_' + pad2
