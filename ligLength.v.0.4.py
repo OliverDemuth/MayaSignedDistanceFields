@@ -326,7 +326,7 @@ def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 	# get direction of I
 
-	iDir = dt.Vector(I.uv-u.uv).normal()
+	iDir = dt.Vector(I.uv[0]-u.uv[],I.uv[1]-u.uv[1],0).normal()
 
 	#accw = (u.uv+accwDir)*INF # define ccw triangle point if checking for arc sector below, otherwise not needed 
 	#acw = (u.uv+acwDir)*INF # define cw triangle point if checking for arc sector below, otherwise not needed 
@@ -346,7 +346,7 @@ def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 	 	
 		# either comparing angles directly ========== (not sure which calculation is cheaper and faster, probably this)
 
-		pDir = dt.Vector(point.uv-u.uv).normal()
+		pDir = dt.Vector(point.uv[0]-u.uv[0],point.uv[1]-u.uv[1], 0).normal()
 		point.angle = dt.Vector(pDir).angle(iDir) # get angle between vectors u to p and u to i
 
 		if point.angle > dirAngle: # check if point.angle falls outside the arc sector, if so break loop
@@ -379,7 +379,7 @@ def scan(u, I, accwDir=(-1,0,0), acwDir=(-1,0,0), points, edges, d):
 
 		else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
 
-			nDir = dt.Vector(n.uv-u.uv).normal() # vector from u to n
+			nDir = dt.Vector(n.uv[0]-u.uv[0],n.uv[1]-u.uv[1],0).normal() # vector from u to n
 
 			intersectionTurningPointsCW = scan(u, n, nDir, acwDir, points, edges, CW) # scan from n to acw to find potential successors
 			intersectionTurningPointsCCW = scan(u, n, accwDir, nDir, points, edges, CCW) # scan from n to accw to find potential successors
@@ -495,7 +495,7 @@ def astar( start, end, points, edges ):
 				# get parent_node of current_node and get previous direction
 
 				parent_node = current_node.parent
-				parentDir = dt.Vector(current_node.uv-parent_node.uv).normal()
+				parentDir = dt.Vector(current_node.uv[0]-parent_node.uv[0],current_node.uv[1]-parent_node.uv[1],0).normal()
 
 				# get neighboring nodes of current_node and get their orientation in relation to the parent_node
 
@@ -503,8 +503,8 @@ def astar( start, end, points, edges ):
 				neighborTwo_node = current_node.neighbors[1]
 				neighborOneOrient = ccw(parent_node,current_node,neighborOne_node)
 				neighborTwoOrient = ccw(parent_node,current_node,neighborTwo_node)
-				neighborOneDir = dt.Vector(neighborOne_node.uv-current_node.uv).normal()
-				neighborTwoDir = dt.Vector(neighborTwo_node.uv-current_node.uv).normal()
+				neighborOneDir = dt.Vector(neighborOne_node.uv[0]-current_node.uv[0],neighborOne_node.uv[1]-current_node.uv[1],0).normal()
+				neighborTwoDir = dt.Vector(neighborTwo_node.uv[0]-current_node.uv[0],neighborTwo_node.uv[1]-current_node.uv[1],0).normal()
 
 				# check if path was following edge of polygon in previous step 
 
@@ -526,7 +526,7 @@ def astar( start, end, points, edges ):
 
 				else: # neither neighbor was previous step, therefore need to check which way around the obstacle the path has to wrap 
 					
-					end_nodeDir = dt.Vector(end_node.uv-current_node.uv).normal()
+					end_nodeDir = dt.Vector(end_node.uv[0]-current_node.uv[0],end_node.uv[1]-current_node.uv[1],0).normal()
 					neighborOneAngle = neighborOneDir.angle(end_nodeDir)
 					neighborTwoAngle = neighborTwoDir.angle(end_nodeDir)
 
@@ -576,7 +576,7 @@ def astar( start, end, points, edges ):
 			
 			# calculate temporary g value
 			
-			tempG = current_node.g + dt.Vector(current_node.pos-successor.pos).lenght()
+			tempG = current_node.g + dt.Vector(current_node.pos[0]-successor.pos[0],current_node.pos[1]-successor.pos[1],current_node.pos[2]-successor.pos[2]).lenght()
 			
 			if successor in open_list: # if successor is already in open_list compare g values
 				if tempG < successor.g:
@@ -587,7 +587,7 @@ def astar( start, end, points, edges ):
 			
 			# calculate h and f values
 			
-			successor.h = dt.Vector(successor.pos-end_node.pos).length()
+			successor.h = dt.Vector(successor.pos[0]-end_node.pos[0],successor.pos[1]-end_node.pos[1],successor.pos[2]-end_node.pos[2]).length()
 			successor.f = successor.h + successor.g
 		
 	return [0, -1] #, 0] # no path found
@@ -684,9 +684,9 @@ def polyFacesTotArea( faces ): # Requires faces to be selected
 		VtxBPos = pm.xForm(VtxB, query=True, worldSpace=True, translation=True)
 		VtxCPos = pm.xForm(VtxC, query=True, worldSpace=True, translation=True)
 
-		DistA = dt.Vector(VtxBPos-VtxCPos).length()
-		DistB = dt.Vector(VtxAPos-VtxCPos).length()
-		DistC = dt.Vector(VtxAPos-VtxBPos).length()
+		DistA = dt.Vector(VtxBPos[0]-VtxCPos[0],VtxBPos[1]-VtxCPos[1],VtxBPos[2]-VtxCPos[2]).length()
+		DistB = dt.Vector(VtxAPos[0]-VtxCPos[0],VtxAPos[1]-VtxCPos[1],VtxAPos[2]-VtxCPos[2]).length()
+		DistC = dt.Vector(VtxAPos[0]-VtxBPos[0],VtxAPos[1]-VtxBPos[1],VtxAPos[2]-VtxBPos[2]).length()
 
 		# calculate area each triangle and sum it up
 
