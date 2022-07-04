@@ -1,38 +1,38 @@
-#   ligLength.v.0.6.py 
+#	ligLength.v.0.6.py 
 #
-#   This script calculates the shortest path (length) of a ligament from origin to
-#   insertion wrapping around the proximal and distal bone meshes. It roughly follows
-#   the RayScan approach by Hechenberger et al. 2020, in that it creates a partial 
-#   on-the-fly visibility graph on an A* search, adding elements to its priority
-#   queue based on arc sectors to find the shortest distance. 
+#	This script calculates the shortest path (length) of a ligament from origin to
+#	insertion wrapping around the proximal and distal bone meshes. It roughly follows
+#	the RayScan approach by Hechenberger et al. 2020, in that it creates a partial 
+#	on-the-fly visibility graph on an A* search, adding elements to its priority
+#	queue based on arc sectors to find the shortest distance. 
 #
-#   Written by Oliver Demuth and Vittorio la Barbera 09.05.2022
-#   Last updated 30.06.2022 - Oliver Demuth
+#	Written by Oliver Demuth and Vittorio la Barbera 09.05.2022
+#	Last updated 04.07.2022 - Oliver Demuth
 #
-#   SYNOPSIS:
+#	SYNOPSIS:
 #
-#       INPUT params:
-#           string  origin:        	Name of the origin point, i.e. the name of a locator at the position of the ligament origin
-#           string  insertion:     	Name of the insertion point, i.e. the name of a locator at the position of the ligament insertion
-#           string  jointcentre:   	Name of the joint centre, i.e. the name of a locator or joint, e.g. "myJoint" if following the ROM mapping protocol of Manafzadeh & Padian 2018
-#           string  proximal:      	Name of the proximal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
-#           string  distal:        	Name of the distal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
-#           int     res:           	Integer value to define the resolution of the curve approximating the slices.
+#		INPUT params:
+#			string  origin:		 Name of the origin point, i.e. the name of a locator at the position of the ligament origin
+#			string  insertion:	  Name of the insertion point, i.e. the name of a locator at the position of the ligament insertion
+#			string  jointcentre:	Name of the joint centre, i.e. the name of a locator or joint, e.g. "myJoint" if following the ROM mapping protocol of Manafzadeh & Padian 2018
+#			string  proximal:		Name of the proximal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
+#			string  distal:		 Name of the distal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
+#			int	 res:			Integer value to define the resolution of the curve approximating the slices.
 #
-#       RETURN params:
-#           float   pathLength[]:	Return value is a float array with two elements in the form of:
+#		RETURN params:
+#			float	pathLength[]: Return value is a float array with two elements in the form of:
 #
-#           element 0: 
-#               0   | False:    	failure, no shortest path (end point cannot be reached from start point through Pointset and NeighborSet): [0.0,-1.0]
-#               1   | True:		shortest path found: [1.0,..]
+#			element 0: 
+#				0	| False:	  failure, no shortest path (end point cannot be reached from start point through Pointset and NeighborSet): [0.0,-1.0]
+#				1	| True:	shortest path found: [1.0,..]
 #
-#           element 1:
-#               pathLength:        	Length of path from starting point to end point
+#			element 1:
+#				pathLength:		 Length of path from starting point to end point
 #
 #
-#   Note, the accuracy of the reported length depends on the resolution of the curve 
-#   approximating the slices through the bone meshes. The lower the resolution 'res', 
-#   the faster the script runs; however, accuracy is also reduced. 
+#	Note, the accuracy of the reported length depends on the resolution of the curve 
+#	approximating the slices through the bone meshes. The lower the resolution 'res', 
+#	the faster the script runs; however, accuracy is also reduced. 
 
 
 # ========== load pymel ==========
@@ -50,6 +50,7 @@ COLLINEAR = 0
 FP_TOLERANCE = 10 # used to address floating point errors and truncate floating point numbers to a certain tolerance 
 T = 10**FP_TOLERANCE
 T2 = 10.0**FP_TOLERANCE
+counter = 0
 
 
 # ========== object definitions ==========
@@ -105,7 +106,7 @@ class nodeEdge(object):
 
 def polyFacesTotArea( faces ): # Requires faces to be selected
 	# Input variables:
-	# 	faces = selected faces for which surface area is to be calculated
+	#	faces = selected faces for which surface area is to be calculated
 	# ======================================== #
 
 	# triangulation of faces
@@ -137,14 +138,14 @@ def polyFacesTotArea( faces ): # Requires faces to be selected
 		VtxCPos = pm.xform(VtxC, query = True, worldSpace = True, translation = True)
 
 		DistA = dt.Vector(VtxBPos[0] - VtxCPos[0],
-						  VtxBPos[1] - VtxCPos[1],
-						  VtxBPos[2] - VtxCPos[2]).length()
+							VtxBPos[1] - VtxCPos[1],
+							VtxBPos[2] - VtxCPos[2]).length()
 		DistB = dt.Vector(VtxAPos[0] - VtxCPos[0],
-						  VtxAPos[1] - VtxCPos[1],
-						  VtxAPos[2] - VtxCPos[2]).length()
+							VtxAPos[1] - VtxCPos[1],
+							VtxAPos[2] - VtxCPos[2]).length()
 		DistC = dt.Vector(VtxAPos[0] - VtxBPos[0],
-						  VtxAPos[1] - VtxBPos[1],
-						  VtxAPos[2] - VtxBPos[2]).length()
+							VtxAPos[1] - VtxBPos[1],
+							VtxAPos[2] - VtxBPos[2]).length()
 
 		# calculate area each triangle and sum it up
 		s = (DistA + DistB + DistC) / 2
@@ -158,12 +159,12 @@ def polyFacesTotArea( faces ): # Requires faces to be selected
 def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 	# Input variables:
-	# 	oPos = origin position
-	# 	cutDir = direction of cutting plane
-	# 	uDir = direction uf U axis on cutting plane
-	# 	vDir = direction of V axis on cutting plane
-	# 	mesh = mesh to be cut
-	# 	res = resolution for mesh slice approximation
+	#	oPos = origin position
+	#	cutDir = direction of cutting plane
+	#	uDir = direction uf U axis on cutting plane
+	#	vDir = direction of V axis on cutting plane
+	#	mesh = mesh to be cut
+	#	res = resolution for mesh slice approximation
 	# ======================================== #
 
 	# get number of faces
@@ -174,11 +175,11 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 	# cut mesh
 	pm.polyCut(meshF,  # mesh
-		       pc = (oPos[0], oPos[1], oPos[2]),  # origin pos
-		       ro = (cutDir[0], cutDir[1], cutDir[2]),  # cut direction
-		       ps = (1, 1),  # size of cut plane
-		       eo = (0, 0, 0),  # offset of the plane
-		       ef = 1)  # extract ???
+					 pc = (oPos[0], oPos[1], oPos[2]),  # origin pos
+					 ro = (cutDir[0], cutDir[1], cutDir[2]),  # cut direction
+					 ps = (1, 1),  # size of cut plane
+					 eo = (0, 0, 0),  # offset of the plane
+					 ef = 1)  # extract ???
 
 	# get difference in face numbers of pre and post cutting
 	numPreSlice = pm.polyEvaluate(mesh, f = True)
@@ -306,13 +307,16 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = None ):
 
 	# Input variables:
-	# 	origin = name of ligament origin (represented by object, e.g. locator, in Maya scene)
-	# 	insertion = name of ligament insertion (represented by object, e.g. locator, in Maya scene)
-	# 	jointCentre = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
-	# 	proxMesh = name of proximal bone mesh to which ligament origin attaches
-	# 	distMesh = name of distal bone mesh to which ligament insertion attaches
-	#	res = resolution for mesh slice approximation
+	#	origin = name of ligament origin (represented by object, e.g. locator, in Maya scene)
+	#	insertion = name of ligament insertion (represented by object, e.g. locator, in Maya scene)
+	#	jointCentre = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
+	#	proxMesh = name of proximal bone mesh to which ligament origin attaches
+	#	distMesh = name of distal bone mesh to which ligament insertion attaches
+	# res = resolution for mesh slice approximation
 	# ======================================== #
+
+	global counter 
+	counter = 0
 
 	# data house keeping
 	duplicate_prox_name = proxMesh + '_duplicate'
@@ -330,12 +334,12 @@ def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = N
 	# calculate vectors from origin to insertion
 
 	LigDir = dt.Vector(oPos[0] - iPos[0],
-					   oPos[1] - iPos[1],
-					   oPos[2] - iPos[2])
+						 oPos[1] - iPos[1],
+						 oPos[2] - iPos[2])
 
 	JointDir = dt.Vector(oPos[0] - jPos[0],
-					     oPos[1] - jPos[1],
-					     oPos[2] - jPos[2])
+							 oPos[1] - jPos[1],
+							 oPos[2] - jPos[2])
 	Offset = LigDir.length()
 
 	# calculate cut plane direction
@@ -389,15 +393,15 @@ def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = N
 def intersect( p0, p1, edge ):
 
 	# Input variables:
-	# 	p0 = start point of line segment
-	#	p1 = end point of line segment
-	#	edge = line segment to check if it crosses (intersects) segment p0p1
+	#	p0 = start point of line segment
+	# p1 = end point of line segment
+	# edge = line segment to check if it crosses (intersects) segment p0p1
 	# ======================================== #
 
 	# check if either point is in edge
 
 	if p0 in edge or p1 in edge:
-		intersection = 0 #this is technically wrong but it stops the script from getting stuck on u
+		intersection = 0 #this is technically wrong but it stops the script from getting stuck on u. THIS CAUSES ISSUES!
 		return intersection
 
 	# get edge points from nodeEdge class
@@ -445,9 +449,9 @@ def intersect( p0, p1, edge ):
 def intersect_point(p0, p1, edge):
 
 	# Input variables:
-	# 	p0 = start point of line segment
+	#	p0 = start point of line segment
 	#	p1 = end point of line segment
-	#	edge = line segment to calculate intersection point with
+	# 	edge = line segment to calculate intersection point with
 	# ======================================== #
 
 		# check if either point is in intersection
@@ -503,9 +507,9 @@ def intersect_point(p0, p1, edge):
 def ccw(A, B, C):
 
 	# Input variables:
-	# 	A = first corner of triangle (2D coordinates are stored in uv attribute in Point class)
-	#	B = second corner of triangle (2D coordinates are stored in uv attribute in Point class)
-	#	C = third corner of triangle (2D coordinates are stored in uv attribute in Point class)
+	#	A = first corner of triangle (2D coordinates are stored in uv attribute in Point class)
+	# B = second corner of triangle (2D coordinates are stored in uv attribute in Point class)
+	# C = third corner of triangle (2D coordinates are stored in uv attribute in Point class)
 	# ======================================== #
 
 	area = int(((B.uv[0] - A.uv[0]) * (C.uv[1] - A.uv[1]) - (B.uv[1] - A.uv[1]) * (C.uv[0] - A.uv[0])) * T) / T2
@@ -525,9 +529,9 @@ def ccw(A, B, C):
 def shoot_ray( point, target, edges ):
 
 	# Input variables:
-	# 	point = origin point of ray
-	#	target = target point of ray
-	#	edgeSet = edges to be checked if they intersect ray
+	#	point = origin point of ray
+	# target = target point of ray
+	# edgeSet = edges to be checked if they intersect ray
 	# ======================================== #
 
 	intersectP = []
@@ -551,13 +555,13 @@ def shoot_ray( point, target, edges ):
 def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	# Input variables:
-	# 	u = starting point
-	#	I = target point and/or intersection point
-	#	points = set of all points within path finding problem
-	#	edges = set of all edges within path finding problem
-	#	d = direction of scan, either CCW or CW
-	#	accwDir = normalised vector of the direction of the counter clockwise angle sector border, i.e. accwDir = dt.Vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
-	#	acwDir = normalised vector of the direction of the clockwise angle sector border, i.e. acwDir = dt.Vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
+	#	u = starting point
+	# I = target point and/or intersection point
+	# points = set of all points within path finding problem
+	# edges = set of all edges within path finding problem
+	# d = direction of scan, either CCW or CW
+	# accwDir = normalised vector of the direction of the counter clockwise angle sector border, i.e. accwDir = dt.Vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
+	# acwDir = normalised vector of the direction of the clockwise angle sector border, i.e. acwDir = dt.Vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
 	# ======================================== #
 
 	# make direction fool proof
@@ -567,10 +571,16 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 	if d < 0:
 		d =- 1
 
+	global counter 
+	counter += 1
+	print (counter)
+
 	# get subset of points that are part of intersection polygon
 
 	polygonSubset = []
-	if I.ID[0] == None:
+	if u.ID[0] == None:
+		polygonSubset = points
+	elif I.ID[0] == None:
 		polygonSubset = points
 	else:
 		for point in points:
@@ -588,9 +598,6 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	iDir = dt.Vector(I.uv[0]-u.uv[0],I.uv[1]-u.uv[1],0).normal()
 
-	#accw = (u.uv+accwDir)*INF # define ccw triangle point if checking for arc sector below, otherwise not needed
-	#acw = (u.uv+acwDir)*INF # define cw triangle point if checking for arc sector below, otherwise not needed
-
 	# get arc sector angles based on direction d
 
 	if d == CW:
@@ -600,46 +607,84 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	# loop through points in direction d to find turning point, however, if any angle falls outside the arc sector break loop
 
-	turningPoint = None # define turning point
+	turningPoints = [] # define turning point
+
+	# get angle between vectors u to p and u to i
 
 	for point in pointsDir:
 
-		# either comparing angles directly
-
 		pDir = dt.Vector(point.uv[0]-u.uv[0],point.uv[1]-u.uv[1], 0).normal()
-		point.angle = dt.Vector(pDir).angle(iDir) # get angle between vectors u to p and u to i
+		point.angle = dt.Vector(pDir).angle(iDir) 
 
-		if point.angle > dirAngle: # check if point.angle falls outside the arc sector, if so break loop
+	# sort points by angle to in direction d
+
+	pointsDir.sort(key = lambda point:point.angle) 
+
+	# go through sorted points and find turning points
+
+	for point in pointsDir:
+
+		if point.angle > dirAngle: # check if point.angle falls outside the arc sector, if so break loop because we leave the angle sector
 			break
 
-	else: # no break, i.e. all points checked and they all are within arc sector
+		if ccw(u, I, point) == ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2): # all points are on the same side of the arc sector
+			if point.neighbors.point1.angle < point.angle and point.neighbors.point2.angle < point.angle:
+				turningPoints.append(point)
 
-		pointsDir.sort(key = lambda point:point.angle, reverse=True) # sort points to get point with largest angle, i.e. the turning point in direction d
-		turningPoint=pointsDir[0]
+		elif ccw(u, I, point.neighbors.point1) == 0 and ccw(point, point.neighbors.point1, point.neighbors.point2) != 0: # neighbor 1 is u and points are not colinear
+			if point.neighbors.point2.angle < point.angle or ccw(u, I, point) != ccw(u, I, point.neighbors.point2):
+				turningPoints.append(point)
+
+		elif ccw(u, I, point.neighbors.point2) == 0 and ccw(point, point.neighbors.point1, point.neighbors.point2) != 0: # neighbor 2 is u and points are not colinear
+			if point.neighbors.point1.angle < point.angle or ccw(u, I, point) != ccw(u, I, point.neighbors.point1): 
+				turningPoints.append(point)
+
+		elif ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # both neighbors are on the other side of the arc sector
+			turningPoints.append(point)
+
+		elif ccw(u, I, point.neighbors.point1) != ccw(u, I, point): # only neighbor 1 is on the opposite side of the arc sector 
+			if point.neighbors.point2.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point2):
+				turningPoints.append(point)
+
+		elif ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # only neighbor 2 is on the opposite side of the arc sector 
+			if point.neighbors.point1.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point1):
+				turningPoints.append(point)
+
+	print ('number of turningPoints',len(turningPoints))
 
 	successors = []
 
 	# if a turning point was found, check if it is visible
 
-	if turningPoint is not None:
+	if len(turningPoints) != 0 :
 
-		n = shoot_ray(u, turningPoint, edges)
+		for turningPoint in turningPoints:
+			n = shoot_ray(u, turningPoint, edges)
 
-		if n == turningPoint: # turningPoint is visible from u
+			if n.ID[1] != -1:
 
-			successors.append(n) # add it to successor list
+				if n == turningPoint: # turningPoint is visible from u
 
-		else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
+					print ('turningPoint', n.ID, 'is visible')
 
-			nDir = dt.Vector(n.uv[0] - u.uv[0],n.uv[1] - u.uv[1],0).normal() # vector from u to n
+					successors.append(n) # add it to successor list
 
-			intersectionTurningPointsCW = scan(u, n, points, edges, CW, nDir, acwDir,) # scan from n to acw to find potential successors
-			intersectionTurningPointsCCW = scan(u, n, points, edges, CCW, accwDir, nDir) # scan from n to accw to find potential successors
+				else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
 
-			# add potential successors to successors list
+					if counter > 100:
+						break
 
-			successors.extend(intersectionTurningPointsCW)
-			successors.extend(intersectionTurningPointsCCW)
+					print ('turningPoint', n.ID, 'is not visible')
+
+					nDir = dt.Vector(n.uv[0] - u.uv[0],n.uv[1] - u.uv[1],0).normal() # vector from u to n
+
+					intersectionTurningPointsCW = scan(u, n, points, edges, CW, nDir, acwDir,) # scan from n to acw to find potential successors
+					intersectionTurningPointsCCW = scan(u, n, points, edges, CCW, accwDir, nDir) # scan from n to accw to find potential successors
+
+					# add potential successors to successors list
+
+					successors.extend(intersectionTurningPointsCW)
+					successors.extend(intersectionTurningPointsCCW)
 
 	return successors
 
@@ -649,11 +694,13 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 def astar( start, end, points, edges ):
 
 	# Input variables:
-	# 	start = 3D position of the starting point
-	#	end = 3D position of the end point
-	#	points = set of all points within path finding problem
-	#	edges = set of all edges within path finding problem
+	#	start = 3D position of the starting point
+	# end = 3D position of the end point
+	# points = set of all points within path finding problem
+	# edges = set of all edges within path finding problem
 	# ======================================== #
+
+	global counter
 
 	# Create start and end node
 
@@ -685,6 +732,9 @@ def astar( start, end, points, edges ):
 
 	while len(open_list) > 0:
 
+		if counter > 100:
+			break
+
 		# Get the current node
 
 		current_node = open_list[0]
@@ -698,6 +748,8 @@ def astar( start, end, points, edges ):
 				current_index = index
 
 		# Pop current off open list, add to closed list
+
+		print ('current_node', current_node.ID)
 
 		open_list.pop(current_index)
 		closed_list.append(current_node)
@@ -723,6 +775,11 @@ def astar( start, end, points, edges ):
 		# shoot ray from current_node to end_node
 
 		hitPoint = shoot_ray(current_node,end_node,edges)
+		print('shoot ray from', current_node.ID, 'to', end_node.ID)
+
+		if hitPoint != end_node:
+			print('hitPoint neighbors', hitPoint.neighbors.point1.ID, hitPoint.neighbors.point2.ID)
+
 		successors = []
 
 		# check if end_node is visible
@@ -743,6 +800,8 @@ def astar( start, end, points, edges ):
 				# get parent_node of current_node and get previous direction
 
 				parent_node = current_node.parent
+				print ('parent_node', parent_node.ID)
+
 				parentDir = dt.Vector(current_node.uv[0]-parent_node.uv[0],current_node.uv[1]-parent_node.uv[1],0).normal()
 
 				# get neighboring nodes of current_node and get their orientation in relation to the parent_node
@@ -814,8 +873,12 @@ def astar( start, end, points, edges ):
 			turningPoints.extend(turningPointsCCW)
 			turningPoints.extend(turningPointsCW)
 
+			print ('number of successors = ', len(turningPoints))
+
 			for point in turningPoints:
 				successors.append(point)
+				print('successors')
+				print(point.ID)
 
 		# Loop through successors
 
