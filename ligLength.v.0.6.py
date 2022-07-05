@@ -7,27 +7,27 @@
 #	queue based on arc sectors to find the shortest distance. 
 #
 #	Written by Oliver Demuth and Vittorio la Barbera 09.05.2022
-#	Last updated 04.07.2022 - Oliver Demuth
+#	Last updated 05.07.2022 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
 #		INPUT params:
-#			string  origin:		 Name of the origin point, i.e. the name of a locator at the position of the ligament origin
-#			string  insertion:	  Name of the insertion point, i.e. the name of a locator at the position of the ligament insertion
+#			string  origin:			Name of the origin point, i.e. the name of a locator at the position of the ligament origin
+#			string  insertion:		Name of the insertion point, i.e. the name of a locator at the position of the ligament insertion
 #			string  jointcentre:	Name of the joint centre, i.e. the name of a locator or joint, e.g. "myJoint" if following the ROM mapping protocol of Manafzadeh & Padian 2018
 #			string  proximal:		Name of the proximal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
-#			string  distal:		 Name of the distal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
-#			int	 res:			Integer value to define the resolution of the curve approximating the slices.
+#			string  distal:			Name of the distal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
+#			int	 	res:			Integer value to define the resolution of the curve approximating the slices.
 #
 #		RETURN params:
-#			float	pathLength[]: Return value is a float array with two elements in the form of:
+#			float	pathLength[]:	Return value is a float array with two elements in the form of:
 #
 #			element 0: 
-#				0	| False:	  failure, no shortest path (end point cannot be reached from start point through Pointset and NeighborSet): [0.0,-1.0]
-#				1	| True:	shortest path found: [1.0,..]
+#				0	| False:		failure, no shortest path (end point cannot be reached from start point through Pointset and NeighborSet): [0.0,-1.0]
+#				1	| True:			shortest path found: [1.0,..]
 #
 #			element 1:
-#				pathLength:		 Length of path from starting point to end point
+#				pathLength:			Length of path from starting point to end point
 #
 #
 #	Note, the accuracy of the reported length depends on the resolution of the curve 
@@ -312,7 +312,7 @@ def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = N
 	#	jointCentre = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
 	#	proxMesh = name of proximal bone mesh to which ligament origin attaches
 	#	distMesh = name of distal bone mesh to which ligament insertion attaches
-	# res = resolution for mesh slice approximation
+	# 	res = resolution for mesh slice approximation
 	# ======================================== #
 
 	global counter 
@@ -334,12 +334,12 @@ def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = N
 	# calculate vectors from origin to insertion
 
 	LigDir = dt.Vector(oPos[0] - iPos[0],
-						 oPos[1] - iPos[1],
-						 oPos[2] - iPos[2])
+					   oPos[1] - iPos[1],
+					   oPos[2] - iPos[2])
 
 	JointDir = dt.Vector(oPos[0] - jPos[0],
-							 oPos[1] - jPos[1],
-							 oPos[2] - jPos[2])
+						 oPos[1] - jPos[1],
+						 oPos[2] - jPos[2])
 	Offset = LigDir.length()
 
 	# calculate cut plane direction
@@ -394,8 +394,8 @@ def intersect( p0, p1, edge ):
 
 	# Input variables:
 	#	p0 = start point of line segment
-	# p1 = end point of line segment
-	# edge = line segment to check if it crosses (intersects) segment p0p1
+	#	p1 = end point of line segment
+	#	edge = line segment to check if it crosses (intersects) segment p0p1
 	# ======================================== #
 
 	# check if either point is in edge
@@ -451,7 +451,7 @@ def intersect_point(p0, p1, edge):
 	# Input variables:
 	#	p0 = start point of line segment
 	#	p1 = end point of line segment
-	# 	edge = line segment to calculate intersection point with
+	#	edge = line segment to calculate intersection point with
 	# ======================================== #
 
 		# check if either point is in intersection
@@ -508,8 +508,8 @@ def ccw(A, B, C):
 
 	# Input variables:
 	#	A = first corner of triangle (2D coordinates are stored in uv attribute in Point class)
-	# B = second corner of triangle (2D coordinates are stored in uv attribute in Point class)
-	# C = third corner of triangle (2D coordinates are stored in uv attribute in Point class)
+	#	B = second corner of triangle (2D coordinates are stored in uv attribute in Point class)
+	#	C = third corner of triangle (2D coordinates are stored in uv attribute in Point class)
 	# ======================================== #
 
 	area = int(((B.uv[0] - A.uv[0]) * (C.uv[1] - A.uv[1]) - (B.uv[1] - A.uv[1]) * (C.uv[0] - A.uv[0])) * T) / T2
@@ -530,8 +530,8 @@ def shoot_ray( point, target, edges ):
 
 	# Input variables:
 	#	point = origin point of ray
-	# target = target point of ray
-	# edgeSet = edges to be checked if they intersect ray
+	#	target = target point of ray
+	#	edgeSet = edges to be checked if they intersect ray
 	# ======================================== #
 
 	intersectP = []
@@ -556,12 +556,12 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	# Input variables:
 	#	u = starting point
-	# I = target point and/or intersection point
-	# points = set of all points within path finding problem
-	# edges = set of all edges within path finding problem
-	# d = direction of scan, either CCW or CW
-	# accwDir = normalised vector of the direction of the counter clockwise angle sector border, i.e. accwDir = dt.Vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
-	# acwDir = normalised vector of the direction of the clockwise angle sector border, i.e. acwDir = dt.Vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
+	# 	I = target point and/or intersection point
+	# 	points = set of all points within path finding problem
+	# 	edges = set of all edges within path finding problem
+	# 	d = direction of scan, either CCW or CW
+	# 	accwDir = normalised vector of the direction of the counter clockwise angle sector border, i.e. accwDir = dt.Vector(accw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
+	# 	acwDir = normalised vector of the direction of the clockwise angle sector border, i.e. acwDir = dt.Vector(acw.uv-u.uv).normal(). Variable is optional and if not suplied is assumed to point into opposite direction from u to I and thus the arc being a half circle
 	# ======================================== #
 
 	# make direction fool proof
@@ -571,9 +571,13 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 	if d < 0:
 		d =- 1
 
-	global counter 
-	counter += 1
+	# Debugging
+
+	global counter
+	counter += 1 # increase for each scan for debugging
 	print (counter)
+
+
 
 	# get subset of points that are part of intersection polygon
 
@@ -609,7 +613,7 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	turningPoints = [] # define turning point
 
-	# get angle between vectors u to p and u to i
+	# get angle between vectors u to p and u to I
 
 	for point in pointsDir:
 
@@ -625,30 +629,37 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 	for point in pointsDir:
 
 		if point.angle > dirAngle: # check if point.angle falls outside the arc sector, if so break loop because we leave the angle sector
+			print('outside arc sector')
 			break
 
 		if ccw(u, I, point) == ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2): # all points are on the same side of the arc sector
 			if point.neighbors.point1.angle < point.angle and point.neighbors.point2.angle < point.angle:
 				turningPoints.append(point)
+				print('Case 1', point.ID)
 
 		elif ccw(u, I, point.neighbors.point1) == 0 and ccw(point, point.neighbors.point1, point.neighbors.point2) != 0: # neighbor 1 is u and points are not colinear
 			if point.neighbors.point2.angle < point.angle or ccw(u, I, point) != ccw(u, I, point.neighbors.point2):
 				turningPoints.append(point)
+				print('Case 2', point.ID)
 
 		elif ccw(u, I, point.neighbors.point2) == 0 and ccw(point, point.neighbors.point1, point.neighbors.point2) != 0: # neighbor 2 is u and points are not colinear
 			if point.neighbors.point1.angle < point.angle or ccw(u, I, point) != ccw(u, I, point.neighbors.point1): 
 				turningPoints.append(point)
+				print('Case 3', point.ID)
 
 		elif ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # both neighbors are on the other side of the arc sector
 			turningPoints.append(point)
+			print('Case 4', point.ID)
 
 		elif ccw(u, I, point.neighbors.point1) != ccw(u, I, point): # only neighbor 1 is on the opposite side of the arc sector 
 			if point.neighbors.point2.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point2):
 				turningPoints.append(point)
+				print('Case 5', point.ID)
 
 		elif ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # only neighbor 2 is on the opposite side of the arc sector 
 			if point.neighbors.point1.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point1):
 				turningPoints.append(point)
+				print('Case 6', point.ID)
 
 	print ('number of turningPoints',len(turningPoints))
 
@@ -659,7 +670,13 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 	if len(turningPoints) != 0 :
 
 		for turningPoint in turningPoints:
+
+			print ('turning point ID', turningPoint.ID)
+			
 			n = shoot_ray(u, turningPoint, edges)
+
+			if counter > 100:
+				break
 
 			if n.ID[1] != -1:
 
@@ -670,9 +687,6 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 					successors.append(n) # add it to successor list
 
 				else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
-
-					if counter > 100:
-						break
 
 					print ('turningPoint', n.ID, 'is not visible')
 
@@ -695,9 +709,9 @@ def astar( start, end, points, edges ):
 
 	# Input variables:
 	#	start = 3D position of the starting point
-	# end = 3D position of the end point
-	# points = set of all points within path finding problem
-	# edges = set of all edges within path finding problem
+	#	end = 3D position of the end point
+	#	points = set of all points within path finding problem
+	#	edges = set of all edges within path finding problem
 	# ======================================== #
 
 	global counter
@@ -740,7 +754,11 @@ def astar( start, end, points, edges ):
 		current_node = open_list[0]
 		current_index = 0
 
+		print('open_list:')
+
 		for index, item in enumerate(open_list):
+
+			print(item.ID)
 
 			if item.f < current_node.f:
 
@@ -761,12 +779,12 @@ def astar( start, end, points, edges ):
 			pathLength = current_node.g * dist
 
 			# path might not be needed
-			
+
 			path = []
 			current = current_node
-			
+
 			while current is not None:
-			
+
 				path.append(current.ID)
 				current = current.parent
 
@@ -867,7 +885,10 @@ def astar( start, end, points, edges ):
 
 			turningPoints = []
 
+			print('scan CCW', accwDir, hitPoint.ID)
 			turningPointsCCW = scan(current_node, hitPoint, points, edges, CCW, accwDir, acwDir)
+
+			print('scan CW', acwDir, hitPoint.ID)
 			turningPointsCW = scan(current_node, hitPoint, points, edges, CW, accwDir, acwDir)
 
 			turningPoints.extend(turningPointsCCW)
@@ -888,7 +909,7 @@ def astar( start, end, points, edges ):
 
 			for closed_successors in closed_list:
 				if successor == closed_successors:
-						continue
+					continue
 
 			# calculate temporary g value
 
