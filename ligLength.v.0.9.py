@@ -1,4 +1,4 @@
-#	ligLength.v.0.7.py 
+#	ligLength.v.0.9.py 
 #
 #	This script calculates the shortest path (length) of a ligament from origin to
 #	insertion wrapping around the proximal and distal bone meshes. It roughly follows
@@ -7,7 +7,7 @@
 #	queue based on arc sectors to find the shortest distance. 
 #
 #	Written by Oliver Demuth and Vittorio la Barbera 09.05.2022
-#	Last updated 08.07.2022 - Oliver Demuth
+#	Last updated 28.07.2022 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -17,7 +17,7 @@
 #			string  jointcentre:	Name of the joint centre, i.e. the name of a locator or joint, e.g. "myJoint" if following the ROM mapping protocol of Manafzadeh & Padian 2018
 #			string  proximal:		Name of the proximal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
 #			string  distal:			Name of the distal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
-#			int	 	res:			Integer value to define the resolution of the curve approximating the slices.
+#			int	 	res:			Integer value to define the resolution of the curve approximating the slices. If none is given, slice will not be approximated
 #
 #		RETURN params:
 #			float	pathLength[]:	Return value is a float array with two elements in the form of:
@@ -50,7 +50,6 @@ COLLINEAR = 0
 FP_TOLERANCE = 10 # used to address floating point errors and truncate floating point numbers to a certain tolerance 
 T = 10**FP_TOLERANCE
 T2 = 10.0**FP_TOLERANCE
-counter = 0
 
 
 # ========== object definitions ==========
@@ -207,9 +206,9 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 		tempPlane = mesh + '_plane_' + str(i) # name of the slice 
 		tempSliceEdges = pm.polyListComponentConversion(newFaces, ff = True, te = True) # get all edges from the slices
 
-		# get slice area and translate it into resolution for curve circumscribing slice
-		
-		if res is not None: # if res is provided approximate the slices, otherwise use full resolution of mesh
+		if res != None:
+
+			# get slice area and translate it into resolution for curve circumscribing slice
 
 			pm.select(newFaces)
 			sliceArea = polyFacesTotArea(newFaces)
@@ -219,40 +218,54 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 			if resolution < 4:
 				resolution = 4
 
-		# approximate slice surface and reduce number of vertices and edges to a more reasonable number based on slice area
-		
-		pm.select(tempSliceEdges)
-		pm.polyToCurve(form = 2, degree = 1, conformToSmoothMeshPreview = 0, n = tempCRV)
-		pm.select(clear = True)
+			# approximate slice surface and reduce number of vertices and edges to a more reasonable number based on slice area
+			
+			pm.select(tempSliceEdges)
+			pm.polyToCurve(form = 2, degree = 1, conformToSmoothMeshPreview = 0, n = tempCRV)
+			pm.select(clear = True)
 
-		# only rebuild curve and approximate slice if res is provided, otherwise use full resolutio of mesh
-
-		if res is not None:
 			pm.rebuildCurve(tempCRV, ch = 1, rpo = 1, rt = 0, end = 1,
 				kr = 0, kcp = 0, kep = 1, kt = 1, s = resolution,
 				d = 1, tol = 1e-08)
 
-		pm.nurbsToPolygonsPref(pt = 1, pc = 1, f = 0)
-		pm.planarSrf(tempCRV, ch = 1, d = 1, ko = 0, tol = 1e-01,
-			rn = 0, po = 1, n = tempPlane)
+			pm.nurbsToPolygonsPref(pt = 1, pc = 1, f = 0)
+			pm.planarSrf(tempCRV, ch = 1, d = 1, ko = 0, tol = 1,
+				rn = 0, po = 1, n = tempPlane)
 
-		# add curve and plane to temporary group
-		
-		tempGRP = 'TempGRP'
-		if not pm.objExists(tempGRP):  # check if temporary group exists in the Maya scene
-			pm.group(em = True, n = tempGRP)
+			# add curve and plane to temporary group
+			
+			tempGRP = 'TempGRP'
+			if not pm.objExists(tempGRP):  # check if temporary group exists in the Maya scene
+				pm.group(em = True, n = tempGRP)
 
-		pm.parent(tempCRV, tempGRP)
-		pm.parent(tempPlane, tempGRP)
+			pm.parent(tempCRV, tempGRP)
+			pm.parent(tempPlane, tempGRP)
 
-		# get vertices and edges from new slice
+			# get vertices and edges from new slice
 
-		tempPlaneF = tempPlane + '.f[0]'
+			tempPlaneF = tempPlane + '.f[0]'
+
+			vertices = pm.polyListComponentConversion(tempPlaneF, ff = True, tv = True)
+			pm.polyMergeVertex(vertices,d = 0.01, ch = 1) # merge vertices that are close together
+			vertices = pm.polyListComponentConversion(tempPlaneF, ff = True, tv = True)
+			vertices = pm.filterExpand(vertices, sm = 31)
+
+			# work around if Maya unable to count vertices properly
+
+			lastVertex = pm.general.MeshVertex(vertices[-1]).index()
+			vertices = tempPlane + '.vtx[0:' + str(lastVertex) + ']'
+			vertices = pm.filterExpand(vertices, sm = 31)
+
+		else: # res == None, get vertices directly from slice
+
+			vertices = pm.polyListComponentConversion(newFaces, ff = True, tv = True)
+			vertices = pm.filterExpand(vertices, sm = 31)
+
+		# define variables for nodes and their neighbors
 
 		nodePoints = []
-		vertices = pm.polyListComponentConversion(tempPlaneF, ff = True, tv = True)
-		vertices = pm.filterExpand(vertices, sm = 31)
 		vtxNeighbors = []
+		vertexIndices = []
 
 		# go through vertices and create nodePoints
 
@@ -261,6 +274,7 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 			# extract vertex index and get name for node
 
 			vtxID = pm.general.MeshVertex(vertices[j]).index()
+			vertexIndices.append(vtxID)
 			vtxNeighbors.append(pm.general.MeshVertex(vertices[j]).connectedVertices())
 
 			# get position of 2D plane (uv) from 3D position (xyz)
@@ -280,36 +294,56 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 		# get neighboring nodePoints
 
 		for j in range(len(nodePoints)):
+
 			neighbors = pm.filterExpand(vtxNeighbors[j], sm = 31)
-			neighbor1ID = pm.general.MeshVertex(neighbors[0]).index()
-			neighbor2ID = pm.general.MeshVertex(neighbors[1]).index()
-			nodePoints[j].neighbors = nodeEdge(point1 = nodePoints[neighbor1ID], point2 = nodePoints[neighbor2ID])
+
+			neighbor1ID = pm.general.MeshVertex(neighbors[-2]).index() # get neighbor 1 vertex ID
+			neighbor1Index = vertexIndices.index(neighbor1ID) # get neighbor 1 vertex index
+
+			neighbor2ID = pm.general.MeshVertex(neighbors[-1]).index() # get neighbor 2 vertex ID
+			neighbor2Index = vertexIndices.index(neighbor2ID) # get neighbor 2 vertex index
+
+			nodePoints[j].neighbors = nodeEdge(point1 = nodePoints[neighbor1Index], point2 = nodePoints[neighbor2Index])
 
 		vtxNodes += nodePoints
 
-		# triangulate plane to get all edges
+		# triangulate slice to get all edges
 
-		pm.select(tempPlaneF)
-		pm.polyTriangulate(tempPlaneF)
+		if res != None:
 
-		newFaces = pm.ls(selection = True)
+			pm.select(tempPlaneF)
+			pm.polyTriangulate(tempPlaneF)
+
+		else:
+
+			pm.select(newFaces)
+			pm.polyTriangulate(newFaces)
+
+		SliceFaces = pm.ls(selection = True)
 		pm.select(clear = True)
 
 		# get all edges from the slices
 
 		nodeEdges = []
-		edges = pm.polyListComponentConversion(newFaces, ff = True, te = True)
+		edges = pm.polyListComponentConversion(SliceFaces, ff = True, te = True)
 		edges = pm.filterExpand(edges, sm = 32)
 
 		# go through each edge to create nodeEdge
 
 		for j in range(len(edges)):
+
 			edgeVertices = pm.polyListComponentConversion(edges[j], fe = True, tv = True)
 			edgeVertices = pm.filterExpand(edgeVertices, sm = 31)
-			id_vtx1 = pm.general.MeshVertex(edgeVertices[0]).index() # get vertex ID
-			id_vtx2 = pm.general.MeshVertex(edgeVertices[1]).index() # get vertex ID
 
-			nodeEdges.append(nodeEdge(point1 = nodePoints[id_vtx1], point2 = nodePoints[id_vtx2]))
+			id_vtx1 = pm.general.MeshVertex(edgeVertices[0]).index() # get vertex ID of vertex 1
+			vtx1IDIndex = vertexIndices.index(id_vtx1) # get index of vertex 2
+
+			id_vtx2 = pm.general.MeshVertex(edgeVertices[1]).index() # get vertex ID of vertex 2
+			vtx2IDIndex = vertexIndices.index(id_vtx2) # get index of vertex 2
+
+			# get nodePoints for vertices
+
+			nodeEdges.append(nodeEdge(point1 = nodePoints[vtx1IDIndex], point2 = nodePoints[vtx2IDIndex]))
 
 		edgeNodes += nodeEdges
 
@@ -329,10 +363,8 @@ def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = N
 	# 	res = resolution for mesh slice approximation
 	# ======================================== #
 
-	global counter 
-	counter = 0
-
 	# data house keeping
+
 	duplicate_prox_name = proxMesh + '_duplicate'
 	pm.duplicate(proxMesh, n = duplicate_prox_name)
 
@@ -380,10 +412,12 @@ def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = N
 	VtxSet.extend(VtxSet2)
 	EdgeSet.extend(EdgeSet2)
 
+	print('Number of NodePoints =', len(VtxSet))
+	print('Number of NodeEdges =', len(EdgeSet))
+
 	# run A* search
 
 	ligLength = astar(oPos, iPos, VtxSet, EdgeSet)
-	# ligLength = (VtxSet,EdgeSet)
 
 	# clean up
 
@@ -414,8 +448,12 @@ def intersect( p0, p1, edge ):
 
 	# check if either point is in edge
 
-	if p0 in edge or p1 in edge:
-		intersection = 0 #this is technically wrong but it stops the script from getting stuck on u. THIS CAUSES ISSUES!
+	if p1 in edge:
+		intersection = 1
+		return intersection
+
+	if p0 in edge:
+		intersection = 0 # this is technically wrong but it stops the script from getting stuck on u.
 		return intersection
 
 	# get edge points from nodeEdge class
@@ -471,9 +509,10 @@ def intersect_point(p0, p1, edge):
 		# check if either point is in intersection
 
 	if p1 in edge:
+		intersect_dist = dt.Vector(p0.uv[0] - p1.uv[0], p0.uv[1] - p1.uv[1], 0).length()
+		p1.dist = intersect_dist
+
 		return p1
-	if p0 in edge:
-		return p0
 
 	# get name, polygon and neighbors
 
@@ -585,14 +624,6 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 	if d < 0:
 		d =- 1
 
-	# Debugging
-
-	global counter
-	counter += 1 # increase for each scan for debugging
-	print (counter)
-
-
-
 	# get subset of points that are part of intersection polygon
 
 	polygonSubset = []
@@ -620,8 +651,11 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	if d == CW:
 		dirAngle = dt.Vector(acwDir).angle(iDir) # arc sector angle in direction d
+		endAngle = dt.Vector(acwDir).angle(dt.Vector(1-u.uv[0],0-u.uv[1],0).normal())
+
 	else: # d == CCW or d == 0, i.e. colinear
 		dirAngle = dt.Vector(accwDir).angle(iDir) # arc sector angle in direction d
+		endAngle = dt.Vector(accwDir).angle(dt.Vector(1-u.uv[0],0-u.uv[1],0).normal())
 
 	# loop through points in direction d to find turning point, however, if any angle falls outside the arc sector break loop
 
@@ -642,40 +676,31 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	for point in pointsDir:
 
-		if point.angle > dirAngle: # check if point.angle falls outside the arc sector, if so break loop because we leave the angle sector
-			print('outside arc sector')
+		if point.angle > dirAngle: # check if point.angle falls outside the angle sector, if so break loop because we leave the angle sector
 			break
 
-		if ccw(u, I, point) == ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2): # all points are on the same side of the arc sector
-			if point.neighbors.point1.angle < point.angle and point.neighbors.point2.angle < point.angle:
+		if ccw(u, I, point) == ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2): # all points are on the same side of scan line
+			if point.neighbors.point1.angle < point.angle and point.neighbors.point2.angle < point.angle: # point angle is bigger than both neighboring angles
 				turningPoints.append(point)
-				print('Case 1', point.ID)
 
-		elif ccw(u, I, point.neighbors.point1) == 0 and ccw(point, point.neighbors.point1, point.neighbors.point2) != 0: # neighbor 1 is u and points are not colinear
-			if point.neighbors.point2.angle < point.angle or ccw(u, I, point) != ccw(u, I, point.neighbors.point2):
+		elif u.ID == point.neighbors.point1.ID: # neighbor 1 is u
+			if ccw(u, point, point.neighbors.point2) != ccw(u, I, point) and ccw(u, point, point.neighbors.point2) != 0: # points are not colinear and change in direction, i.e turning point
 				turningPoints.append(point)
-				print('Case 2', point.ID)
 
-		elif ccw(u, I, point.neighbors.point2) == 0 and ccw(point, point.neighbors.point1, point.neighbors.point2) != 0: # neighbor 2 is u and points are not colinear
-			if point.neighbors.point1.angle < point.angle or ccw(u, I, point) != ccw(u, I, point.neighbors.point1): 
+		elif u.ID == point.neighbors.point2.ID: # neighbor 2 is u
+			if ccw(u, point, point.neighbors.point1) != ccw(u, I, point) and ccw(u, point, point.neighbors.point1) != 0: # points are not colinear and change in direction, i.e turning point
 				turningPoints.append(point)
-				print('Case 3', point.ID)
 
-		elif ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # both neighbors are on the other side of the arc sector
-			turningPoints.append(point)
-			print('Case 4', point.ID)
+		elif ccw(u, I, point.neighbors.point1) == ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # both neighbors are on the other side of the scan line from point
+		 	turningPoints.append(point)
 
-		elif ccw(u, I, point.neighbors.point1) != ccw(u, I, point): # only neighbor 1 is on the opposite side of the arc sector 
-			if point.neighbors.point2.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point2):
+		elif ccw(u, I, point.neighbors.point1) != ccw(u, I, point): # neighbor 1 is on the opposite side of the scan line from point
+			if point.neighbors.point2.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point2): # point angle is bigger than neighbor 2 ange AND point and neighbor 2 are on the same side
 				turningPoints.append(point)
-				print('Case 5', point.ID)
 
-		elif ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # only neighbor 2 is on the opposite side of the arc sector 
-			if point.neighbors.point1.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point1):
+		elif ccw(u, I, point.neighbors.point2) != ccw(u, I, point): # neighbor 2 is on the opposite side of the arc sector 
+			if point.neighbors.point1.angle < point.angle and ccw(u, I, point) == ccw(u, I, point.neighbors.point1): # point angle is bigger than neighbor 1 ange AND point and neighbor 1 are on the same side
 				turningPoints.append(point)
-				print('Case 6', point.ID)
-
-	print ('number of turningPoints',len(turningPoints))
 
 	successors = []
 
@@ -684,25 +709,16 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 	if len(turningPoints) != 0 :
 
 		for turningPoint in turningPoints:
-
-			print ('turning point ID', turningPoint.ID)
 			
 			n = shoot_ray(u, turningPoint, edges)
-
-			if counter > 100:
-				break
 
 			if n.ID[1] != -1:
 
 				if n == turningPoint: # turningPoint is visible from u
 
-					print ('turningPoint', n.ID, 'is visible')
-
 					successors.append(n) # add it to successor list
 
 				else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
-
-					print ('turningPoint', n.ID, 'is not visible')
 
 					nDir = dt.Vector(n.uv[0] - u.uv[0],n.uv[1] - u.uv[1],0).normal() # vector from u to n
 
@@ -727,8 +743,6 @@ def astar( start, end, points, edges ):
 	#	points = set of all points within path finding problem
 	#	edges = set of all edges within path finding problem
 	# ======================================== #
-
-	global counter
 
 	# Create start and end node
 
@@ -760,19 +774,12 @@ def astar( start, end, points, edges ):
 
 	while len(open_list) > 0:
 
-		if counter > 100:
-			break
-
 		# Get the current node
 
 		current_node = open_list[0]
 		current_index = 0
 
-		print('open_list:')
-
 		for index, item in enumerate(open_list):
-
-			print(item.ID)
 
 			if item.f < current_node.f:
 
@@ -780,8 +787,6 @@ def astar( start, end, points, edges ):
 				current_index = index
 
 		# Pop current off open list, add to closed list
-
-		print ('current_node', current_node.ID)
 
 		open_list.pop(current_index)
 		closed_list.append(current_node)
@@ -791,26 +796,22 @@ def astar( start, end, points, edges ):
 		if current_node == end_node:
 
 			pathLength = current_node.g * dist
+			return [1, pathLength]
 
-			# path might not be needed
+			# path = []
+			# current = current_node
 
-			path = []
-			current = current_node
+			# while current is not None:
 
-			while current is not None:
-
-				path.append(current.ID)
-				current = current.parent
-
-			return [1, pathLength, path[::-1]] # Return reversed path
+			# 	path.append(current.ID)
+			# 	current = current.parent
+				
+			#return [1, pathLength], path[::-1]] # Return reversed path
+			
 
 		# shoot ray from current_node to end_node
 
 		hitPoint = shoot_ray(current_node,end_node,edges)
-		print('shoot ray from', current_node.ID, 'to', end_node.ID)
-
-		if hitPoint != end_node:
-			print('hitPoint neighbors', hitPoint.neighbors.point1.ID, hitPoint.neighbors.point2.ID)
 
 		successors = []
 
@@ -823,7 +824,11 @@ def astar( start, end, points, edges ):
 
 		else: # end_node is not visible from current_node, thus need to define accwDir and acwDir for scan
 
-			if current_node.parent is None: # current node has no parent, i.e. is starting point, thus arc sector is a circle
+			if current_node.parent is None: # current node has no parent, i.e. is starting point, thus angle sector is a circle
+
+				accwDir = acwDir = (-1,0,0)
+
+			elif current_node.parent.ID[0] != current_node.ID[0]:
 
 				accwDir = acwDir = (-1,0,0)
 
@@ -832,40 +837,40 @@ def astar( start, end, points, edges ):
 				# get parent_node of current_node and get previous direction
 
 				parent_node = current_node.parent
-				print ('parent_node', parent_node.ID)
-
 				parentDir = dt.Vector(current_node.uv[0]-parent_node.uv[0],current_node.uv[1]-parent_node.uv[1],0).normal()
 
 				# get neighboring nodes of current_node and get their orientation in relation to the parent_node
 
 				neighborOne_node = current_node.neighbors.point1
-				neighborTwo_node = current_node.neighbors.point2
 				neighborOneOrient = ccw(parent_node,current_node,neighborOne_node)
-				neighborTwoOrient = ccw(parent_node,current_node,neighborTwo_node)
 				neighborOneDir = dt.Vector(neighborOne_node.uv[0]-current_node.uv[0],neighborOne_node.uv[1]-current_node.uv[1],0).normal()
+				
+				neighborTwo_node = current_node.neighbors.point2
+				neighborTwoOrient = ccw(parent_node,current_node,neighborTwo_node)
 				neighborTwoDir = dt.Vector(neighborTwo_node.uv[0]-current_node.uv[0],neighborTwo_node.uv[1]-current_node.uv[1],0).normal()
 
-				# check if path was following edge of polygon in previous step
+				# check if path was following edge of polygon in previous step and set acwDir and accwDir accordingly
+
+				end_nodeDir = dt.Vector(end_node.uv[0]-current_node.uv[0],end_node.uv[1]-current_node.uv[1],0).normal()
 
 				if parent_node == neighborOne_node: # neighbor one was previous step
 					if neighborTwoOrient == CW:
-						acwDir == neighborTwoDir
-						accwDir == parentDir
+						acwDir = end_nodeDir
+						accwDir = parentDir
 					else:
-						acwDir == parentDir
-						accwDir == neighborTwoDir
+						acwDir = parentDir
+						accwDir = end_nodeDir
 
 				elif parent_node == neighborTwo_node: # neighbor two was previous step
 					if neighborOneOrient == CW:
-						acwDir == neighborOneDir
-						accwDir == parentDir
+						acwDir = end_nodeDir
+						accwDir = parentDir
 					else:
-						acwDir == parentDir
-						accwDir == neighborOneDir
+						acwDir = parentDir
+						accwDir = end_nodeDir
 
 				else: # neither neighbor was previous step, therefore need to check which way around the obstacle the path has to wrap
 
-					end_nodeDir = dt.Vector(end_node.uv[0]-current_node.uv[0],end_node.uv[1]-current_node.uv[1],0).normal()
 					neighborOneAngle = neighborOneDir.angle(end_nodeDir)
 					neighborTwoAngle = neighborTwoDir.angle(end_nodeDir)
 
@@ -897,27 +902,36 @@ def astar( start, end, points, edges ):
 
 			# find turningpoints on polygon hitPoint.ID[0] and if not visible on polygon hitPoint'.ID[0]
 
-			turningPoints = []
-
-			print('scan CCW', accwDir, hitPoint.ID)
 			turningPointsCCW = scan(current_node, hitPoint, points, edges, CCW, accwDir, acwDir)
-
-			print('scan CW', acwDir, hitPoint.ID)
 			turningPointsCW = scan(current_node, hitPoint, points, edges, CW, accwDir, acwDir)
 
+			turningPoints = []
 			turningPoints.extend(turningPointsCCW)
 			turningPoints.extend(turningPointsCW)
 
-			print ('number of successors = ', len(turningPoints))
-
 			for point in turningPoints:
 				successors.append(point)
-				print('successors')
-				print(point.ID)
 
 		# Loop through successors
 
 		for successor in successors:
+
+			if successor.ID[0] != current_node.ID[0] and successor.ID[0] != None: # successor and current point are on different meshes
+
+				recurseHitPoints = []
+
+				# go back through closed list and check if there is a better point that was missed because only one mesh was checked
+
+				for closedPoint in closed_list:
+					recurseHitPoint = shoot_ray(successor,closedPoint,edges)
+					if recurseHitPoint == closedPoint: # an already closed point is visible from successor
+						recurseHitPoints.append(point)
+
+				recurseHitPoints.sort(key = lambda point:point.g) # sort visible points (from current successor) in closed list by g value
+				
+				if recurseHitPoints[0].ID != current_node.ID: # check if the best visible one is already the current_node
+					successor.parent = recurseHitPoints[0]
+					tempG = successor.parent.g + dt.Vector(current_node.uv[0]-successor.uv[0],current_node.uv[1]-successor.uv[1],0).length()
 
 			# check if successor is in closed_list
 
@@ -944,4 +958,4 @@ def astar( start, end, points, edges ):
 			successor.h = dt.Vector(successor.uv[0]-end_node.uv[0],successor.uv[1]-end_node.uv[1],0).length()
 			successor.f = successor.h + successor.g
 
-	return [0, -1, None] # no path found
+	return [0, -1] # no path found
