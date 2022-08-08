@@ -2,24 +2,24 @@
 
 ## How to run the scripts
 
-1. We recommend create your own virtual enviornment to run the experiments using conda (cheat sheet available [here](https://docs.conda.io/projects/conda/en/4.6.0/_downloads/52a95608c49671267e40c689e0bc00ca/conda-cheatsheet.pdf) )
+#### 1. Make sure to have the PyMEL package installed for Maya
+
+For **Windows** in the command promp execute the following 
 ```
-conda create  --name ligLengthEnv
-conda activate ligLengthEnv
+cd C:\Program Files\Autodesk\Maya<VersionNumber>\bin
+mayapy -m pip install "pymel>=1.3.,<1.4."
 ```
-2. Clone the project
+For **macOS** in the terminal execute the following
 ```
-git clone https://github.com/OliverDemuth/LigamentLength.git
-cd LigamentLength
+export PATH=$PATH:/Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin
+sudo ./mayapy -m pip install "pymel>=1.3.,<1.4."
 ```
-4. As explained in [PyMEL](https://github.com/LumaPictures/pymel) we need to execute
-```
-export PATH=$PATH:/Applications/Autodesk/maya202*/Maya.app/Contents/bin (replace the star with the Maya version installed)
-curl https://bootstrap.pypa.io/get-pip.py | mayapy
-mayapy -m pip install --pre pymel
-mayapy -m pip install numpy
-```
-4. execute the script
-```
-mayapy main.py
-```
+For more information see [here](https://knowledge.autodesk.com/support/maya/learn-explore/caas/CloudHelp/cloudhelp/2023/ENU/Maya-Scripting/files/GUID-2AA5EFCE-53B1-46A0-8E43-4CD0B2C72FB4-htm.html)
+
+#### 2. Run first script
+Copy and Paste *ligLength.py* script into the *Python Script Editor* and execute it
+
+#### 3. Run second script
+Copy and Paste *ligLengthExpression.py* into the *Python Script Editor*, adjust the user defined variables and execute it
+
+###### The PyMEL/Python scripts have been written in Python 3 and were tested in Maya 2023
