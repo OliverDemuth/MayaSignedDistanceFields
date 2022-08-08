@@ -1,13 +1,14 @@
-#	ligLength.v.0.9.py 
+#	ligamentLength.py 
 #
 #	This script calculates the shortest path (length) of a ligament from origin to
-#	insertion wrapping around the proximal and distal bone meshes. It roughly follows
-#	the RayScan approach by Hechenberger et al. 2020, in that it creates a partial 
-#	on-the-fly visibility graph on an A* search, adding elements to its priority
-#	queue based on arc sectors to find the shortest distance. 
+#	insertion wrapping around the proximal and distal bone meshes. It approximates
+#	the ligament length by reducing the 3D problem into a 2D Euclidean shortest path 
+#	problem. It roughly follows the RayScan approach by Hechenberger et al. 2020, in 
+#	that it creates a partial on-the-fly visibility graph on an A* search, adding  
+#	elements to its priority queue based on arc sectors, to find the shortest path. 
 #
 #	Written by Oliver Demuth and Vittorio la Barbera 09.05.2022
-#	Last updated 28.07.2022 - Oliver Demuth
+#	Last updated 08.08.2022 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -17,7 +18,7 @@
 #			string  jointcentre:	Name of the joint centre, i.e. the name of a locator or joint, e.g. "myJoint" if following the ROM mapping protocol of Manafzadeh & Padian 2018
 #			string  proximal:		Name of the proximal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
 #			string  distal:			Name of the distal bone mesh, e.g. the meshes that were used for the boolean if following the ROM mapping protocol of Manafzadeh & Padian 2018
-#			int	 	res:			Integer value to define the resolution of the curve approximating the slices. If none is given, slice will not be approximated
+#			bool 	reverse:		Boolean value, if true path will be computed from insertion to origin. If none is given, false will be assumed and path computed from origin to insertion
 #
 #		RETURN params:
 #			float	pathLength[]:	Return value is a float array with two elements in the form of:
@@ -31,19 +32,18 @@
 #
 #
 #	Note, the accuracy of the reported length depends on the resolution of the curve 
-#	approximating the slices through the bone meshes. The lower the resolution 'res', 
-#	the faster the script runs; however, accuracy is also reduced. 
+#	approximating the slices through the bone meshes. The lower the resolution, the
+#	faster the script runs; however, accuracy is also reduced. 
 
 
-# ========== load pymel ==========
+# ========== load plugins ==========
 
 import pymel.core as pm
 import pymel.core.datatypes as dt
-
+import gc
 
 # ========== constants ==========
 
-INF = 10000
 CCW = 1
 CW = -1
 COLLINEAR = 0
@@ -80,11 +80,6 @@ class nodeEdge(object):
 		self.point1 = point1
 		self.point2 = point2
 
-	def get_adjacent(self, point):
-		if point == self.point1:
-			return self.point2
-		return self.point1
-
 	def __contains__(self, point):
 		return self.point1 == point or self.point2 == point
 
@@ -101,97 +96,111 @@ class nodeEdge(object):
 # ========== MAYA specific functions ========= #
 ################################################
 
-# ========== face area function ==========
+# ========== ligament length function ==========
 
-def polyFacesTotArea( faces ): # Requires faces to be selected
+def ligLength( origin, insertion, jointCentre, ligPlane, booObject, reverse = False ):
+
 	# Input variables:
-	#	faces = selected faces for which surface area is to be calculated
+	#	origin = name of ligament origin (represented by object, e.g. locator, in Maya scene)
+	#	insertion = name of ligament insertion (represented by object, e.g. locator, in Maya scene)
+	#	jointCentre = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
+	#	ligPlane = name of plane which acts as cutting plane
+	#	booObject = name of boolean object to get obstacles
+	#	reverse = boolean attribute to define the direction of the ligament origin to insertion or insertion to origin
 	# ======================================== #
 
-	# triangulation of faces
+	# get positions of points of interest
 
-	pm.polyTriangulate(faces)
-	vertIndicesStr = pm.polyInfo(fv=True)
-	pm.select(clear=True)
+	if reverse == True or reverse == 1:
+		oPos = pm.xform(insertion, query = True, worldSpace = True, translation = True)
+		iPos = pm.xform(origin, query = True, worldSpace = True, translation = True)
+	else:
+		oPos = pm.xform(origin, query = True, worldSpace = True, translation = True)
+		iPos = pm.xform(insertion, query = True, worldSpace = True, translation = True)
 
-	mesh = faces.split('.')
+	jPos = pm.xform(jointCentre, query = True, worldSpace = True, translation = True)
 
-	# get number of faces
+	# calculate vectors from origin to insertion
 
-	faceNum = len(vertIndicesStr)
-	faceTotArea = 0
+	LigDir = dt.Vector(oPos[0] - iPos[0],
+					   oPos[1] - iPos[1],
+					   oPos[2] - iPos[2])
 
-	# area calculations
-	for i in range(faceNum):  # get ID of each triangle vertex
+	JointDir = dt.Vector(oPos[0] - jPos[0],
+						 oPos[1] - jPos[1],
+						 oPos[2] - jPos[2])
 
-		vertIndices = vertIndicesStr[i].split()
+	Offset = LigDir.length()
 
-		VtxA = mesh[0] + '.vtx[' + vertIndices[2] + ']'
-		VtxB = mesh[0] + '.vtx[' + vertIndices[3] + ']'
-		VtxC = mesh[0] + '.vtx[' + vertIndices[4] + ']'
+	# calculate cut plane direction
 
-		# query position of each vertex and calculate distances between them
+	uCross = LigDir.cross(JointDir).normal()
+	vCross = LigDir.cross(uCross).normal()
 
-		VtxAPos = pm.xform(VtxA, query = True, worldSpace = True, translation = True)
-		VtxBPos = pm.xform(VtxB, query = True, worldSpace = True, translation = True)
-		VtxCPos = pm.xform(VtxC, query = True, worldSpace = True, translation = True)
+	cutAim = pm.angleBetween(euler = True, 
+		v1 = (0.0, 1.0, 0.0),
+		v2 = (uCross[0], uCross[1], uCross[2]))
 
-		DistA = dt.Vector(VtxBPos[0] - VtxCPos[0],
-						  VtxBPos[1] - VtxCPos[1],
-						  VtxBPos[2] - VtxCPos[2])
-		DistB = dt.Vector(VtxAPos[0] - VtxCPos[0],
-						  VtxAPos[1] - VtxCPos[1],
-						  VtxAPos[2] - VtxCPos[2])
+	planeRotate = ligPlane + '.rotate'
+	planeTranslate = ligPlane + '.translate'
 
-		# calculate area each triangle and sum it up
+	pm.setAttr(planeRotate, cutAim[0], cutAim[1], cutAim[2], type="double3")
+	pm.setAttr(planeTranslate, jPos[0], jPos[1], jPos[2], type="double3")
 
-		faceTotArea += DistA.cross(DistB).length()/2 #face area as defined by the cross product
-		
-	return faceTotArea
+	# normalize vectors by distance between origin and insertion
+
+	LigDirNorm = LigDir.normal() / Offset
+	vCrossNorm = vCross / Offset
+
+	# get obstacle slices, their vertices and edges
+
+	VtxSet, EdgeSet = getObstacles( oPos, booObject, cutAim, LigDirNorm, vCrossNorm )  # get vertices and edges of boo
+
+	# run A* search
+
+	ligLength = astar( Offset, VtxSet, EdgeSet )
+
+	# garbage collection
+
+	for nodeEdge in EdgeSet:
+		del nodeEdge
+	del EdgeSet
+	
+	for nodePoint in VtxSet:
+	    del nodePoint
+	del VtxSet
+
+	gc.collect()
 
 
-# ========== polygon slice approximation function ==========
+	return ligLength
 
-def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
+
+
+	# ========== polygon slice approximation function ==========
+
+def getObstacles( oPos, mesh, cutDir, uDir, vDir,):
 
 	# Input variables:
 	#	oPos = origin position
+	#	mesh = boolean mesh to be approximated
 	#	cutDir = direction of cutting plane
 	#	uDir = direction uf U axis on cutting plane
 	#	vDir = direction of V axis on cutting plane
-	#	mesh = mesh to be cut
-	#	res = resolution for mesh slice approximation
 	# ======================================== #
 
 	# get number of faces
 
 	numFace = pm.polyEvaluate(mesh, f=True) # number of faces
 	numF = numFace - 1
-	meshF = mesh + '.f[0:' + str(numF) + ']'  # get string of all faces in the mesh
-
-	# cut mesh
-
-	pm.polyCut(meshF,  # all faces of the mesh
-					 pc = (oPos[0], oPos[1], oPos[2]),  # origin pos
-					 ro = (cutDir[0], cutDir[1], cutDir[2]),  # cut direction
-					 ps = (1, 1),  # size of cut plane
-					 eo = (0, 0, 0),  # offset of the plane
-					 ef = 1)  # extract face
-
-	# get difference in face numbers of pre and post cutting
-	
-	numPreSlice = pm.polyEvaluate(mesh, f = True)
-
-	pm.select(mesh)
-	pm.polyCloseBorder() # create the slice face
-
-	numPostSlice = pm.polyEvaluate(mesh, f = True)
-
-	pm.select(clear=True)
-
-	faceDiff = (numPostSlice - numPreSlice) // 2  # get number of newly created faces
+	meshFaces = mesh + '.f[0:' + str(numF) + ']'  # get string of all faces in the mesh
+	meshFaces = pm.filterExpand(meshFaces, sm =  34)
+	numShell = pm.polyEvaluate(mesh, s=True) # number of shells
 
 	# create empty lists
+
+	tempShellFaces = meshFaces
+	shellFaces = []
 
 	vtcs = []
 	edges = []
@@ -200,66 +209,64 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 	# get vertices and edges of mesh slice
 
-	for i in range(faceDiff):
-		newFaces = mesh + '.f[' + str(numPostSlice - i - 1) + ']' # newly created faces
-		tempCRV = mesh + '_CRV_' + str(i) # name for the curve(s) cicrumscribing the slices
+	for i in range(numShell):
+
+		# get faces of individual shells (disconnected face islands), i.e. the obstacles, from the first face of temShellFaces
+
+		shellFace = pm.general.MeshFace(tempShellFaces[0])
+		connectedShellFaces = shellFace.connectedFaces()
+
+		# check if shell, i.e. obstacle, consists of multiple faces 
+
+		if len(connectedShellFaces) > 0:
+
+			openShellFaces = []
+			closedShellFaces = []
+
+			openShellFaces.append(shellFace)
+
+			# cycle through all connected faces of shell
+
+			while len(openShellFaces) > 0:
+
+				# get all connected faces to the current face
+
+				current_face = pm.filterExpand(openShellFaces[0],sm=34)
+				current_face = current_face[0]
+				connectedFaces = pm.general.MeshFace(current_face).connectedFaces()
+				connectedFaces = pm.filterExpand(connectedFaces, sm=34)
+
+				# pop current face from openShellFaces and add it to closedShellFaces
+
+				openShellFaces.pop(0)
+				closedShellFaces.append(current_face)
+
+				# go through connected faces and add them to openShellFaces if they haven't been referenced yet
+
+				for connectedFace in connectedFaces:
+					connectedFace = pm.filterExpand(connectedFace,sm=34) 
+					connectedFace = connectedFace[0]
+
+					# only add faces that have not yet been added (doesn't work 100%); required to use 'set' below to filter them out
+
+					openShellFaces.append(connectedFace) if connectedFace not in closedShellFaces else None 
+
+			shellFaces = set(closedShellFaces) # get all faces of shell and filter out duplicates
+		else:
+			shellFaces = shellFace # shell is only made up of a single face
+
+		shellFaces = pm.filterExpand(shellFaces, sm =  34)
+
+		# remove shell faces from tempShellFaces, i.e. already checked faces will not be checked again when cycling through shells
+
+		for face in shellFaces:	
+			tempShellFaces.remove(face)
+
+		tempSliceEdges = pm.polyListComponentConversion(shellFaces, ff = True, te = True) # get all edges from the slices
 		tempPlane = mesh + '_plane_' + str(i) # name of the slice 
-		tempSliceEdges = pm.polyListComponentConversion(newFaces, ff = True, te = True) # get all edges from the slices
 
-		if res != None:
-
-			# get slice area and translate it into resolution for curve circumscribing slice
-
-			pm.select(newFaces)
-			sliceArea = polyFacesTotArea(newFaces)
-			log = dt.log(sliceArea)
-			resolution = dt.ceil(res + (res * log))
-
-			if resolution < 4:
-				resolution = 4
-
-			# approximate slice surface and reduce number of vertices and edges to a more reasonable number based on slice area
-			
-			pm.select(tempSliceEdges)
-			pm.polyToCurve(form = 2, degree = 1, conformToSmoothMeshPreview = 0, n = tempCRV)
-			pm.select(clear = True)
-
-			pm.rebuildCurve(tempCRV, ch = 1, rpo = 1, rt = 0, end = 1,
-				kr = 0, kcp = 0, kep = 1, kt = 1, s = resolution,
-				d = 1, tol = 1e-08)
-
-			pm.nurbsToPolygonsPref(pt = 1, pc = 1, f = 0)
-			pm.planarSrf(tempCRV, ch = 1, d = 1, ko = 0, tol = 1,
-				rn = 0, po = 1, n = tempPlane)
-
-			# add curve and plane to temporary group
-			
-			tempGRP = 'TempGRP'
-			if not pm.objExists(tempGRP):  # check if temporary group exists in the Maya scene
-				pm.group(em = True, n = tempGRP)
-
-			pm.parent(tempCRV, tempGRP)
-			pm.parent(tempPlane, tempGRP)
-
-			# get vertices and edges from new slice
-
-			tempPlaneF = tempPlane + '.f[0]'
-
-			vertices = pm.polyListComponentConversion(tempPlaneF, ff = True, tv = True)
-			pm.polyMergeVertex(vertices,d = 0.01, ch = 1) # merge vertices that are close together
-			vertices = pm.polyListComponentConversion(tempPlaneF, ff = True, tv = True)
-			vertices = pm.filterExpand(vertices, sm = 31)
-
-			# work around if Maya unable to count vertices properly
-
-			lastVertex = pm.general.MeshVertex(vertices[-1]).index()
-			vertices = tempPlane + '.vtx[0:' + str(lastVertex) + ']'
-			vertices = pm.filterExpand(vertices, sm = 31)
-
-		else: # res == None, get vertices directly from slice
-
-			vertices = pm.polyListComponentConversion(newFaces, ff = True, tv = True)
-			vertices = pm.filterExpand(vertices, sm = 31)
+		vertices = pm.polyListComponentConversion(shellFaces, ff = True, tv = True)
+		vertices = pm.filterExpand(vertices, sm = 31)
 
 		# define variables for nodes and their neighbors
 
@@ -280,9 +287,11 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 			# get position of 2D plane (uv) from 3D position (xyz)
 
 			vtcPos = pm.xform(vertices[j], query = True, worldSpace = True, translation = True) # get vertex position
+
 			pOffset = dt.Vector(oPos[0] - vtcPos[0], # calculate offset from origin
 								oPos[1] - vtcPos[1],
 								oPos[2] - vtcPos[2])
+
 			u = pOffset.dot(uDir) # calculate u value
 			v = pOffset.dot(vDir) # calculate v value
 			nodeUV = (u, v, 0)
@@ -297,38 +306,33 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 
 			neighbors = pm.filterExpand(vtxNeighbors[j], sm = 31)
 
-			neighbor1ID = pm.general.MeshVertex(neighbors[-2]).index() # get neighbor 1 vertex ID
+			# if more than 2 neighbors, remove the ones that are not part of the face
+			getNeighbors =[]
+
+			if len(neighbors) > 2:
+				for neighbor in neighbors:
+					if pm.general.MeshVertex(neighbor).index() in vertexIndices:
+						getNeighbors.append(neighbor)
+			else: getNeighbors = neighbors
+
+			neighbor1ID = pm.general.MeshVertex(getNeighbors[0]).index() # get neighbor 1 vertex ID
 			neighbor1Index = vertexIndices.index(neighbor1ID) # get neighbor 1 vertex index
 
-			neighbor2ID = pm.general.MeshVertex(neighbors[-1]).index() # get neighbor 2 vertex ID
+			neighbor2ID = pm.general.MeshVertex(getNeighbors[1]).index() # get neighbor 2 vertex ID
 			neighbor2Index = vertexIndices.index(neighbor2ID) # get neighbor 2 vertex index
 
 			nodePoints[j].neighbors = nodeEdge(point1 = nodePoints[neighbor1Index], point2 = nodePoints[neighbor2Index])
 
 		vtxNodes += nodePoints
 
-		# triangulate slice to get all edges
-
-		if res != None:
-
-			pm.select(tempPlaneF)
-			pm.polyTriangulate(tempPlaneF)
-
-		else:
-
-			pm.select(newFaces)
-			pm.polyTriangulate(newFaces)
-
-		SliceFaces = pm.ls(selection = True)
-		pm.select(clear = True)
-
 		# get all edges from the slices
 
-		nodeEdges = []
-		edges = pm.polyListComponentConversion(SliceFaces, ff = True, te = True)
+		edges = pm.polyListComponentConversion(shellFaces, ff = True, te = True)
 		edges = pm.filterExpand(edges, sm = 32)
 
 		# go through each edge to create nodeEdge
+
+		nodeEdges = []
 
 		for j in range(len(edges)):
 
@@ -348,88 +352,6 @@ def polyApproxSlice( oPos, cutDir, uDir, vDir, mesh, res ):
 		edgeNodes += nodeEdges
 
 	return vtxNodes, edgeNodes
-
-
-# ========== ligament length function ==========
-
-def ligLength(origin, insertion, jointCentre, proxMesh, distMesh, resolution = None ):
-
-	# Input variables:
-	#	origin = name of ligament origin (represented by object, e.g. locator, in Maya scene)
-	#	insertion = name of ligament insertion (represented by object, e.g. locator, in Maya scene)
-	#	jointCentre = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
-	#	proxMesh = name of proximal bone mesh to which ligament origin attaches
-	#	distMesh = name of distal bone mesh to which ligament insertion attaches
-	# 	res = resolution for mesh slice approximation
-	# ======================================== #
-
-	# data house keeping
-
-	duplicate_prox_name = proxMesh + '_duplicate'
-	pm.duplicate(proxMesh, n = duplicate_prox_name)
-
-	duplicate_dist_name = distMesh + '_duplicate'
-	pm.duplicate(distMesh, n = duplicate_dist_name)
-
-	# get positions of points of interest
-
-	oPos = pm.xform(origin, query = True, worldSpace = True, translation = True)
-	iPos = pm.xform(insertion, query = True, worldSpace = True, translation = True)
-	jPos = pm.xform(jointCentre, query = True, worldSpace = True, translation = True)
-
-	# calculate vectors from origin to insertion
-
-	LigDir = dt.Vector(oPos[0] - iPos[0],
-					   oPos[1] - iPos[1],
-					   oPos[2] - iPos[2])
-
-	JointDir = dt.Vector(oPos[0] - jPos[0],
-						 oPos[1] - jPos[1],
-						 oPos[2] - jPos[2])
-	Offset = LigDir.length()
-
-	# calculate cut plane direction
-
-	uCross = LigDir.cross(JointDir).normal()
-	vCross = LigDir.cross(uCross).normal()
-	cutAim = pm.angleBetween(euler = True, 
-		v1 = (0.0, 0.0, 1.0),
-		v2 = (uCross[0], uCross[1], uCross[2]))
-
-	# normalize vectors by distance between origin and insertion
-
-	LigDirNorm = LigDir.normal() / Offset
-	vCrossNorm = vCross / Offset
-
-	# get obstacle slices, their vertices and edges
-
-	VtxSet, EdgeSet = polyApproxSlice(oPos, cutAim, LigDirNorm, vCrossNorm,
-		proxMesh, resolution)  # approximated slice of proximal bone mesh
-
-	VtxSet2, EdgeSet2 = polyApproxSlice(oPos, cutAim, LigDirNorm, vCrossNorm,
-		distMesh, resolution)  # approximated slice of distal bone mesh
-
-	VtxSet.extend(VtxSet2)
-	EdgeSet.extend(EdgeSet2)
-
-	print('Number of NodePoints =', len(VtxSet))
-	print('Number of NodeEdges =', len(EdgeSet))
-
-	# run A* search
-
-	ligLength = astar(oPos, iPos, VtxSet, EdgeSet)
-
-	# clean up
-
-	if pm.objExists('TempGRP'): # check if temporary group exists
-		pm.delete('TempGRP')
-
-	pm.delete(proxMesh, distMesh)
-	pm.rename(duplicate_prox_name, proxMesh)
-	pm.rename(duplicate_dist_name, distMesh)
-
-	return ligLength
-
 
 
 ################################################
@@ -453,7 +375,7 @@ def intersect( p0, p1, edge ):
 		return intersection
 
 	if p0 in edge:
-		intersection = 0 # this is technically wrong but it stops the script from getting stuck on u.
+		intersection = 0 # this is technically incorrect, however it stops the script from getting stuck on u
 		return intersection
 
 	# get edge points from nodeEdge class
@@ -510,6 +432,7 @@ def intersect_point(p0, p1, edge):
 
 	if p1 in edge:
 		intersect_dist = dt.Vector(p0.uv[0] - p1.uv[0], p0.uv[1] - p1.uv[1], 0).length()
+
 		p1.dist = intersect_dist
 
 		return p1
@@ -528,6 +451,7 @@ def intersect_point(p0, p1, edge):
 		intersect_u = edge.point1.uv[0]
 		intersect_v = pslope * (intersect_u - p0.uv[0]) + p0.uv[1]
 		intersect_UV = (intersect_u,intersect_v,0)
+
 		intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
 
 		return nodePoint(uv = intersect_UV, ID = (intersect_Poly, -1), neighbors = edge, dist = intersect_dist)
@@ -537,6 +461,7 @@ def intersect_point(p0, p1, edge):
 		intersect_u = p0.uv[0]
 		intersect_v = eslope * (intersect_u - edge.point1.uv[0]) + edge.point1.uv[1]
 		intersect_UV = (intersect_u,intersect_v,0)
+
 		intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
 
 		return nodePoint(uv = intersect_UV, ID = (intersect_Poly, -1), neighbors = edge, dist = intersect_dist)
@@ -550,6 +475,7 @@ def intersect_point(p0, p1, edge):
 	intersect_u = (eslope * edge.point1.uv[0] - pslope * p0.uv[0] + p0.uv[1] - edge.point1.uv[1]) / (eslope - pslope)
 	intersect_v = eslope * (intersect_u - edge.point1.uv[0]) + edge.point1.uv[1]
 	intersect_UV = (intersect_u,intersect_v,0)
+
 	intersect_dist = dt.Vector(p0.uv[0] - intersect_u, p0.uv[1] - intersect_v, 0).length()
 
 	return nodePoint(uv = intersect_UV, ID = (intersect_Poly, -1), neighbors = edge, dist = intersect_dist)
@@ -645,17 +571,17 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	# get direction of I
 
-	iDir = dt.Vector(I.uv[0]-u.uv[0],I.uv[1]-u.uv[1],0).normal()
+	iDir = dt.Vector(I.uv[0] - u.uv[0], I.uv[1] - u.uv[1], 0).normal()
 
 	# get arc sector angles based on direction d
 
 	if d == CW:
 		dirAngle = dt.Vector(acwDir).angle(iDir) # arc sector angle in direction d
-		endAngle = dt.Vector(acwDir).angle(dt.Vector(1-u.uv[0],0-u.uv[1],0).normal())
+		endAngle = dt.Vector(acwDir).angle(dt.Vector(1 - u.uv[0], 0 - u.uv[1], 0).normal())
 
 	else: # d == CCW or d == 0, i.e. colinear
 		dirAngle = dt.Vector(accwDir).angle(iDir) # arc sector angle in direction d
-		endAngle = dt.Vector(accwDir).angle(dt.Vector(1-u.uv[0],0-u.uv[1],0).normal())
+		endAngle = dt.Vector(accwDir).angle(dt.Vector(1 - u.uv[0], 0 - u.uv[1], 0).normal())
 
 	# loop through points in direction d to find turning point, however, if any angle falls outside the arc sector break loop
 
@@ -665,7 +591,7 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 	for point in pointsDir:
 
-		pDir = dt.Vector(point.uv[0]-u.uv[0],point.uv[1]-u.uv[1], 0).normal()
+		pDir = dt.Vector(point.uv[0] - u.uv[0], point.uv[1] - u.uv[1], 0).normal()
 		point.angle = dt.Vector(pDir).angle(iDir) 
 
 	# sort points by angle to in direction d
@@ -720,7 +646,7 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 				else: # turning point is not visible from u, need to recurse and scan again with subset of arc sector
 
-					nDir = dt.Vector(n.uv[0] - u.uv[0],n.uv[1] - u.uv[1],0).normal() # vector from u to n
+					nDir = dt.Vector(n.uv[0] - u.uv[0], n.uv[1] - u.uv[1], 0).normal() # vector from u to n
 
 					intersectionTurningPointsCW = scan(u, n, points, edges, CW, nDir, acwDir,) # scan from n to acw to find potential successors
 					intersectionTurningPointsCCW = scan(u, n, points, edges, CCW, accwDir, nDir) # scan from n to accw to find potential successors
@@ -735,7 +661,7 @@ def scan(u, I, points, edges, d, accwDir, acwDir):
 
 # ========== A* search algorithm ==========
 
-def astar( start, end, points, edges ):
+def astar( Offset, points, edges ):
 
 	# Input variables:
 	#	start = 3D position of the starting point
@@ -751,10 +677,6 @@ def astar( start, end, points, edges ):
 
 	end_node = nodePoint(uv = (1, 0, 0), ID = (None, 'end_node'))
 	end_node.g = end_node.h = end_node.f = 0
-
-	# get distance between start and end point
-
-	dist = dt.Vector(start[0]-end[0],start[1]-end[1],start[2]-end[2]).length()
 
 	# add nodes to VtxSet
 
@@ -795,19 +717,8 @@ def astar( start, end, points, edges ):
 
 		if current_node == end_node:
 
-			pathLength = current_node.g * dist
+			pathLength = current_node.g * Offset
 			return [1, pathLength]
-
-			# path = []
-			# current = current_node
-
-			# while current is not None:
-
-			# 	path.append(current.ID)
-			# 	current = current.parent
-				
-			#return [1, pathLength], path[::-1]] # Return reversed path
-			
 
 		# shoot ray from current_node to end_node
 
@@ -837,21 +748,21 @@ def astar( start, end, points, edges ):
 				# get parent_node of current_node and get previous direction
 
 				parent_node = current_node.parent
-				parentDir = dt.Vector(current_node.uv[0]-parent_node.uv[0],current_node.uv[1]-parent_node.uv[1],0).normal()
+				parentDir = dt.Vector(current_node.uv[0] - parent_node.uv[0], current_node.uv[1] - parent_node.uv[1], 0).normal()
 
 				# get neighboring nodes of current_node and get their orientation in relation to the parent_node
 
 				neighborOne_node = current_node.neighbors.point1
 				neighborOneOrient = ccw(parent_node,current_node,neighborOne_node)
-				neighborOneDir = dt.Vector(neighborOne_node.uv[0]-current_node.uv[0],neighborOne_node.uv[1]-current_node.uv[1],0).normal()
+				neighborOneDir = dt.Vector(neighborOne_node.uv[0] - current_node.uv[0], neighborOne_node.uv[1] - current_node.uv[1], 0).normal()
 				
 				neighborTwo_node = current_node.neighbors.point2
 				neighborTwoOrient = ccw(parent_node,current_node,neighborTwo_node)
-				neighborTwoDir = dt.Vector(neighborTwo_node.uv[0]-current_node.uv[0],neighborTwo_node.uv[1]-current_node.uv[1],0).normal()
+				neighborTwoDir = dt.Vector(neighborTwo_node.uv[0] - current_node.uv[0], neighborTwo_node.uv[1] - current_node.uv[1], 0).normal()
 
 				# check if path was following edge of polygon in previous step and set acwDir and accwDir accordingly
 
-				end_nodeDir = dt.Vector(end_node.uv[0]-current_node.uv[0],end_node.uv[1]-current_node.uv[1],0).normal()
+				end_nodeDir = dt.Vector(end_node.uv[0] - current_node.uv[0], end_node.uv[1] - current_node.uv[1], 0).normal()
 
 				if parent_node == neighborOne_node: # neighbor one was previous step
 					if neighborTwoOrient == CW:
@@ -927,11 +838,12 @@ def astar( start, end, points, edges ):
 					if recurseHitPoint == closedPoint: # an already closed point is visible from successor
 						recurseHitPoints.append(point)
 
-				recurseHitPoints.sort(key = lambda point:point.g) # sort visible points (from current successor) in closed list by g value
-				
-				if recurseHitPoints[0].ID != current_node.ID: # check if the best visible one is already the current_node
-					successor.parent = recurseHitPoints[0]
-					tempG = successor.parent.g + dt.Vector(current_node.uv[0]-successor.uv[0],current_node.uv[1]-successor.uv[1],0).length()
+				if len(recurseHitPoints) > 0:
+					recurseHitPoints.sort(key = lambda point:point.g) # sort visible points (from current successor) in closed list by g value
+					
+					if recurseHitPoints[0].ID != current_node.ID: # check if the best visible one is already the current_node
+						successor.parent = recurseHitPoints[0]
+						tempG = successor.parent.g + dt.Vector(current_node.uv[0] - successor.uv[0], current_node.uv[1] - successor.uv[1], 0).length()
 
 			# check if successor is in closed_list
 
@@ -941,7 +853,7 @@ def astar( start, end, points, edges ):
 
 			# calculate temporary g value
 
-			tempG = current_node.g + dt.Vector(current_node.uv[0]-successor.uv[0],current_node.uv[1]-successor.uv[1],0).length()
+			tempG = current_node.g + dt.Vector(current_node.uv[0] - successor.uv[0], current_node.uv[1] - successor.uv[1], 0).length()
 
 			if successor in open_list: # if successor is already in open_list compare g values
 				if tempG < successor.g:
@@ -955,7 +867,8 @@ def astar( start, end, points, edges ):
 
 			# calculate h and f values
 
-			successor.h = dt.Vector(successor.uv[0]-end_node.uv[0],successor.uv[1]-end_node.uv[1],0).length()
+			successor.h = dt.Vector(successor.uv[0] - end_node.uv[0], successor.uv[1] - end_node.uv[1], 0).length()
 			successor.f = successor.h + successor.g
 
 	return [0, -1] # no path found
+
