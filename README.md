@@ -17,9 +17,9 @@ sudo ./mayapy -m pip install "pymel>=1.3.,<1.4."
 For more information see [here](https://knowledge.autodesk.com/support/maya/learn-explore/caas/CloudHelp/cloudhelp/2023/ENU/Maya-Scripting/files/GUID-2AA5EFCE-53B1-46A0-8E43-4CD0B2C72FB4-htm.html)
 
 #### 2. Run first script
-Copy and Paste *ligamentLength.py* script into the *Python Script Editor* and execute it
+Copy and paste *ligamentLength.py* script into the *Python Script Editor* and execute it
 
 #### 3. Run second script
-Copy and Paste *ligamentLengthExpression.py* into the *Python Script Editor*, adjust the user defined variables and execute it
+Copy and paste *ligamentLengthExpression.py* into the *Python Script Editor*, adjust the user defined variables and execute it
 
 ###### The PyMEL/Python scripts have been written in Python 3 and were tested in Maya 2023
