@@ -527,6 +527,7 @@ def cost_fun(params):
 		
 	return cost
     
-    
+   
+
     
     
