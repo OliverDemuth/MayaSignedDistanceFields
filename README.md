@@ -65,7 +65,7 @@ ligamentCalculationWrapper.py
 progressBar.py
 ```
 3. Adjust the user defined variables in *ligamentCalculationWrapper.py* and save it
-4. Execute the script
+4. Execute the script as follows:
 
 For **Windows** in the command prompt execute the following
 ```
