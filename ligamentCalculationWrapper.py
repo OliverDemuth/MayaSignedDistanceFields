@@ -51,19 +51,19 @@
 
 # ========== set variables ========== 
 
-jointName = 'myJoint' 				# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
-meshes = ['bones_boo']				# specify according to meshes or boolean object in the Maya scene
-gridSubdiv = 16						# Integer value for the subdivision of the cube, i.e., number of grid points for any given axis, e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Please note this scales to O((n+1)^3)
-ligSubdiv = 20						# Integer value for the number of ligament segments, e.g., 20, see. Marai et al., 2004 for details
-FrameInterval = 300					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+jointName = 'myJoint' 	# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
+meshes = ['bones_boo']	# specify according to meshes in the Maya scene, e.g., the boolean object if following the ROM mapping protocol of Manafzadeh & Padian, 2018, i.e., 'boo', or several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
+gridSubdiv = 16		# Integer value for the subdivision of the cube, i.e., number of grid points for any given axis, e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Please note this scales to O((n+1)^3)
+ligSubdiv = 20		# Integer value for the number of ligament segments, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004, for details
+FrameInterval = None	# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 
 
 # ========== set directories ========== 
 
-path = '\\Volumes\\PhD2\\XROMM\\Maya\\ligaments\\python' # add your file path. Make sure 'ligamentLength.py' is in this folder
+path = '\\Volumes\\PhD\\XROMM\\Maya\\ligaments\\python' # add your file path. Make sure 'ligamentLength.py' is in this folder
 
-fileDir = '/Volumes/PhD2/XROMM/Maya/ligaments/maya files' # path for Maya files
-outDir = '/Volumes/PhD2/XROMM/Maya/ligaments/results' # path for Maya output
+fileDir = '/Volumes/PhD/XROMM/Maya/ligaments/maya files' # path for Maya files
+outDir = '/Volumes/PhD/XROMM/Maya/ligaments/results' # path for Maya output
 
 #########################################################################################
 
