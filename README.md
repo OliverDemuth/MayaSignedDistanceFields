@@ -41,9 +41,10 @@ For more information about managing Python packages with mayapy and pip see [her
 2. Copy and paste the *runLigamentCalculation.py* script into the *Python Script Editor*
 3. Adjust the user defined variables in the scirpt and execute it
 
-The ligament lengths will be keyed into the attributes of 'jointName' for each frame.
+The ligament lengths will be keyed into the attributes of 'jointName' for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress. The ligament length calculations can be cancelled at any time by pressing *esc* without losing any progress.
 
 #### From the command line 
+Autodesk Maya does not need to be open.
 1. Create the following exemplary folder structure and change the directories in the *ligamentCalculationWrapper.py* script
 ```
 path = '\\your\\file\\path\\ligaments\\python' 
@@ -69,6 +70,6 @@ For **macOS** in the terminal execute the following
 cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin/
 ./mayapy "path/to/ligamentCalculationWrapper.py"
 ```
-The ligament lengths will be saved as .csv files in the results folder.
+The ligament lengths will be saved as .csv files in the results folder. The ligament length calculations cannot directly be abborted unless the command prompt/terminal is closed, however, all progress will be lost.
 
 ###### The Python scripts have been written in Python 3 and were tested in Autodesk Maya 2023
