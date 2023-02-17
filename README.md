@@ -35,7 +35,7 @@ progressBar.py
 
 ### Prepare the Maya scene
 
-1. Create two *locators* for each ligament, i.e., the origin and insertion, position them on the meshes and parent them underneath the respective elements/joints.
+1. Create two locators for each ligament, i.e., the origin and insertion, and position them on the meshes and parent them underneath the respective elements/joints.
 
 2. For each ligament create a float attribute at 'jointName' and name it accordingly. Make sure that the naming convention for the ligament origins  and insertions is correct, i.e. the locators should be named 'ligament*_orig' and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'. Make sure to remove the 'viable' attribute from 'jointName' if previously followed [Manafzadeh & Padian, 2018](https://doi.org/10.1098/rspb.2018.0727) before executing the ligament calculations.
 
@@ -48,7 +48,7 @@ progressBar.py
 2. Copy and paste the *runLigamentCalculation.py* script into the *Python Script Editor*
 3. Adjust the user defined variables in the scirpt and execute it
 
-The ligament lengths will be keyed into the attributes of 'jointName' for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress. The ligament length calculations can be cancelled at any time by pressing *esc* without losing any progress.
+The ligament lengths will be keyed into the attributes of 'jointName' for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress made. The ligament length calculations can be cancelled at any time by pressing *esc* without losing any progress.
 
 #### From the command line 
 Autodesk Maya does not need to be open.
