@@ -23,7 +23,7 @@ For more information about managing Python packages with mayapy and pip see [her
 
 **Note**, installing *pytricubic* requires *CMake*. For more information see [here](https://github.com/danielguterding/pytricubic)
 
-Download the following scripts and save them in a folder on your PC/Mac
+#### Download the following scripts from this repository and save them in a folder on your PC/Mac
 ```
 ligamentCalculation.py
 runLigamentCalculation.py
