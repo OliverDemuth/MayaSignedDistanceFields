@@ -54,7 +54,7 @@ The ligament lengths will be keyed into the attributes of 'jointName' for each f
 Autodesk Maya does not need to be open.
 1. Create the following exemplary folder structure and change the directories in the *ligamentCalculationWrapper.py* script
 ```
-path = '\\your\\file\\path\\ligaments\\python' 
+path = '/your/file/path/ligaments/python' 
 fileDir = '/your/file/path/ligaments/maya files'
 outDir = '/your/file/path/ligaments/results' 
 ```
