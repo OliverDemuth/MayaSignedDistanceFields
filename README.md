@@ -24,6 +24,14 @@ For more information about managing Python packages with mayapy and pip see [her
 
 **Note**, installing *pytricubic* requires *CMake*. For more information see [here](https://github.com/danielguterding/pytricubic)
 
+Download the following scripts and save them in a folder on your PC/Mac
+```
+ligamentCalculation.py
+runLigamentCalculation.py
+ligamentCalculationWrapper.py
+progressBar.py
+```
+
 ## 2. How to run the ligament calculations
 
 ### Prepare the Maya scene
