@@ -77,6 +77,6 @@ For **macOS** in the terminal execute the following
 cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin/
 ./mayapy "path/to/ligamentCalculationWrapper.py"
 ```
-The ligament lengths will be saved as .csv files in the results folder. The ligament length calculations cannot directly be abborted unless the command prompt/terminal is closed, however, all progress will be lost.
+The ligament lengths will be saved as .csv files in the results folder. The ligament length calculations cannot directly be aborted unless the command prompt/terminal is closed, however, all progress will be lost.
 
 ###### The Python scripts have been written in Python 3 and were tested in Autodesk Maya 2023
