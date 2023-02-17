@@ -12,42 +12,42 @@
 #	SYNOPSIS:
 #
 #		INPUT params:
-#			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint, e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian, 2018
-#			string  meshes:			String array of the name(s) of the bone meshes, e.g., the boolean object if following the ROM mapping protocol of Manafzadeh & Padian, 2018, i.e., 'boo', or several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
-#			int 	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points for the X-axis (along the ligament), e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Note, this scales to O((n+1)*(n/2+1)^2)
-#			int 	ligSubdiv:		Integer value for the number of ligament points, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004, for details
+#			string  jointName:	Name of the joint centre, i.e. the name of a locator or joint, e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian, 2018
+#			string  meshes:		String array of the name(s) of the bone meshes, e.g., the boolean object if following the ROM mapping protocol of Manafzadeh & Padian, 2018, i.e., 'boo', or several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
+#			int 	gridSubdiv:	Integer value for the subdivision of the cube, i.e., number of grid points for the X-axis (along the ligament), e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Note, this scales to O((n+1)*(n/2+1)^2)
+#			int 	ligSubdiv:	Integer value for the number of ligament points, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004, for details
 #
 #		RETURN params:
 #			list 	ligamentNames:	Return value is a list of the ligament names designated as custom attributes in the 'jointName'
 #			list	pathLengths:	Return value is a list with the path lengths for all ligaments designated as custom attributes in the 'jointName'
-#			list 	pathPoints:		Return value is a list of lists with the 3D coordinates of the path points in world space for all ligaments designated as custom attributes in the 'jointName'
-#			list 	results: 		Return value is a list of object of the scipy.optimize.OptimizeResult class. They represent the outputs of the scipy.optimize.minimize() function
+#			list 	pathPoints:	Return value is a list of lists with the 3D coordinates of the path points in world space for all ligaments designated as custom attributes in the 'jointName'
+#			list 	results: 	Return value is a list of object of the scipy.optimize.OptimizeResult class. They represent the outputs of the scipy.optimize.minimize() function
 #
 #
 #	IMPORTANT notes:
 #
 #	(1) Meshes need realtively uniform face areas, otherwise large faces might skew 
-#		vertex normals towards their normals. It is, therefore, important to extrude 
-#		edges around large faces prior to closing the hole at edges with otherwise 
-#		acute angles to circumvent this issue, e.g., if meshes have been cut to reduce
-#		polycount, prior to executing the Python scripts.
+#	    vertex normals towards their normals. It is, therefore, important to extrude 
+#	    edges around large faces prior to closing the hole at edges with otherwise 
+#	    acute angles to circumvent this issue, e.g., if meshes have been cut to reduce
+#	    polycount, prior to executing the Python scripts.
 #
 #	(2) For each ligament create a float attribute at 'jointName' and name it 
-#		accordingly. Make sure that the naming convention for the ligament origins 
-#		and insertions is correct, i.e. the locators should be named 'ligament*_orig' 
-#		and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'. Make
-#		sure to remove the 'viable' attribute from 'jointName' if previously followed 
-#		Manafzadeh & Padian, 2018, before executing the ligament calculations.
+#	    accordingly. Make sure that the naming convention for the ligament origins 
+#	    and insertions is correct, i.e. the locators should be named 'ligament*_orig' 
+#	    and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'. Make
+#	    sure to remove the 'viable' attribute from 'jointName' if previously followed 
+#	    Manafzadeh & Padian, 2018, before executing the ligament calculations.
 #
-#	(3)	This script requires several modules for Python. Make sure to have the 
-#		following external modules installed:
+#	(3) This script requires several modules for Python. Make sure to have the 
+#	    following external modules installed:
 #
-#			- 'numpy' 		NumPy:					https://numpy.org/about/
-#			- 'scipy'		SciPy:					https://scipy.org/about/
-#			- 'tricubic' 	Daniel Guterding: 		https://github.com/danielguterding/pytricubic
+#		- 'numpy' 	NumPy:			https://numpy.org/about/
+#		- 'scipy'	SciPy:			https://scipy.org/about/
+#		- 'tricubic' 	Daniel Guterding: 	https://github.com/danielguterding/pytricubic
 #
-#		For further information regarding them, please check the website(s) referenced 
-#		above.
+#	    For further information regarding them, please check the website(s) referenced 
+#	    above.
 
 
 # ========== load modules ==========
@@ -128,7 +128,7 @@ def ligCalc(jointName, meshes, gridSubdiv ,ligSubdiv):
 
 		coords = []
 		for j in range(ligSubdiv + 1):
-			coords.append(getPosInWS(rotMat, [x[j],y[j],z[j]])) 
+			coords.append(getPosInWS(rotMat, [x[j], y[j], z[j]])) 
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
@@ -162,12 +162,12 @@ def sigDistField(origin, insertion, jPos, meshes, subdivision):
 	# calculate vectors from origin to insertion and to joint centre
 
 	LigDir = om.MVector(iPos[0] - oPos[0],
-						iPos[1] - oPos[1],
-						iPos[2] - oPos[2])
+			    iPos[1] - oPos[1],
+			    iPos[2] - oPos[2])
 
 	JointDir = om.MVector(jPos[0] - oPos[0],
-						  jPos[1] - oPos[1],
-						  jPos[2] - oPos[2])
+			      jPos[1] - oPos[1],
+			      jPos[2] - oPos[2])
 
 	Offset = LigDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
 
@@ -180,9 +180,9 @@ def sigDistField(origin, insertion, jPos, meshes, subdivision):
 	# get rotation matrix from liagament plane directions
 
 	rotMat = om.MMatrix([uDir.x, uDir.y, uDir.z, 0,
-						 vDir.x, vDir.y, vDir.z, 0,
-						 wDir.x, wDir.y, wDir.z, 0,
-						 oPos[0],oPos[1],oPos[2],1]) # centre position around origin
+			     vDir.x, vDir.y, vDir.z, 0,
+			     wDir.x, wDir.y, wDir.z, 0,
+			     oPos[0],oPos[1],oPos[2],1]) # centre position around origin
 
 	# create variables
 
@@ -190,7 +190,7 @@ def sigDistField(origin, insertion, jPos, meshes, subdivision):
 	gridPoints = []
 	sigDistances = []
 
-	# cycle through all meshes
+	# loop through all meshes
 
 	for mesh in meshes:
 		meshSigDist, osPoints, wsPoints = sigDistMesh(mesh, Offset, rotMat, subdivision) # get signed distance field for each mesh
@@ -245,8 +245,8 @@ def sigDistMesh(mesh, Offset, rotMat, subdivision):
 	elements = np.linspace(-0.25, 0.25, num = int(subdivision/2) + 1, endpoint=True)
 
 	points = [[i, j, k] for i in xElements # full length along x
-						for j in elements  # half length along y
-						for k in elements] # half length along z
+			    for j in elements  # half length along y
+			    for k in elements] # half length along z
 
 	# go through grid points and calculate signed distance for each of them
 
@@ -274,8 +274,8 @@ def sigDistMesh(mesh, Offset, rotMat, subdivision):
 		# get vector from localPoint to ptON
 
 		diff = om.MVector(ptON.point.x - localPoint[0], 
-						  ptON.point.y - localPoint[1],
-						  ptON.point.z - localPoint[2])
+				  ptON.point.y - localPoint[1],
+				  ptON.point.z - localPoint[2])
 
 		# get distance from localPoint to ptON    
 
@@ -305,13 +305,13 @@ def getPosInWS(rotMat,point):
 	# ======================================== #
 
 	localMat = om.MMatrix(((1, 0, 0, 0),
-						   (0, 1, 0, 0),
-						   (0, 0, 1, 0),
-						   (point[0], point[1], point[2], 1))) # position of point
+			       (0, 1, 0, 0),
+			       (0, 0, 1, 0),
+			       (point[0], point[1], point[2], 1))) # position of point
 
 	worldPos = localMat * rotMat
 
-	return om.MVector(round(worldPos[12],10), round(worldPos[13],10), round(worldPos[14],10)) # round to remove floating point errors
+	return om.MVector(round(worldPos[12], 10), round(worldPos[13], 10), round(worldPos[14], 10)) # round to remove floating point errors
 
 
 # ========== get point in mesh object space function ==========	
@@ -324,9 +324,9 @@ def getPosInOS(rotMat, point):
 	# ======================================== #
 
 	ptWS = om.MMatrix(((1, 0, 0, 0),
-					   (0, 1, 0, 0),
-					   (0, 0, 1, 0),
-					   (point[0], point[1], point[2], 1))) # world space matrix of point
+			   (0, 1, 0, 0),
+			   (0, 0, 1, 0),
+			   (point[0], point[1], point[2], 1))) # world space matrix of point
 
 	ptPosOS = ptWS * rotMat.inverse() # multiply with inverse of rotation matrix
 
@@ -388,10 +388,10 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 
 	# get rotation matrix from ligament coordinate system to default cubic grid coordinate system
 
-	rotMat = om.MMatrix([xDir.x, 	xDir.y,		xDir.z, 	0,
-						 yDir.x, 	yDir.y, 	yDir.z, 	0,
-						 zDir.x, 	zDir.y, 	zDir.z, 	0,
-						 origPos.x,	origPos.y,	origPos.z,	1]) 
+	rotMat = om.MMatrix([xDir.x, xDir.y, xDir.z, 0,
+			     yDir.x, yDir.y, yDir.z, 0,
+			     zDir.x, zDir.y, zDir.z, 0,
+			     origPos.x, origPos.y, origPos.z, 1]) 
 
 	# initialise tricubic interpolator with signed distance data on default cubic grid
 
@@ -403,10 +403,10 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 
 	# set constraints function
 
-	cons = ({'type': 'ineq',	# set type to inequality, which means that it is to be non-negative
-			 'fun': cons_fun,	# set constraint function
-			 'args': arguments	# pass arguments to constrain function
-			 })
+	cons = ({'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
+		 'fun': cons_fun,	# set constraint function
+		 'args': arguments	# pass arguments to constrain function
+		  })
 
 	# set bounds
 
