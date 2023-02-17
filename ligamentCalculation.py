@@ -403,9 +403,9 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 
 	# set constraints function
 
-	cons = ({'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
-		 'fun': cons_fun,	# set constraint function
-		 'args': arguments	# pass arguments to constrain function
+	cons = ({'type': 'ineq',   # set type to inequality, which means that it is to be non-negative
+		 'fun': cons_fun,  # set constraint function
+		 'args': arguments # pass arguments to constraints function
 		  })
 
 	# set bounds
