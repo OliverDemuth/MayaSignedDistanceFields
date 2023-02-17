@@ -1,6 +1,6 @@
 # Compute Ligament Length
 
-Automated shortest distance calculation of a ligament from origin to insertion wrapping around the 3D bone meshes. It is an implementation of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) approach for Autodesk Maya. The scripts create a signed distance field of the bone meshes for each ligament which is then used to approximate its 3D path and calculate its length. 
+Automated estimation of 3D ligaments wrapping around bone meshes. It is an implementation of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) approach for Autodesk Maya. The scripts create a signed distance field of the bone meshes for each ligament which is then used to approximate its 3D path and calculate its length. 
 
 ## 1. Installation 
 #### Make sure to have the required Python modules installed for Autodesk Maya
