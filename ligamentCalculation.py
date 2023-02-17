@@ -14,8 +14,8 @@
 #		INPUT params:
 #			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint, e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian, 2018
 #			string  meshes:			String array of the name(s) of the bone meshes, e.g., the boolean object if following the ROM mapping protocol of Manafzadeh & Padian, 2018, i.e., 'boo', or several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
-#			int		gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points for the X-axis, e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Note, this scales to O((n+1)*(n/2+1)^2)
-#			int 	ligSubdiv:		Integer value for the number of ligament points, e.g., e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004, for details
+#			int		gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points for the X-axis (along the ligament), e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Note, this scales to O((n+1)*(n/2+1)^2)
+#			int 	ligSubdiv:		Integer value for the number of ligament points, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004, for details
 #
 #		RETURN params:
 #			list 	ligamentNames:	Return value is a list of the ligament names designated as custom attributes in the 'jointName'
