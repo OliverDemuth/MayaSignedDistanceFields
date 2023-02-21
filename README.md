@@ -5,18 +5,22 @@ Automated estimation of 3D ligaments wrapping around bone meshes. It is an imple
 ## 1. Installation 
 #### Make sure to have the required Python modules installed for Autodesk Maya
 
+[NumPy](https://numpy.org/)  
+[SciPy](https://scipy.org/)    
+[pytricubic](https://github.com/danielguterding/pytricubic)  
+
 For **Windows** in the command prompt execute the following 
 ```
 cd C:\Program Files\Autodesk\Maya<VersionNumber>\bin
-mayapy -m pip install scipy
 mayapy -m pip install numpy
+mayapy -m pip install scipy
 mayapy -m pip install tricubic
 ```
 For **macOS** in the terminal execute the following
 ```
 cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin
-sudo ./mayapy -m pip install scipy
 sudo ./mayapy -m pip install numpy
+sudo ./mayapy -m pip install scipy
 sudo ./mayapy -m pip install tricubic
 ```
 For more information about managing Python packages with mayapy and pip see [here](https://knowledge.autodesk.com/support/maya/learn-explore/caas/CloudHelp/cloudhelp/2023/ENU/Maya-Scripting/files/GUID-72A245EC-CDB4-46AB-BEE0-4BBBF9791627-htm.html)
@@ -25,12 +29,11 @@ For more information about managing Python packages with mayapy and pip see [her
 
 #### Download the following scripts from this repository and save them in a folder on your PC/Mac
 ```
-ligamentCalculation.py
-runLigamentCalculation.py
-ligamentCalculationWrapper.py
-progressBar.py
+ligamentCalculation.py  
+runLigamentCalculation.py  
+ligamentCalculationWrapper.py  
+progressBar.py  
 ```
-
 ## 2. How to run the ligament calculations
 
 ### Prepare the Maya scene
