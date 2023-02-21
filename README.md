@@ -70,12 +70,12 @@ progressBar.py
 For **Windows** in the command prompt execute the following
 ```
 cd C:\Program Files\Autodesk\Maya<VersionNumber>\bin\
-mayapy.exe "path/to/ligamentCalculationWrapper.py"
+mayapy path/to/ligamentCalculationWrapper.py
 ```
 For **macOS** in the terminal execute the following
 ```
 cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin/
-./mayapy "path/to/ligamentCalculationWrapper.py"
+./mayapy path/to/ligamentCalculationWrapper.py
 ```
 The ligament lengths will be saved as .csv files in the results folder, named according to the respective Maya file in the Maya files folder. The ligament length calculations cannot be safely aborted and can only be cancelled by closing the command prompt/terminal, however, all progress will be lost.
 
