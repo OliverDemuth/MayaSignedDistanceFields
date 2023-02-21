@@ -79,4 +79,4 @@ cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin/
 ```
 The ligament lengths will be saved as .csv files in the results folder, named according to the respective Maya file in the Maya files folder. The ligament length calculations cannot be safely aborted and can only be cancelled by closing the command prompt/terminal, however, all progress will be lost.
 
-###### The Python scripts have been written in Python 3 and were tested in Autodesk Maya 2023
+###### The Python scripts have been written in Python 3.9 and were tested in Autodesk Maya 2023
