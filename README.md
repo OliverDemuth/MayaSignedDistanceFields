@@ -58,7 +58,7 @@ path = '/your/file/path/ligaments/python'
 fileDir = '/your/file/path/ligaments/maya files'
 outDir = '/your/file/path/ligaments/results' 
 ```
-2. Copy the following scripts into the folder according to the *path* specified in the *ligamentCalculationWrapper.py* script as above
+2. Copy the following scripts into the python folder according to the *path* specified in the *ligamentCalculationWrapper.py* script as above
 ```
 ligamentCalculation.py
 ligamentCalculationWrapper.py
