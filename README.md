@@ -49,7 +49,7 @@ progressBar.py
 
 1. Copy and paste the *ligamentCalculation.py* script into the *Python Script Editor* and execute it
 2. Copy and paste the *runLigamentCalculation.py* script into the *Python Script Editor*
-3. Adjust the user defined variables in the scirpt and execute it
+3. Adjust the user defined variables in the script and execute it
 
 The ligament lengths will be keyed into the attributes of 'jointName' for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress made. The ligament length calculations can be cancelled at any time by pressing *esc* without losing any progress.
 
