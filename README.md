@@ -10,14 +10,14 @@ For **Windows** in the command prompt execute the following
 cd C:\Program Files\Autodesk\Maya<VersionNumber>\bin
 mayapy -m pip install scipy
 mayapy -m pip install numpy
-mayapy -m pip install pytricubic
+mayapy -m pip install tricubic
 ```
 For **macOS** in the terminal execute the following
 ```
 cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin
 sudo ./mayapy -m pip install scipy
 sudo ./mayapy -m pip install numpy
-sudo ./mayapy -m pip install pytricubic
+sudo ./mayapy -m pip install tricubic
 ```
 For more information about managing Python packages with mayapy and pip see [here](https://knowledge.autodesk.com/support/maya/learn-explore/caas/CloudHelp/cloudhelp/2023/ENU/Maya-Scripting/files/GUID-72A245EC-CDB4-46AB-BEE0-4BBBF9791627-htm.html)
 
