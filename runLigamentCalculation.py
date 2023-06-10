@@ -5,16 +5,14 @@
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 17.02.2023 - Oliver Demuth
+#	Last updated 09.06.2023 - Oliver Demuth
 #
 #
-#	Note, for each ligament create a float attribute at 'jointName' and name it
+#	Note, for each ligament create a float attribute at 'jointName' and name it 
 #	accordingly. Rename the strings in the user defined variables below according to the
 #	objects in your Maya scene and make sure that the naming convention for the ligament 
 #	origins and insertions is correct, i.e. the locators should be named 'ligament*_orig'
-#	and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'. Make sure to
-#	remove the 'viable' attribute from 'jointName' if previously followed Manafzadeh &
-#	Padian, 2018, before executing the ligament calculations.
+#	and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'.
 #	
 #
 #	This script relies on the following other (Python) script(s) which need to be run
@@ -30,19 +28,20 @@
 #################################################
 
 
-jointName = 'myJoint' 		# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
+jointName = 'myJoint' 				# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
 
-meshes = ['bones_boo']		# specify according to meshes in the Maya scene, e.g., the boolean object if following the ROM mapping protocol of Manafzadeh & Padian, 2018, i.e., 'boo', or several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
+meshes = ['bones_boo']				# specify according to meshes or boolean object in the Maya scene
 
-gridSubdiv = 16			# Integer value for the subdivision of the cube, i.e., number of grid points for the X-axis (along the ligament), e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Note, this scales to O((n+1)*(n/2+1)^2)
+gridSubdiv = 16						# Integer value for the subdivision of the cube, i.e., number of grid points for any given axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
 
-ligSubdiv = 20			# Integer value for the number of ligament segments, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004, for details
+ligSubdiv = 20						# Integer value for the number of ligament segments, e.g., 20, see Marai et al., 2004 for details
 
-StartFrame = None		# Integer value to specify the start frame
+StartFrame = None 					# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 
-FrameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+FrameInterval = None				# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 
-KeyPathPoints = True		# Boolean value to specify whether ligament point positions are to be keyed or not: True = yes, False = no
+KeyPathPoints = False				# Boolean to specify whether ligament point positions are to be keyed or not. True = yes, False = no
+
 
 
 
@@ -77,7 +76,7 @@ if FrameInterval == None or (minKeys + FrameInterval) > maxKeys:
 else:
 	keyframes = minKeys + FrameInterval
 
-keyDiff = keyframes - minKeys
+keyDiff = keyframes - minKeys + 1
 
 if keyDiff <=0:
 	keyDiff = 1
@@ -90,10 +89,10 @@ start = time.time()
 # define progress bar
 
 cmds.progressWindow(title='Ligament calculation in progress...',
-		    progress=1,
-		    status='Processing frame {0} of {1} frames'.format(1,keyDiff),
-		    isInterruptable=True, 
-		    max=keyDiff)
+					progress=1,
+					status='Processing frame {0} of {1} frames'.format(1,keyDiff),
+					isInterruptable=True, 
+					max=keyDiff)
 
 print('Ligament calculation in progress...')
 
@@ -134,7 +133,7 @@ for i in range(keyDiff):
 	# check if progress is interupted
 
 	if cmds.progressWindow(query=True, isCancelled=True):
-		break
+			break
 
 	# calculate the length of each ligament 
 
@@ -143,8 +142,11 @@ for i in range(keyDiff):
 	# key the attributes on the animated joint
 
 	for index, ligament in enumerate(ligAttributes):
-
-		cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
+	    
+		if results[index].status == 0:
+			cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
+		else:
+			cmds.setKeyframe(jointName, at = ligament, v = -1)
 
 		# check if ligament points are to be keyed
 
