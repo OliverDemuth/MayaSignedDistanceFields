@@ -28,19 +28,19 @@
 #################################################
 
 
-jointName = 'myJoint' 				# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
+jointName = 'myJoint' 		# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
 
-meshes = ['bones_boo']				# specify according to meshes or boolean object in the Maya scene
+meshes = ['bones_boo']		# specify according to meshes or boolean object in the Maya scene
 
-gridSubdiv = 16						# Integer value for the subdivision of the cube, i.e., number of grid points for any given axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+gridSubdiv = 16			# Integer value for the subdivision of the cube, i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
 
-ligSubdiv = 20						# Integer value for the number of ligament segments, e.g., 20, see Marai et al., 2004 for details
+ligSubdiv = 20			# Integer value for the number of ligament segments, e.g., 20, see Marai et al., 2004 for details
 
-StartFrame = None 					# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
+StartFrame = None 		# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 
-FrameInterval = None				# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+FrameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 
-KeyPathPoints = False				# Boolean to specify whether ligament point positions are to be keyed or not. True = yes, False = no
+KeyPathPoints = False		# Boolean to specify whether ligament point positions are to be keyed or not. True = yes, False = no
 
 
 
@@ -88,11 +88,11 @@ start = time.time()
 
 # define progress bar
 
-cmds.progressWindow(title='Ligament calculation in progress...',
-					progress=1,
-					status='Processing frame {0} of {1} frames'.format(1,keyDiff),
-					isInterruptable=True, 
-					max=keyDiff)
+cmds.progressWindow(title = 'Ligament calculation in progress...',
+		    progress = 1,
+		    status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
+		    isInterruptable = True, 
+		    max = keyDiff)
 
 print('Ligament calculation in progress...')
 
@@ -118,8 +118,8 @@ if KeyPathPoints == True:
 			# check if locators exists
 
 			if not cmds.objExists(loc):
-				cmds.spaceLocator(name = loc) # create locator
-				cmds.parent(loc, ligament + '_LOC_GRP') # parent locator under their ligament locator group
+			       cmds.spaceLocator(name = loc) # create locator
+			       cmds.parent(loc, ligament + '_LOC_GRP') # parent locator under their ligament locator group
 
 # go through each frame and key ligament lengths into attributes
 
@@ -128,7 +128,7 @@ for i in range(keyDiff):
 	if minKeys > keyframes:
 		break
 
-	j = minKeys+i
+	j = minKeys + i
 
 	# check if progress is interupted
 
