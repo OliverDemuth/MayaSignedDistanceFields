@@ -14,35 +14,35 @@
 #		INPUT params:
 #			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint, e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
 #			string  meshes:			Name(s) of the bone meshes, e.g., the boolean object if following the ROM mapping protocol of Manafzadeh & Padian 2018, i.e., 'boo', or several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
-#			int		gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points for the X-axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
-#			int 	ligSubdiv:		Integer value for the number of ligament points, e.g., e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details
+#			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+#			int 	ligSubdiv:		Integer value for the number of ligament points, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details
 #
 #		RETURN params:
-#			list 	ligamentNames:	Return value is a list of the ligament names designated as custom attributes in the 'jointName'
-#			list	pathLengths:	Return value is a list with the path lengths for all ligaments designated as custom attributes in the 'jointName'
+#			list 	ligamentNames:		Return value is a list of the ligament names designated as custom attributes in the 'jointName'
+#			list	pathLengths:		Return value is a list with the path lengths for all ligaments designated as custom attributes in the 'jointName'
 #			list 	pathPoints:		Return value is a list of lists with the 3D coordinates of the path points in world space for all ligaments designated as custom attributes in the 'jointName'
-#			list 	results: 		Return value is a list of object of the scipy.optimize.OptimizeResult class. They represent the outputs of the scipy.optimize.minimize() function
+#			list 	results: 		Return value is a list of objects of the scipy.optimize.OptimizeResult class. They represent the outputs of the scipy.optimize.minimize() function
 #
 #
 #	IMPORTANT notes:
 #		
-#	(1) Meshes need realtively uniform face areas, otherwise large faces might skew 
+#	(1) 	Meshes need realtively uniform face areas, otherwise large faces might skew 
 #		vertex normals in their direction. It is, therefore, important to extrude 
 #		edges around large faces prior to closing the hole at edges with otherwise 
 #		acute angles to circumvent this issue, e.g., if meshes have been cut to reduce
 #		polycount, prior to executing the Python scripts.
 #
-#	(2) For each ligament create a float attribute at 'jointName' and name it 
+#	(2) 	For each ligament create a float attribute at 'jointName' and name it 
 #		accordingly. Make sure that the naming convention for the ligament origins 
 #		and insertions is correct, i.e. the locators should be named 'ligament*_orig' 
 #		and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'.
 #
-#	(3)	This script requires several modules for Python. Make sure to have the 
-#		following external modules installed for the mayapy application:
+#	(3)	This script requires several modules for Python, see README file. Make sure to
+#		have the following external modules installed for the mayapy application:
 #
-#			- 'numpy' 		NumPy:					https://numpy.org/about/
-#			- 'scipy'		SciPy:					https://scipy.org/about/
-#			- 'tricubic' 	Daniel Guterding: 		https://github.com/danielguterding/pytricubic
+#			- 'numpy' 	NumPy:			https://numpy.org/about/
+#			- 'scipy'	SciPy:			https://scipy.org/about/
+#			- 'tricubic' 	Daniel Guterding: 	https://github.com/danielguterding/pytricubic
 #				
 #		For further information regarding them, please check the website(s) referenced 
 #		above.
@@ -81,8 +81,7 @@ def ligCalc(jointName, meshes, gridSubdiv ,ligSubdiv):
 
 	# check if gridSubdiv is even or odd
 
-	if int(gridSubdiv) % 2 == 0:
-		subDiv = int(gridSubdiv) # subdivision is even
+	if int(gridSubdiv) % 2 == 0: subDiv = int(gridSubdiv) # subdivision is even
 	else: subDiv = int(gridSubdiv) + 1 # make odd numbers even
 
 	# get number of ligaments
@@ -149,7 +148,7 @@ def sigDistField(origin, insertion, jPos, meshes, subdivision):
 	#	insertion = name of ligament insertion (represented by object, e.g. locator, in Maya scene)
 	#	jPos = joint centre position
 	#	meshes = name(s) of the mesh(es) for which the signed distance field is calculated
-	#	subdivision = number of elements for X-axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
 	# ======================================== #
 
 	# get positions of points of interest
@@ -160,27 +159,27 @@ def sigDistField(origin, insertion, jPos, meshes, subdivision):
 	# calculate vectors from origin to insertion and to joint centre
 				
 	LigDir = om.MVector(iPos[0] - oPos[0],
-						iPos[1] - oPos[1],
-						iPos[2] - oPos[2])
+			    iPos[1] - oPos[1],
+			    iPos[2] - oPos[2])
 
 	JointDir = om.MVector(jPos[0] - oPos[0],
-						  jPos[1] - oPos[1],
-						  jPos[2] - oPos[2])
+			      jPos[1] - oPos[1],
+			      jPos[2] - oPos[2])
 
 	Offset = LigDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
 
 	# calculate planes relative to ligaments
 
 	uDir = LigDir.normal() * Offset
-	wDir = (JointDir.normal() ^ uDir).normal() * Offset# cross product to get z axis
+	wDir = (JointDir.normal() ^ uDir).normal() * Offset # cross product to get z axis
 	vDir = (wDir ^ uDir).normal() * Offset # cross product to get y axis 
 
 	# get rotation matrix from liagament plane directions
 
 	rotMat = om.MMatrix([uDir.x, uDir.y, uDir.z, 0,
-						 vDir.x, vDir.y, vDir.z, 0,
-						 wDir.x, wDir.y, wDir.z, 0,
-						 oPos[0],oPos[1],oPos[2],1]) # centre position around origin
+			     vDir.x, vDir.y, vDir.z, 0,
+			     wDir.x, wDir.y, wDir.z, 0,
+			     oPos[0],oPos[1],oPos[2],1]) # centre position around origin
 
 	# create variables
 
@@ -214,7 +213,7 @@ def sigDistMesh(mesh, Offset, rotMat, subdivision):
 	#	mesh = name of the mesh for which the signed distance field is calculated
 	# 	Offset = distance from origin to insertion
 	#	rotMat = rotation matrix for points in the ligament coordinate system relative to mid point between origin and insertion 
-	#	subdivision = number of elements for X-axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
 	# ======================================== #
 
 	# get dag paths
@@ -242,9 +241,9 @@ def sigDistMesh(mesh, Offset, rotMat, subdivision):
 	xElements = np.linspace(-0.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
 	elements = np.linspace(-1, 1, num = subdivision + 1, endpoint=True)
 	
-	points = [[i, j, k] for i in xElements # full length along x
-						for j in elements  # half length along y
-						for k in elements] # half length along z
+	points = [[i, j, k] for i in xElements # length along x
+			    for j in elements  # length along y
+			    for k in elements] # length along z
 
 	# go through grid points and calculate signed distance for each of them
 
@@ -272,8 +271,8 @@ def sigDistMesh(mesh, Offset, rotMat, subdivision):
 		# get vector from localPoint to ptON
 
 		diff = om.MVector(ptON.point.x - localPoint[0], 
-						  ptON.point.y - localPoint[1],
-						  ptON.point.z - localPoint[2])
+				  ptON.point.y - localPoint[1],
+				  ptON.point.z - localPoint[2])
 
 		# get distance from localPoint to ptON    
 	
@@ -303,16 +302,16 @@ def getPosInWS(rotMat,point):
 	# ======================================== #
 
 	localMat = om.MMatrix(((1, 0, 0, 0),
-						   (0, 1, 0, 0),
-						   (0, 0, 1, 0),
-						   (point[0], point[1], point[2], 1))) # position of point
+			       (0, 1, 0, 0),
+			       (0, 0, 1, 0),
+			       (point[0], point[1], point[2], 1))) # position of point
 
 	worldPos = localMat * rotMat
 
 	return om.MVector(round(worldPos[12],10), round(worldPos[13],10), round(worldPos[14],10)) # round to remove floating point errors
 
 
-# ========== get point in mesh object space function ==========	
+# ========== get point in object space function ==========	
 	
 def getPosInOS(rotMat, point):
 
@@ -322,9 +321,9 @@ def getPosInOS(rotMat, point):
 	# ======================================== #
 
 	ptWS = om.MMatrix(((1, 0, 0, 0),
-					   (0, 1, 0, 0),
-					   (0, 0, 1, 0),
-					   (point[0], point[1], point[2], 1))) # world space matrix of point
+			   (0, 1, 0, 0),
+			   (0, 0, 1, 0),
+			   (point[0], point[1], point[2], 1))) # world space matrix of point
 
 	ptPosOS = ptWS * rotMat.inverse() # multiply with inverse of rotation matrix
 
@@ -386,10 +385,10 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 
 	# get rotation matrix from ligament coordinate system to default cubic grid coordinate system
 
-	rotMat = om.MMatrix([xDir.x, 	xDir.y,		xDir.z, 	0,
-						 yDir.x, 	yDir.y, 	yDir.z, 	0,
-						 zDir.x, 	zDir.y, 	zDir.z, 	0,
-						 origPos.x,	origPos.y,	origPos.z,	1]) 
+	rotMat = om.MMatrix([	xDir.x, 	xDir.y,		xDir.z, 	0,
+			     	yDir.x, 	yDir.y, 	yDir.z, 	0,
+			     	zDir.x, 	zDir.y, 	zDir.z, 	0,
+			     	origPos.x,	origPos.y,	origPos.z,	1]) 
 
 	# initialise tricubic interpolator with signed distance data on default cubic grid
 
@@ -401,19 +400,19 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 
 	# set constraints function
 
-	cons = ({'type': 'ineq',			# set type to inequality, which means that it is to be non-negative
-			 'fun': sigDist_cons_fun,	# set constraint function
-			 'args': arguments})		# pass arguments to constrain function
+	cons = ({'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
+			 'fun': cons_fun,	# set constraint function
+			 'args': arguments})	# pass arguments to constrain function
 
 	# set bounds
 
-	boundsList = [(-1,1)] * (len(initial_guess))
+	boundsList = [(-1,1)] * (len(initial_guess)) # keep y and z coordinates of points within boundary of cubic grid
 	boundsList[0] = boundsList[1] = boundsList[len(initial_guess) - 2] = boundsList[len(initial_guess) - 1] = (0,0) # set y and z bounds of origin and insertion to zero
 	bnds = tuple(boundsList)
 
 	# set options
 
-	options = {"maxiter": 500} 
+	options = {"maxiter": 500} # if it doesn't solve within 500 iterations it usually won't solve
 
 	# optimization using SLSQP
 
@@ -426,7 +425,7 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 
 # ========== constraints functions for optimisation ==========
 
-def sigDist_cons_fun(params, x, ip, rotMat):
+def cons_fun(params, x, ip, rotMat):
 
 	# Input variables:
 	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
@@ -471,7 +470,7 @@ def cost_fun(params, x, ip, rotMat):
 
 	# Input variables:
 	#	params = array of Y and Z coordinates of ligament points, i.e., params = [[y_0, z_0],[y_1, z_1], ... ,[y_n-1, z_n-1]]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
-	#	x = constant X coordinates for ligament points. Passed through args, not part of cost function but constraints function
+	#	x = constant X coordinates for ligament points.
 	#	ip = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the cubic grid. Passed through args, not part of cost function but constraints function
 	#	rotMat = rotation matrix from ligament coordinate system to default cubic grid coordinate system. Passed through args, not part of cost function but constraints function
 	# ======================================== #
