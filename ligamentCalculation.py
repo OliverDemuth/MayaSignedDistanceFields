@@ -474,8 +474,8 @@ def path_cons_fun(params, x, ip, rotMat):
 	# Input variables:
 	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
 	#	x = constant X coordinates for ligament points
-	#	ip = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the cubic grid 
-	#	rotMat = rotation matrix from ligament coordinate system to default cubic grid coordinate system
+	#	ip = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the cubic grid. Passed through args, not part of this constraint function
+	#	rotMat = rotation matrix from ligament coordinate system to default cubic grid coordinate system. Passed through args, not part of this constraint function
 	# ======================================== #
 
 	# extract coordinates from params
