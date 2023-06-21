@@ -7,7 +7,7 @@
 #	length. 
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 09.06.2023 - Oliver Demuth
+#	Last updated 20.06.2023 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -197,7 +197,7 @@ def sigDistField(origin, insertion, jPos, meshes, subdivision):
 
 	if len(meshes) == 1:
 		sigDistances = np.array(sigDistList[0]) # for a single mesh
-	elif len(meshes == 2):
+	elif len(meshes) == 2:
 		sigDistances = np.minimum(sigDistList[0],sigDistList[1]) # for two meshes (faster than np.amin() for element-wise comparison of two arrays)
 	else:
 		sigDistances = np.amin(sigDistList, axis = 0) # for more than two meshes
@@ -236,9 +236,9 @@ def sigDistMesh(mesh, Offset, rotMat, subdivision):
 	polyIntersect.create(mObj,mat)
 	ptON = om.MPointOnMesh()
 
-	# create 3D grid where all axes are twice the distance between origin and insertion
+	# create 3D grid where all axes are 1.5 times the distance between origin and insertion
 
-	xElements = np.linspace(-0.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
+	xElements = np.linspace(-0.25, 1.25, num = subdivision + 1, endpoint=True, dtype=float)
 	elements = np.linspace(-1, 1, num = subdivision + 1, endpoint=True)
 	
 	points = [[i, j, k] for i in xElements # length along x
@@ -401,12 +401,15 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 	# set constraints function
 
 	cons = ({'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
-			 'fun': cons_fun,	# set constraint function
-			 'args': arguments})	# pass arguments to constrain function
+		 'fun': sigDist_cons_fun,	# set constraint function
+		 'args': arguments},
+		{'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
+		 'fun': path_cons_fun,		# set constraint function
+		 'args': arguments})		# pass arguments to constrain function
 
 	# set bounds
 
-	boundsList = [(-1,1)] * (len(initial_guess)) # keep y and z coordinates of points within boundary of cubic grid
+	boundsList = [(-0.75,0.75)] * (len(initial_guess)) # keep y and z coordinates of points within boundary of cubic grid
 	boundsList[0] = boundsList[1] = boundsList[len(initial_guess) - 2] = boundsList[len(initial_guess) - 1] = (0,0) # set y and z bounds of origin and insertion to zero
 	bnds = tuple(boundsList)
 
@@ -423,9 +426,9 @@ def ligLengthOptMin(sigDistFieldArray, relGridPoints, ligSubdiv):
 	return res
 
 
-# ========== constraints functions for optimisation ==========
+# ========== signed distance field constraint function ==========
 
-def cons_fun(params, x, ip, rotMat):
+def sigDist_cons_fun(params, x, ip, rotMat):
 
 	# Input variables:
 	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
@@ -462,6 +465,41 @@ def cons_fun(params, x, ip, rotMat):
 			break
 	
 	return min(signDist) # return minimal value, if any of the points is inside a mesh it will be negative
+
+
+# ========== path constraint function ==========
+
+def path_cons_fun(params, x, ip, rotMat):
+
+	# Input variables:
+	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
+	#	x = constant X coordinates for ligament points
+	#	ip = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the cubic grid 
+	#	rotMat = rotation matrix from ligament coordinate system to default cubic grid coordinate system
+	# ======================================== #
+
+	# extract coordinates from params
+
+	y = params[0::2]
+	z = params[1::2]
+
+	# get number of ligament segments
+
+	n = len(x)-1
+
+	# calculate distance between subsequent points
+
+	dist = []
+
+	for i in range(n):
+		dist.append(((y[i+1] - y[i])**2 + (z[i+1] - z[i])**2)**0.5) # diagonal YZ distance between subsequent points
+
+	maxDist = max(dist) # get maximum diagonal YZ distance 
+
+	distDiff = 1.5 / n - maxDist # mediolateral offset can be maximally 1.5 times the distance between path segment along X-axis. This is to avoid path penetrating through thin parts of the mesh, where path points would be on either side of mesh
+	
+
+	return distDiff
 
 
 # ========== cost function for optimisation ==========
