@@ -5,7 +5,7 @@
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 09.06.2023 - Oliver Demuth
+#	Last updated 20.06.2023 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -72,11 +72,13 @@ else:
 maxKeys = cmds.keyframe(jointName, attribute='rotateX', query=True, keyframeCount=True)
 
 if FrameInterval == None or (minKeys + FrameInterval) > maxKeys:
-	keyframes = maxKeys
+    keyframes = maxKeys
+    keyDiff = keyframes - minKeys + 1
+	
 else:
-	keyframes = minKeys + FrameInterval
+    keyframes = minKeys + FrameInterval
+    keyDiff = keyframes - minKeys
 
-keyDiff = keyframes - minKeys + 1
 
 if keyDiff <=0:
 	keyDiff = 1
