@@ -239,7 +239,7 @@ def sigDistMesh(mesh, Offset, rotMat, subdivision):
 	# create 3D grid where all axes are 1.5 times the distance between origin and insertion
 
 	xElements = np.linspace(-0.25, 1.25, num = subdivision + 1, endpoint=True, dtype=float)
-	elements = np.linspace(-1, 1, num = subdivision + 1, endpoint=True)
+	elements = np.linspace(-0.75, 0.75, num = subdivision + 1, endpoint=True)
 	
 	points = [[i, j, k] for i in xElements # length along x
 			    for j in elements  # length along y
