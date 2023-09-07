@@ -483,7 +483,7 @@ end
 
 %% Ligament Data Filter and 6DOF to 3DOF function
 
-function ligData = ligFilter(inputData,ligInd,span,filter,itter) % Rotation for X, Y and Z axes
+function ligData = ligFilter(inputData,ligInd,span,filter,itter) 
 
 posInd = unique(inputData(:,1:3),'rows'); % get unique positions from 6DOF ROM simulation
 rotXInd = unique(inputData(:,4), 'rows'); % get set of X rotational values
