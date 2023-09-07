@@ -9,6 +9,7 @@
 %
 %   Last updated 07.09.2023 - Oliver Demuth
 
+clear;
 clc;
 
 %% load data
@@ -360,12 +361,9 @@ exportFileName = append(inputData,'.pdf');
 exportgraphics(fig,exportFileName,'ContentType','vector');
 
 
+%% ==== Custom Helper Functions ==== %%
 
-
-
-    %% Custom Helper Functions
-
-    %% constrain rotational data based on ligament lengths
+%% constrain rotational data based on ligament lengths
 
 function consData = ligCons(inputTable,thresholds) % Rotation for X, Y and Z axes and calculated ligament lengths
 
@@ -449,11 +447,10 @@ for i = 4:numCol % get number of ligaments, i.e., data minus rotation columns
     %exportgraphics(fig,exportfilename,'ContentType','vector');
 end
 
-
 end
 
     
-    %% Cosine correct Data function
+%% Cosine correct Data function
     
 function ccData = cc(DataRotation) % Rotation for X, Y and Z axes
 
