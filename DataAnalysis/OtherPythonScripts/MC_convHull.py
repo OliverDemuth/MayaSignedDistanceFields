@@ -1,9 +1,9 @@
-#	MC_convHull.py
+# MC_convHull.py
 #
-#	  This script calculates the circumference of a bone based on a cutting
-#	  plane using Andrew's monotone chain convex hull algorithm in Autodesk
-#	  Maya. Cut a bone with a plane using a Boolean operation and select the
-#   resulting slice and run this script. 
+#	This script calculates the circumference of a bone based on a cutting
+#	plane using Andrew's monotone chain convex hull algorithm in Autodesk
+#	Maya. Cut a bone with a plane using a Boolean operation and select the
+#   	resulting slice and run this script. 
 #
 #	Written by Oliver Demuth 28.11.2022
 
@@ -58,12 +58,12 @@ def MC_convHull(selection):
 	pointB = vtcPos[1]
 
 	ADir = dt.Vector(meanPos[0] - pointA[0],
-					 meanPos[1] - pointA[1],
-					 meanPos[2] - pointA[2])
+			 meanPos[1] - pointA[1],
+			 meanPos[2] - pointA[2])
 
 	BDir = dt.Vector(meanPos[0] - pointB[0],
-					 meanPos[1] - pointB[1],
-					 meanPos[2] - pointB[2])
+			 meanPos[1] - pointB[1],
+			 meanPos[2] - pointB[2])
 
 	Offset = ADir.length()
 
@@ -80,18 +80,18 @@ def MC_convHull(selection):
 	# go through vertices and calculate UV coordinates
 
 	for j in range(len(vertices)):
-	    
-	    vtxID = vertices[j]
+		
+		vtxID = vertices[j]
 
-	    tempVtx = vtcPos[j]
-	    pOffset = dt.Vector(meanPos[0] - tempVtx[0], # calculate offset from origin
-	                        meanPos[1] - tempVtx[1],
-	                        meanPos[2] - tempVtx[2])
-	                        
-	    u = pOffset.dot(uDirNorm) # calculate u value
-	    v = pOffset.dot(vDirNorm) # calculate v value
-	    pointUV = (u, v, 0)
-	    uvPoints.append(uvPoint(uv = pointUV, ID = vtxID))
+		tempVtx = vtcPos[j]
+		pOffset = dt.Vector(meanPos[0] - tempVtx[0], # calculate offset from origin
+				    meanPos[1] - tempVtx[1],
+				    meanPos[2] - tempVtx[2])
+							
+		u = pOffset.dot(uDirNorm) # calculate u value
+		v = pOffset.dot(vDirNorm) # calculate v value
+		pointUV = (u, v, 0)
+		uvPoints.append(uvPoint(uv = pointUV, ID = vtxID))
 
 	# calculate convex hull
 
@@ -110,28 +110,33 @@ def convex_hull(points):
 	#	points = points on mesh slice (2D coordinates are stored in uv attribute in Point class)
 	# ======================================== #
 
-    points.sort(key=lambda point:[point.uv[0],point.uv[1]]) # sort points based on u and v coordinates
+	points.sort(key=lambda point:[point.uv[0],point.uv[1]]) # sort points based on u and v coordinates
 
-    if len(points) <= 1:
-        return points
+	if len(points) <= 1:
+		return points
 
-    # get lower hull 
-    lower = []
-    for p in points:
-        while len(lower) >= 2 and ccw(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
-        lower.append(p)
+	# get lower hull 
 
-    # get upper hull
-    upper = []
-    for p in reversed(points):
-        while len(upper) >= 2 and ccw(upper[-2], upper[-1], p) <= 0:
-            upper.pop()
-        upper.append(p)
+	lower = []
 
-    # Concatenation of the lower and upper hulls gives the convex hull.
-    # Last point of each list is omitted because it is repeated at the beginning of the other list. 
-    return lower[:-1] + upper[:-1]
+	for p in points:
+		while len(lower) >= 2 and ccw(lower[-2], lower[-1], p) <= 0:
+			lower.pop()
+		lower.append(p)
+
+	# get upper hull
+
+	upper = []
+
+	for p in reversed(points):
+		while len(upper) >= 2 and ccw(upper[-2], upper[-1], p) <= 0:
+			upper.pop()
+		upper.append(p)
+
+	# Concatenation of the lower and upper hulls gives the convex hull.
+	# Last point of each list is omitted because it is repeated at the beginning of the other list. 
+
+	return lower[:-1] + upper[:-1]
 
 
 def perimeter(hull_points):
@@ -150,7 +155,7 @@ def perimeter(hull_points):
 		p1 = hull_points[k+1]
 
 		perimeter += dt.Vector(p0.uv[0] - p1.uv[0], p0.uv[1] - p1.uv[1], 0).length()
-        
+		
 	# Add distance between the first and last point to the perimeter
 
 	start = hull_points[0]
@@ -186,4 +191,5 @@ def ccw(A, B, C):
 selection = pm.ls(sl=True)
 
 circ = MC_convHull(selection)
+
 print(circ)
