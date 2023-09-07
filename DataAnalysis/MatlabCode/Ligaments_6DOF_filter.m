@@ -1,4 +1,4 @@
-% Ligaments_6DOF.m
+% Ligaments_6DOF_filter.m
 %   This script reduces 6DOF ROM and ligament simulations from Maya into 
 %   a 3DOF output and compares the results with XROMM data. Ligament lengths  
 %   are filtered and outlieres removed. 6DOF osteological ROM is then 
