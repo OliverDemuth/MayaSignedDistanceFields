@@ -157,8 +157,8 @@ def sigDistField(jointName, meshes, subdivision):
 
 		# get positions of points of interest
 
-		oPos = cmds.xform(ligOrigin, query = True, worldSpace = True, translation = True)
-		iPos = cmds.xform(ligInsertion, query = True, worldSpace = True, translation = True)
+		oPos = getWSPos(ligOrigin)
+		iPos = getWSPos(ligInsertion)
 
 		# get distances from origin and insertion to joint centre
 					
