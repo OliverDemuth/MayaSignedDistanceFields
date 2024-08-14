@@ -248,8 +248,6 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	signedDist = []
 	gridPoints = []
 
-	meshMat = om.MMatrix(cmds.xform(mesh, q=True, matrix=True, ws=True)) # get world matrix of mesh
-
 	for point in points:
 
 		# get 3D position of grid points 
