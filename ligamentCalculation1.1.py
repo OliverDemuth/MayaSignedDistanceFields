@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 14.08.2024 - Oliver Demuth
+#	Last updated 15.08.2024 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
