@@ -191,9 +191,9 @@ def sigDistField(jointName, meshes, subdivision):
 
 	# cycle through all meshes
 
-	if length(meshes) > 2
+	if len(meshes) > 2:
 		error('Too many meshes in array. Please specify only the distal and proximal bone mesh in the mesh array.')
-	else if length(mmeshes) < 2
+	elif len(meshes) < 2:
 		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
 	
 	for j,mesh in enumerate(meshes):
