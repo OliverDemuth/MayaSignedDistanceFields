@@ -5,7 +5,7 @@
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 14.08.2024 - Oliver Demuth
+#	Last updated 15.08.2024 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -102,8 +102,8 @@ distSigDistList = sigDistFieldArray[1].tolist()
 
 # initialise tricubic interpolator with signed distance data on default cubic grid
 
-ipProx = tricubic(proxSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+ipProx = tricubic(proxSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv, gridSubdiv, gridSubdiv].
+ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv, gridSubdiv, gridSubdiv].
 
 # get corner points of cubic grids (both grids are set up identically)
 
