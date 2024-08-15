@@ -58,16 +58,16 @@ import scipy as sp
 from tricubic import tricubic
 
 
-
 ################################################
 # ========== Maya specific functions ========= #
 ################################################
 
 
 # ========== ligament length calculation function ==========
-def ligCalc(ipProx, ipDist, gridRotMat, rotMat, LigAttributes ,ligSubdiv):
+def ligCalc(jPos, ipProx, ipDist, gridRotMat, rotMat, LigAttributes, ligSubdiv):
 
 	# Input variables:
+	#	jPos = world coordinates of joint
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
 	#	gridRotMat = rotation matrix of default cubic grid
@@ -93,7 +93,7 @@ def ligCalc(ipProx, ipDist, gridRotMat, rotMat, LigAttributes ,ligSubdiv):
 
 		# get ligament transformation matrices
 
-		ligRotMat, Offset = getLigTransMat(origin, insertion, jPos)
+		ligRotMat, Offset = getLigTransMat(ligOrigin, ligInsertion, jPos)
 
 		# minimise ligament length through optimiser
 
@@ -109,7 +109,7 @@ def ligCalc(ipProx, ipDist, gridRotMat, rotMat, LigAttributes ,ligSubdiv):
 
 		coords = []
 		for j in range(ligSubdiv + 1):
-			coords.append(getPosInWS(rotMat, [x[j],y[j],z[j]])) 
+			coords.append(getPosInWS(ligRotMat, [x[j],y[j],z[j]])) 
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
@@ -138,7 +138,7 @@ def sigDistField(jointName, meshes, subdivision):
 	jPos = getWSPos(jointName)
 	jDag = dagObjFromName(jointName)[1]
 	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation atrix of parent of joint
+	jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
 
 	# get number and names of ligaments
 
@@ -202,7 +202,7 @@ def sigDistField(jointName, meshes, subdivision):
 		localPoints = osPoints # osPoints are identical for both cubic grids
 		worldPoints.append(wsPoints)
 	
-	return sigDistances, localPoints, worldPoints, rotMat, LigAttributes
+	return sigDistances, localPoints, worldPoints, rotMat, LigAttributes, maxDist
 
 
 # ========== signed distance field per mesh function ==========
@@ -485,8 +485,8 @@ def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 
 		ligWSPoint = getPosInWS(ligRotMat,[x[i+1], y[i+1], z[i+1]])
 
-		relPosProx = getPosInOS(gridRotMat, ligWSPoint * rotMat[0].inverse())
-		relPosDist = getPosInOS(gridRotMat, ligWSPoint * rotMat[1].inverse())
+		relPosProx = getPosInOS(gridRotMat, getPosInOS(rotMat[0],ligWSPoint))
+		relPosDist = getPosInOS(gridRotMat, getPosInOS(rotMat[1],ligWSPoint))
 		
 		# tricubic interpolation of signed distance at postion relative to default cubic grid
 
