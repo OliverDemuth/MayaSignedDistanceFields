@@ -28,13 +28,13 @@
 #################################################
 
 
-jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
+jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 
 meshes = ['prox_mesh', 'dist_mesh']	# specify according to meshes or boolean object in the Maya scene
 
-gridSubdiv = 100			# Integer value for the subdivision of the cube, i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+gridSubdiv = 100			# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 
-ligSubdiv = 20				# Integer value for the number of ligament segments, e.g., 20, see Marai et al., 2004 for details
+ligSubdiv = 20				# Integer value for the number of ligament segments (e.g., 20, see Marai et al., 2004 for details)
 
 StartFrame = None 			# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 
