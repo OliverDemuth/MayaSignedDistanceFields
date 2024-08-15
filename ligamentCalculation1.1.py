@@ -199,7 +199,7 @@ def sigDistField(jointName, meshes, subdivision):
 	for j,mesh in enumerate(meshes):
 		meshSigDist, osPoints, wsPoints = sigDistMesh(mesh, rotMat[j], subdivision) # get signed distance field for each mesh
 		sigDistances.append(np.array(meshSigDist).reshape(subdivision + 1, subdivision + 1, subdivision + 1))
-		localPoints.append(osPoints)
+		localPoints = osPoints # osPoints are identical for both cubic grids
 		worldPoints.append(wsPoints)
 	
 	return sigDistances, localPoints, worldPoints, rotMat, LigAttributes
