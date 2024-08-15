@@ -92,7 +92,7 @@ start = time.time()
 
 print('Calculating signed distance fields...')
 
-sigDistFieldArray, localPoints, worldPoints, rotMat, LigAttributes = sigDistField(jointName, meshes, gridSubdiv)
+sigDistFieldArray, localPoints, worldPoints, initialRotMat, LigAttributes, gridScale = sigDistField(jointName, meshes, gridSubdiv)
 
 # get dimensions of cubic grids
 
@@ -176,14 +176,32 @@ for i in range(keyDiff):
 	if cmds.progressWindow(query=True, isCancelled=True):
 			break
 
+	# get joint centre position
+
+	jPos = getWSPos(jointName)
+	jDag = dagObjFromName(jointName)[1]
+	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
+	jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
+
+	# normalize matrices by gridScale
+
+	jInclTransMat.setScale([gridScale,gridScale,gridScale],om.MSpace.kWorld) # set scale in world space
+	jExclTransMat.setScale([gridScale,gridScale,gridScale],om.MSpace.kWorld) # set scale in world space
+
+	# get rotation matrices
+
+	rotMat = []
+	rotMat.append(om.MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
+	rotMat.append(om.MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
+
 	# calculate the length of each ligament 
 
-	ligNames,pathLengths,ligPoints,results = ligCalc(ipProx, ipDist, gridRotMat, rotMat, LigAttributes ,ligSubdiv)
+	ligNames,pathLengths,ligPoints,results = ligCalc(jPos, ipProx, ipDist, gridRotMat, rotMat, LigAttributes ,ligSubdiv)
 
 	# key the attributes on the animated joint
 
 	for index, ligament in enumerate(ligNames):
-	    
+	
 		if results[index].status == 0:
 			cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
 		else:
