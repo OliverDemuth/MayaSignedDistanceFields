@@ -13,9 +13,9 @@
 #
 #		INPUT params:
 #			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-#			string  meshes:			Name(s) of the bone meshes, i.e., several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
-#			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
-#			int 	ligSubdiv:		Integer value for the number of ligament points, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details
+#			string  meshes:			Name(s) of the bone meshes (e.g., several individual meshes in the form of ['prox_mesh','dist_mesh'])
+#			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			int 	ligSubdiv:		Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
 #
 #		RETURN params:
 #			list 	ligamentNames:		Return value is a list of the ligament names as designated as custom attributes in the 'jointName'
@@ -29,8 +29,8 @@
 #	(1) 	Meshes need realtively uniform face areas, otherwise large faces might skew 
 #		vertex normals in their direction. It is, therefore, important to extrude 
 #		edges around large faces prior to closing the hole at edges with otherwise 
-#		acute angles to circumvent this issue, e.g., if meshes have been cut to reduce
-#		polycount, prior to executing the Python scripts.
+#		acute angles to circumvent this issue (e.g., if meshes have been cut to reduce
+#		polycount) prior to executing the Python scripts.
 #
 #	(2) 	For each ligament create a float attribute at 'jointName' and name it 
 #		accordingly. Make sure that the naming convention for the ligament origins 
