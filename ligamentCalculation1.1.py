@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 15.08.2024 - Oliver Demuth
+#	Last updated 09.10.2024 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -55,6 +55,7 @@ import maya.cmds as cmds
 import numpy as np
 import scipy as sp
 
+from math import sqrt
 from tricubic import tricubic
 
 
@@ -526,14 +527,15 @@ def path_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 
 	# calculate distance between subsequent points
 
-	dist = []
+	dist = np.array([])
 
 	for i in range(n):
-		dist.append(((y[i+1] - y[i])**2 + (z[i+1] - z[i])**2)**0.5) # diagonal YZ distance between subsequent points
 
-	maxDist = max(dist) # get maximum diagonal YZ distance 
+		dist = np.append(dist, sqrt((y[i+1] - y[i])**2 + (z[i+1] - z[i])**2))
 
-	distDiff = 1.5 / n - maxDist # mediolateral offset can be maximally 1.5 times the distance between path segment along X-axis. This is to avoid path penetrating through thin parts of the mesh, where path points would be on either side of mesh
+	maxDist = dist.max() # get maximum diagonal YZ distance
+
+	distDiff = 1.7 / n - maxDist # mediolateral offset can be maximally 1.7 times the distance between path segment along X-axis (i.e., 60°). This is to avoid path penetrating through thin parts of the mesh, where path points would be on either side of mesh
 	
 
 	return distDiff
@@ -574,6 +576,6 @@ def cost_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 		
 		# sum up the distances between the individiual ligament points, i.e., the length of the individual segments
 		
-		cost += (const + (y[i+1] - y[i])**2 + (z[i+1] - z[i])**2)**0.5
+		cost += sqrt(const + (y[i+1] - y[i])**2 + (z[i+1] - z[i])**2)
 		
 	return cost
