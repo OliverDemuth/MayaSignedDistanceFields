@@ -27,19 +27,19 @@
 #################################################
 
 
-jointName = 'myJoint' 										# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
+jointName = 'myJoint' 						# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 
-meshes = ['RLP3_scapulocoracoid', 'RLP3_humerus']			# specify according to meshes in the Maya scene
+meshes = ['RLP3_scapulocoracoid', 'RLP3_humerus']		# specify according to meshes in the Maya scene
 
 artSurfMeshes = ['RLP3_glenoid_art_surf', 'RLP3_humerus']	# specify according to meshes in the Maya scene
 
-proxFittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'			# specify according to meshes in the Maya scene
+proxFittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to mesh in the Maya scene
 
-gridSubdiv = 100											# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridSubdiv = 100						# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 
-interval = 90												# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+interval = 90							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 
-debug = 0 													# debug mode to check if signed distance fields have already been calculated
+debug = 0 							# debug mode to check if signed distance fields have already been calculated
 
 
 #################################################
@@ -74,16 +74,13 @@ cmds.rotate(0, 0, 0, jointName)
 cmds.move(0, 0, 0, jointName)
 
 if debug == 1:
-
 	# check if distance fields have already been calculated
-
 	try:
 		sigDistFieldArray
 	except NameError:
 		var_exists = False
 	else:
 		var_exists = True # signed distance field already calculated, no need to do it again
-
 else:
 	var_exists = False
 
@@ -95,9 +92,7 @@ gridSize = 6 * sphereRad
 
 if var_exists == False:
 	# calculate signed distance fields
-
 	print('Calculating signed distance fields...')
-
 	sigDistFieldArray, localPoints, worldPoints, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize)
 
 # get dimensions of cubic grids
@@ -127,9 +122,9 @@ zDir = (zVecPos - origPos) / (dims[2] - 1)
 # get rotation matrix of default cubic grid coordinate system
 
 gridRotMat = om.MMatrix([xDir.x, 	xDir.y,		xDir.z, 	0,
-						 yDir.x, 	yDir.y, 	yDir.z, 	0,
-						 zDir.x, 	zDir.y, 	zDir.z, 	0,
-						 origPos.x,	origPos.y,	origPos.z,	1]) 
+			 yDir.x, 	yDir.y, 	yDir.z, 	0,
+			 zDir.x, 	zDir.y, 	zDir.z, 	0,
+			 origPos.x,	origPos.y,	origPos.z,	1]) 
 
 mid = time.time()
 
@@ -141,18 +136,18 @@ xRots = zRots = np.arange(-180, ceil(180+interval/2), interval, dtype = int)
 yRots = np.arange(-90, ceil(90+interval/2), interval, dtype = int)
 
 rotations = [[x, y, z] for x in xRots  # length along x
-		    		   for y in yRots  # length along y
-		    		   for z in zRots] # length along z
+		       for y in yRots  # length along y
+		       for z in zRots] # length along z
 
 # define progress bar
 
 numFrames = len(rotations)
 
 cmds.progressWindow(title = 'Translation optimisation in progress...',
-				    progress = 1,
-				    status = 'Processing frame {0} of {1} frames'.format(1,numFrames),
-				    isInterruptable = True, 
-				    max = numFrames)
+		    progress = 1,
+		    status = 'Processing frame {0} of {1} frames'.format(1,numFrames),
+		    isInterruptable = True, 
+		    max = numFrames)
 
 print('Translation optimisation in progress...')
 
@@ -177,7 +172,7 @@ for i in range(numFrames):
 	# check if progress is interupted
 
 	if cmds.progressWindow(query=True, isCancelled=True):
-			break
+		break
 			
 	# reset joint
 
@@ -209,7 +204,6 @@ for i in range(numFrames):
 	# check if pose was viable
 
 	if viable == 1:
-
 		frame = cmds.currentTime(query=True)
 
 		# key rotation to animate joint
@@ -242,6 +236,3 @@ else:
 	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames append keyed {2} viable frames.'.format(end - mid,i+1,int(frame-1)))
 
 cmds.progressWindow(edit=True, endProgress=True)
-
-
-
