@@ -14,8 +14,8 @@
 #		INPUT params:
 #			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 #			string  meshes:			Name(s) of the bone meshes, i.e., several individual meshes (e.g., in the form of ['prox_mesh','dist_mesh'])
-#			string	artSurfMeshes:	Name(s) of the articular surface meshes, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
-#			int		gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			string	artSurfMeshes:		Name(s) of the articular surface meshes, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
+#			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 #			float	gridSize:		Float value indicating the size of the cubic grid, i.e., the length of a side (e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
 #			float	thickness:		Float value indicating the thickness value which correlates with the joint spacing
 #			
@@ -27,20 +27,20 @@
 #
 #	IMPORTANT notes:
 #		
-#	(1) Meshes need realtively uniform face areas, otherwise large faces might skew 
+#	(1) 	Meshes need realtively uniform face areas, otherwise large faces might skew 
 #		vertex normals in their direction. It is, therefore, important to extrude 
 #		edges around large faces prior to closing the hole at edges with otherwise 
 #		acute angles to circumvent this issue, e.g., if meshes have been cut to reduce
 #		polycount, prior to executing the Python scripts.
 #
-#	(2) For each bone (*) two sets of meshes are required, the articular surface and the
+#	(2) 	For each bone (*) two sets of meshes are required, the articular surface and the
 #		bone mesh
 #
 #	(3)	This script requires several modules for Python, see README file. Make sure to
 #		have the following external modules installed for the mayapy application:
 #
-#			- 'numpy' 		NumPy:				https://numpy.org/about/
-#			- 'scipy'		SciPy:				https://scipy.org/about/
+#			- 'numpy' 	NumPy:			https://numpy.org/about/
+#			- 'scipy'	SciPy:			https://scipy.org/about/
 #			- 'tricubic' 	Daniel Guterding: 	https://github.com/danielguterding/pytricubic
 #				
 #		For further information regarding them, please check the website(s) referenced 
@@ -197,8 +197,8 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	elements = np.linspace(-1.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
 	
 	points = [[i, j, k] for i in elements  # length along x
-						for j in elements  # length along y
-						for k in elements] # length along z
+			    for j in elements  # length along y
+			    for k in elements] # length along z
 
 	# go through grid points and calculate signed distance for each of them
 
@@ -224,8 +224,8 @@ def sigDistMesh(mesh, rotMat, subdivision):
 		# get vector from localPoint to ptON
 
 		diff = om.MVector(ptON.point.x - localPoint[0], 
-						  ptON.point.y - localPoint[1],
-						  ptON.point.z - localPoint[2])
+				  ptON.point.y - localPoint[1],
+				  ptON.point.z - localPoint[2])
 
 		# get distance from localPoint to ptON    
 	
@@ -267,7 +267,6 @@ def relVtcPos(mesh, rotMat):
 	vertexPos = []
 
 	for i in range(MFnMesh.numVertices):
-
 		worldPos = MFnMesh.getPoint(i, space = om.MSpace.kWorld) # get world position of vertex
 		vertexPos.append(getPosInOS(rotMat, worldPos))
 
@@ -299,9 +298,9 @@ def getPosInWS(rotMat,point):
 	# ======================================== #
 
 	localMat = om.MMatrix(((1, 0, 0, 0),
-			    		   (0, 1, 0, 0),
-			    		   (0, 0, 1, 0),
-			    		   (point[0], point[1], point[2], 1))) # position of point
+			       (0, 1, 0, 0),
+			       (0, 0, 1, 0),
+			       (point[0], point[1], point[2], 1))) # position of point
 
 	worldPos = localMat * rotMat
 
@@ -318,9 +317,9 @@ def getPosInOS(rotMat, point):
 	# ======================================== #
 
 	ptWS = om.MMatrix(((1, 0, 0, 0),
-					   (0, 1, 0, 0),
-					   (0, 0, 1, 0),
-					   (point[0], point[1], point[2], 1))) # world space matrix of point
+			   (0, 1, 0, 0),
+			   (0, 0, 1, 0),
+			   (point[0], point[1], point[2], 1))) # world space matrix of point
 
 	ptPosOS = ptWS * rotMat.inverse() # multiply with inverse of rotation matrix
 
@@ -337,9 +336,9 @@ def getTransMat(rotMat, point):
 	# ======================================== #
 
 	trans = om.MMatrix(((rotMat[0], rotMat[1], rotMat[2], 0),
-						(rotMat[4], rotMat[5], rotMat[6], 0),
-						(rotMat[8], rotMat[9], rotMat[10], 0),
-						(point[0], point[1], point[2], 1))) # object space coordinates of point
+			    (rotMat[4], rotMat[5], rotMat[6], 0),
+			    (rotMat[8], rotMat[9], rotMat[10], 0),
+			    (point[0], point[1], point[2], 1))) # object space coordinates of point
 
 	return trans
 
@@ -381,11 +380,10 @@ def meanRad(mesh):
 	vtcDist = []
 
 	for i in range(MFnMesh.numVertices):
-
 		worldPos = MFnMesh.getPoint(i, space = om.MSpace.kWorld)  # get world position of vertex
 		vtcDist.append(om.MVector(worldPos[0] - centerPos[0], 
-								  worldPos[1] - centerPos[1],
-								  worldPos[2] - centerPos[2]).length())
+					  worldPos[1] - centerPos[1],
+					  worldPos[2] - centerPos[2]).length())
 			
 	meanRad = np.mean(vtcDist)
 	
@@ -445,13 +443,13 @@ def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickn
 
 	# set constraints functions
 
-	cons = ({'type': 'ineq',			# set type to inequality, which means that it is to be non-negative
+	cons = ({'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
 			 'fun': cons_fun,	# set constraint function
-			 'args': arguments})		# pass arguments to constrain function
+			 'args': arguments})	# pass arguments to constrain function
 
 	# set bounds
 
-	boundsList = [(-10,10)] * (len(initial_guess)) # set y and z coordinate boundaries to 10 times euclidean distance between  origin and insertion
+	boundsList = [(-10,10)] * (len(initial_guess)) # set x, y and z coordinate boundaries
 	bnds = tuple(boundsList)
 
 	# set options
