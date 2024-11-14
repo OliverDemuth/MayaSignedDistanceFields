@@ -7,7 +7,7 @@
 #	approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 13.11.2024 - Oliver Demuth
+#	Last updated 14.11.2024 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -31,13 +31,19 @@ jointName = 'myJoint' 						# specify according to the joint centre in the Maya 
 
 meshes = ['RLP3_scapulocoracoid', 'RLP3_humerus']		# specify according to meshes in the Maya scene
 
-artSurfMeshes = ['RLP3_glenoid_art_surf', 'RLP3_humerus']	# specify according to meshes in the Maya scene
+artSurfMeshes = ['RLP3_glenoid_art_surf', 'RLP3_humeral_head']	# specify according to meshes in the Maya scene
 
-proxFittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to mesh in the Maya scene
+proxFittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to meshes in the Maya scene
 
 gridSubdiv = 100						# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 
-interval = 90							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+
+StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
+
+FrameInterval = None						# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+
+ContinueKeys = True						# Boolean value to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
 
 debug = 0 							# debug mode to check if signed distance fields have already been calculated
 
@@ -60,29 +66,14 @@ from math import ceil
 
 # ========================================
 
-
-# set current time to 1
-
-cmds.currentTime(1)
-frame = cmds.currentTime(query=True)
-
-start = time.time()
-
 # reset joint
 
 cmds.rotate(0, 0, 0, jointName)
 cmds.move(0, 0, 0, jointName)
 
-if debug == 1:
-	# check if distance fields have already been calculated
-	try:
-		sigDistFieldArray
-	except NameError:
-		var_exists = False
-	else:
-		var_exists = True # signed distance field already calculated, no need to do it again
-else:
-	var_exists = False
+# get dag path for joint
+
+jDag = dagObjFromName(jointName)[1]
 
 # get gridsize from glenoid sphere radius
 
@@ -90,9 +81,29 @@ sphereRad = meanRad(proxFittedShape)
 thickness = sphereRad/2
 gridSize = 6 * sphereRad
 
+# initialise signed distance fields
+
+start = time.time()
+
+if debug == 1 or ContinueKeys == True:
+
+	# check if distance fields have already been calculated
+
+	try:
+		sigDistFieldArray
+	except NameError:
+		var_exists = False
+	else:
+		var_exists = True # signed distance field already calculated, no need to do it again
+
+else:
+	var_exists = False
+
 if var_exists == False:
 	# calculate signed distance fields
+
 	print('Calculating signed distance fields...')
+
 	sigDistFieldArray, localPoints, worldPoints, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize)
 
 # get dimensions of cubic grids
@@ -139,21 +150,59 @@ rotations = [[x, y, z] for x in xRots  # length along x
 		       for y in yRots  # length along y
 		       for z in zRots] # length along z
 
-# define progress bar
-
 numFrames = len(rotations)
 
+# set time to 1 or to start frame
+
+if ContinueKeys == True:
+	lastKey = cmds.keyframe(jointName, attribute='rotateX', query=True, index=(1, cmds.keyframe(jointName, attribute='rotateX', query=True, keyframeCount=True)))[-1]
+
+	xRot = round(cmds.keyframe(jointName, attribute='rotateX', query=True, eval=True, time=(lastKey,lastKey))[0],6)
+	yRot = round(cmds.keyframe(jointName, attribute='rotateY', query=True, eval=True, time=(lastKey,lastKey))[0],6)
+	zRot = round(cmds.keyframe(jointName, attribute='rotateZ', query=True, eval=True, time=(lastKey,lastKey))[0],6)
+
+	rotIdx = rotations.index([xRot,yRot,zRot]) # get index of last keyed frame
+
+	minKeys = rotIdx + 2 # get index of next frame to be keyed
+
+	# set current time
+
+	cmds.currentTime(lastKey + 1)
+
+else:
+	if StartFrame == None:
+		minKeys = 1 # get index of next frame to be keyed
+		cmds.cutKey(jointName, option="keys") # delete all previous keyframes
+	else: 
+		minKeys = StartFrame
+		
+	lastKey = 0	
+
+	# set current time
+
+	cmds.currentTime(minKeys)
+
+# get total number of frames to be keyed
+
+if FrameInterval == None or (minKeys + FrameInterval) > numFrames:
+	keyframes = numFrames
+	keyDiff = keyframes - minKeys + 1
+else:
+	keyframes = minKeys + FrameInterval
+	keyDiff = FrameInterval
+
+if keyDiff <=0:
+	keyDiff = 1
+
+# define progress bar
+
 cmds.progressWindow(title = 'Translation optimisation in progress...',
-		    progress = 1,
-		    status = 'Processing frame {0} of {1} frames'.format(1,numFrames),
-		    isInterruptable = True, 
-		    max = numFrames)
+					progress = 1,
+					status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
+					isInterruptable = True, 
+					max = keyDiff)
 
 print('Translation optimisation in progress...')
-
-# get dag path for joint
-
-jDag = dagObjFromName(jointName)[1]
 
 # calculate relative position of articular surfaces
 
@@ -162,32 +211,36 @@ distCoords = relVtcPos(artSurfMeshes[1], initialRotMat[1])
 
 # get joint exclusive transformation matrix (parent)
 
-jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
+jExclMat = jDag.exclusiveMatrix() # world rotation matrix of parent joint
+jExclTransMat = om.MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
 jExclTransMat.setScale([gridSize,gridSize,gridSize],om.MSpace.kWorld) # set scale in world space
 
 # go through all possible combinations
 
-for i in range(numFrames):
+for i in range(keyDiff):
+
+	if minKeys > keyframes:
+		break
+
+	j = minKeys - 1 + i # starts at 0, hence need to substract 1
 
 	# check if progress is interupted
 
 	if cmds.progressWindow(query=True, isCancelled=True):
-		break
+			break
 			
-	# reset joint
+	# reset joint translations
 
-	cmds.rotate(0, 0, 0, jointName)
 	cmds.move(0, 0, 0, jointName)
 
 	# set rotation
 
-	rotation = [float(np.round(rotations[i][0], 10)),float(np.round(rotations[i][1], 10)),float(np.round(rotations[i][2], 10))]
+	rotation = [float(rotations[j][0]),float(rotations[j][1]),float(rotations[j][2])]
 	cmds.rotate(rotation[0], rotation[1], rotation[2], jointName)
 
 	# get joint inclusive transformation matrix (child)
 
 	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jInclMat = om.MTransformationMatrix(jDag.inclusiveMatrix())
 	jInclTransMat.setScale([gridSize,gridSize,gridSize],om.MSpace.kWorld) # set scale in world space
 
 	# get rotation matrices
@@ -195,15 +248,18 @@ for i in range(numFrames):
 	rotMat = []
 	rotMat.append(om.MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
 	rotMat.append(om.MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
-	rotMat.append(jDag.exclusiveMatrix()) # get parent rotMat (prox) without scale
+	rotMat.append(jExclMat) # get parent rotMat (prox) without scale
 
 	# optimise the joint translations
 
 	coords, viable, results = optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness)
 
 	# check if pose was viable
+	
+	print(results.nit)
 
 	if viable == 1:
+
 		frame = cmds.currentTime(query=True)
 
 		# key rotation to animate joint
@@ -224,15 +280,18 @@ for i in range(numFrames):
 
 	# update progress bar
 
-	cmds.progressWindow(edit=True, progress=i+1, status='Processing frame {0} of {1} frames'.format(i+1,numFrames))
+	cmds.progressWindow(edit=True, progress=i+1, status='Processing frame {0} of {1} frames'.format(i+1,keyDiff))
 
 # when done close progress bar
 
 end = time.time()
 
 if cmds.progressWindow(query=True, isCancelled=True):
-	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i+1,int(frame-1)))
+	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i+1,int(frame-lastKey)))
 else:
-	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames append keyed {2} viable frames.'.format(end - mid,i+1,int(frame-1)))
+	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames append keyed {2} viable frames.'.format(end - mid,keyDiff,int(frame-lastKey)))
 
 cmds.progressWindow(edit=True, endProgress=True)
+
+
+
