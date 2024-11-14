@@ -363,7 +363,7 @@ def getPosInWS(rotMat,point):
 
 	worldPos = localMat * rotMat
 
-	return om.MVector(round(worldPos[12],10), round(worldPos[13],10), round(worldPos[14],10)) # round to remove floating point errors
+	return om.MVector(worldPos[12], worldPos[13], worldPos[14])
 
 
 # ========== get point in object space function ==========	
@@ -382,7 +382,7 @@ def getPosInOS(rotMat, point):
 
 	ptPosOS = ptWS * rotMat.inverse() # multiply with inverse of rotation matrix
 
-	return om.MVector(round(ptPosOS[12],10), round(ptPosOS[13],10), round(ptPosOS[14],10)) # round to remove floating point errors
+	return om.MVector(ptPosOS[12],ptPosOS[13],ptPosOS[14]) 
 
 
 # ========== get dag path function ==========
