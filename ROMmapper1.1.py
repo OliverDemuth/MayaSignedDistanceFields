@@ -7,7 +7,7 @@
 #	distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 13.11.2024 - Oliver Demuth
+#	Last updated 14.11.2024 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -27,24 +27,24 @@
 #
 #	IMPORTANT notes:
 #		
-#	(1) 	Meshes need realtively uniform face areas, otherwise large faces might skew 
-#		vertex normals in their direction. It is, therefore, important to extrude 
-#		edges around large faces prior to closing the hole at edges with otherwise 
-#		acute angles to circumvent this issue, e.g., if meshes have been cut to reduce
-#		polycount, prior to executing the Python scripts.
+#	(1) Meshes need realtively uniform face areas, otherwise large faces might skew 
+#	    vertex normals in their direction. It is, therefore, important to extrude 
+#	    edges around large faces prior to closing the hole at edges with otherwise 
+#	    acute angles to circumvent this issue, e.g., if meshes have been cut to reduce
+#	    polycount, prior to executing the Python scripts.
 #
-#	(2) 	For each bone (*) two sets of meshes are required, the articular surface and the
-#		bone mesh
+#	(2) For each bone (*) two sets of meshes are required, the articular surface and the
+#	    bone mesh
 #
-#	(3)	This script requires several modules for Python, see README file. Make sure to
-#		have the following external modules installed for the mayapy application:
+#	(3) This script requires several modules for Python, see README file. Make sure to
+#	    have the following external modules installed for the mayapy application:
 #
-#			- 'numpy' 	NumPy:			https://numpy.org/about/
-#			- 'scipy'	SciPy:			https://scipy.org/about/
-#			- 'tricubic' 	Daniel Guterding: 	https://github.com/danielguterding/pytricubic
+#		- 'numpy' 	NumPy:			https://numpy.org/about/
+#		- 'scipy'	SciPy:			https://scipy.org/about/
+#		- 'tricubic' 	Daniel Guterding: 	https://github.com/danielguterding/pytricubic
 #				
-#		For further information regarding them, please check the website(s) referenced 
-#		above.
+#	    For further information regarding them, please check the website(s) referenced 
+#	    above.
 
 
 # ========== load modules ==========
@@ -197,7 +197,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	elements = np.linspace(-1.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
 	
 	points = [[i, j, k] for i in elements  # length along x
-			    for j in elements  # length along y
+		  	    for j in elements  # length along y
 			    for k in elements] # length along z
 
 	# go through grid points and calculate signed distance for each of them
@@ -223,7 +223,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 		
 		# get vector from localPoint to ptON
 
-		diff = om.MVector(ptON.point.x - localPoint[0], 
+		diff = om.MVector(ptON.point.x - localPoint[0],
 				  ptON.point.y - localPoint[1],
 				  ptON.point.z - localPoint[2])
 
@@ -304,7 +304,7 @@ def getPosInWS(rotMat,point):
 
 	worldPos = localMat * rotMat
 
-	return om.MVector(round(worldPos[12],10), round(worldPos[13],10), round(worldPos[14],10)) # round to remove floating point errors
+	return om.MVector(worldPos[12], worldPos[13], worldPos[14])
 
 
 # ========== get point in object space function ==========	
@@ -323,7 +323,7 @@ def getPosInOS(rotMat, point):
 
 	ptPosOS = ptWS * rotMat.inverse() # multiply with inverse of rotation matrix
 
-	return om.MVector(round(ptPosOS[12],10), round(ptPosOS[13],10), round(ptPosOS[14],10)) # round to remove floating point errors
+	return om.MVector(ptPosOS[12], ptPosOS[13], ptPosOS[14])
 
 
 # ========== get add translation to rotmat function ==========	
@@ -380,6 +380,7 @@ def meanRad(mesh):
 	vtcDist = []
 
 	for i in range(MFnMesh.numVertices):
+
 		worldPos = MFnMesh.getPoint(i, space = om.MSpace.kWorld)  # get world position of vertex
 		vtcDist.append(om.MVector(worldPos[0] - centerPos[0], 
 					  worldPos[1] - centerPos[1],
@@ -454,7 +455,7 @@ def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickn
 
 	# set options
 
-	options = {"maxiter": 15} # if it doesn't solve within 12 iterations it usually won't solve
+	options = {"maxiter": 20} # if it doesn't solve within ~15 iterations it usually won't solve
 
 	# optimization using SLSQP
 
@@ -562,9 +563,3 @@ def cost_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 	cost = abs(avgdist-thickness)
 		
 	return cost
-
-
-
-
-
-
