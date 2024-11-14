@@ -255,8 +255,6 @@ for i in range(keyDiff):
 	coords, viable, results = optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness)
 
 	# check if pose was viable
-	
-	print(results.nit)
 
 	if viable == 1:
 
