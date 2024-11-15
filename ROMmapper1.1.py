@@ -1,20 +1,20 @@
 #	ROMmapper1.1.py
 #
-#	This script simulates contact-based positions from meshes and across a set of 
-#	rotational poses. It is an implementation of the Marai et al., 2006. approach for 
-#	Autodesk Maya. It creates signed distance fields for the proximal and distal bone 
-#	meshes, which are then used to caculate intersections between the meshes and the
+#	This script optimises contact-based positions across a set of rotational poses 
+# 	for a set of bone meshes. It is an implementation of the Marai et al., 2006. approach
+#	for Autodesk Maya. It creates signed distance fields for the proximal and distal bone 
+#	meshes which are then used to caculate intersections between the meshes and the
 #	distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 14.11.2024 - Oliver Demuth
+#	Last updated 15.11.2024 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
 #		INPUT params:
 #			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-#			string  meshes:			Name(s) of the bone meshes, i.e., several individual meshes (e.g., in the form of ['prox_mesh','dist_mesh'])
-#			string	artSurfMeshes:		Name(s) of the articular surface meshes, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
+#			string  meshes:			Names of the two bone meshes, i.e., several individual meshes representing the bones (e.g., in the form of ['prox_mesh','dist_mesh'])
+#			string	congruencyMeshes:	Names of the meshes to check articular congruency, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
 #			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 #			float	gridSize:		Float value indicating the size of the cubic grid, i.e., the length of a side (e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
 #			float	thickness:		Float value indicating the thickness value which correlates with the joint spacing
@@ -80,36 +80,50 @@ def optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat,
 
 	results = posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness)
 	
-	transMat = getTransMat(rotMat[1],getPosInOS(rotMat[2].inverse(),results.x))
+	# check if optimisation was successful
 	
-	signDist = []
+	if results.success: 
+	
+		diff = om.MVector(results.x).length() # get offset from glenoid centre
 
-	# check for disarticulation 
-
-	for i in range(len(proxCoords)):
-
-		# transform relative grid position into default cubic grid space for tricubic interpolation using rotation matrices
-
-		relWSProx = getPosInWS(rotMat[0], proxCoords[i])
-		relPosProx = getPosInOS(gridRotMat, getPosInOS(transMat,relWSProx))
+		# check for disarticulation 
+						  
+		if diff < (1.05 * thickness * 2): # first crudely (if distal ACS is more than 5% beyond radius of fitted proximal shape)
 		
-		# calculate distance 
-
-		tempSignDist = ipDist.ip([relPosProx[0], relPosProx[1], relPosProx[2]]) # get smaller of the two values
-		signDist.append(tempSignDist)
-
-	avgdist = np.mean(signDist)
+			transMat = getTransMat(rotMat[1],getPosInOS(rotMat[2].inverse(),results.x))
 	
-	# if disarticulated or any points penetrate meshes the position becomes inviable
+			signDist = []
 
-	if avgdist < (1.05 * thickness) and all(n > 0 for n in signDist):
-		viable = 1
+			for i in range(len(proxCoords)): # more indepth (get mean articular distance and check if within threshold)
+		
+				# transform relative grid position into default cubic grid space for tricubic interpolation using rotation matrices
+		
+				relWSProx = getPosInWS(rotMat[0], proxCoords[i])
+				relPosProx = getPosInOS(gridRotMat, getPosInOS(transMat,relWSProx))
+				
+				# calculate distance 
+		
+				tempSignDist = ipDist.ip([relPosProx[0], relPosProx[1], relPosProx[2]]) # get smaller of the two values
+				signDist.append(tempSignDist)
+		
+			avgdist = np.mean(signDist)
+			
+			# if disarticulated or any points penetrate meshes the position becomes inviable
+		
+			if avgdist < (1.05 * thickness) and all(n > 0 for n in signDist):
+				viable = 1
+			else:
+				viable = 0
+		else:
+			viable = 0			
 	else:
 		viable = 0
+
 
 	# gather results
 
 	return results.x, viable, results
+
 
 
 # ========== signed distance field per joint function ==========
@@ -197,8 +211,8 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	elements = np.linspace(-1.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
 	
 	points = [[i, j, k] for i in elements  # length along x
-		  	    for j in elements  # length along y
-			    for k in elements] # length along z
+			    for j in elements  # length along y
+		  	    for k in elements] # length along z
 
 	# go through grid points and calculate signed distance for each of them
 
@@ -267,6 +281,7 @@ def relVtcPos(mesh, rotMat):
 	vertexPos = []
 
 	for i in range(MFnMesh.numVertices):
+
 		worldPos = MFnMesh.getPoint(i, space = om.MSpace.kWorld) # get world position of vertex
 		vertexPos.append(getPosInOS(rotMat, worldPos))
 
@@ -382,7 +397,7 @@ def meanRad(mesh):
 	for i in range(MFnMesh.numVertices):
 
 		worldPos = MFnMesh.getPoint(i, space = om.MSpace.kWorld)  # get world position of vertex
-		vtcDist.append(om.MVector(worldPos[0] - centerPos[0], 
+		vtcDist.append(om.MVector(worldPos[0] - centerPos[0],
 					  worldPos[1] - centerPos[1],
 					  worldPos[2] - centerPos[2]).length())
 			
@@ -450,12 +465,12 @@ def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickn
 
 	# set bounds
 
-	boundsList = [(-10,10)] * (len(initial_guess)) # set x, y and z coordinate boundaries
+	boundsList = [(-10,10)] * (len(initial_guess)) # set y and z coordinate boundaries to 10 times euclidean distance between  origin and insertion
 	bnds = tuple(boundsList)
 
 	# set options
 
-	options = {"maxiter": 20} # if it doesn't solve within ~15 iterations it usually won't solve
+	options = {"maxiter": 20} # if it doesn't solve within 12 iterations it usually won't solve
 
 	# optimization using SLSQP
 
@@ -563,3 +578,9 @@ def cost_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 	cost = abs(avgdist-thickness)
 		
 	return cost
+
+
+
+
+
+
