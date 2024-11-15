@@ -7,7 +7,7 @@
 #	approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 14.11.2024 - Oliver Demuth
+#	Last updated 15.11.2024 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -28,24 +28,18 @@
 
 
 jointName = 'myJoint' 						# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-
-meshes = ['RLP3_scapulocoracoid', 'RLP3_humerus']		# specify according to meshes in the Maya scene
-
-artSurfMeshes = ['RLP3_glenoid_art_surf', 'RLP3_humeral_head']	# specify according to meshes in the Maya scene
-
-proxFittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to meshes in the Maya scene
-
+meshes = ['RLP3_scapulocoracoid', 				# specify according to meshes in the Maya scene
+		  'RLP3_humerus']				
+congruencyMeshes = ['RLP3_glenoid_art_surf', 			# specify according to meshes in the Maya scene
+		    'RLP3_humeral_head']	
+fittedShapes = ['RLP3_glenoid_fitted_sphere_Mesh',		# specify according to meshes in the Maya scene
+		'RLP3_humeral_head_fitted_ellipsoid_Mesh']				
 gridSubdiv = 100						# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-
 interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
-
 StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
-
 FrameInterval = None						# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-
-ContinueKeys = True						# Boolean value to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
-
-debug = 0 							# debug mode to check if signed distance fields have already been calculated
+ContinueKeys = True						# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
+debug = 1 							# Debug mode to check if signed distance fields have already been calculated
 
 
 #################################################
@@ -77,7 +71,7 @@ jDag = dagObjFromName(jointName)[1]
 
 # get gridsize from glenoid sphere radius
 
-sphereRad = meanRad(proxFittedShape)
+sphereRad = meanRad(fittedShapes[0])
 thickness = sphereRad/2
 gridSize = 6 * sphereRad
 
@@ -187,6 +181,7 @@ else:
 if FrameInterval == None or (minKeys + FrameInterval) > numFrames:
 	keyframes = numFrames
 	keyDiff = keyframes - minKeys + 1
+	
 else:
 	keyframes = minKeys + FrameInterval
 	keyDiff = FrameInterval
@@ -194,20 +189,21 @@ else:
 if keyDiff <=0:
 	keyDiff = 1
 
+
 # define progress bar
 
 cmds.progressWindow(title = 'Translation optimisation in progress...',
-					progress = 1,
-					status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
-					isInterruptable = True, 
-					max = keyDiff)
+		    progress = 1,
+		    status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
+		    isInterruptable = True,
+		    max = keyDiff)
 
 print('Translation optimisation in progress...')
 
 # calculate relative position of articular surfaces
 
-proxCoords = relVtcPos(artSurfMeshes[0], initialRotMat[0])
-distCoords = relVtcPos(artSurfMeshes[1], initialRotMat[1])
+proxCoords = relVtcPos(congruencyMeshes[0], initialRotMat[0])
+distCoords = relVtcPos(congruencyMeshes[1], initialRotMat[1])
 
 # get joint exclusive transformation matrix (parent)
 
@@ -255,6 +251,9 @@ for i in range(keyDiff):
 	coords, viable, results = optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness)
 
 	# check if pose was viable
+	
+	if debug == 1:
+	    print(results.nit)
 
 	if viable == 1:
 
