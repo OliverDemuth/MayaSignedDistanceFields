@@ -7,7 +7,7 @@
 #	approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 15.11.2024 - Oliver Demuth
+#	Last updated 25.11.2024 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -29,7 +29,7 @@
 
 jointName = 'myJoint' 						# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['RLP3_scapulocoracoid', 				# specify according to meshes in the Maya scene
-		  'RLP3_humerus']				
+	  'RLP3_humerus']				
 congruencyMeshes = ['RLP3_glenoid_art_surf', 			# specify according to meshes in the Maya scene
 		    'RLP3_humeral_head']	
 fittedShapes = ['RLP3_glenoid_fitted_sphere_Mesh',		# specify according to meshes in the Maya scene
@@ -38,8 +38,8 @@ gridSubdiv = 100						# integer value for the subdivision of the cube, i.e., num
 interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None						# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-ContinueKeys = True						# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
-debug = 1 							# Debug mode to check if signed distance fields have already been calculated
+ContinueKeys = False						# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
+debug = 0 							# Debug mode to check if signed distance fields have already been calculated
 
 
 #################################################
@@ -50,6 +50,7 @@ debug = 1 							# Debug mode to check if signed distance fields have already be
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
+from maya.api.OpenMaya import MVector, MMatrix, MPoint
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
@@ -99,6 +100,11 @@ if var_exists == False:
 	print('Calculating signed distance fields...')
 
 	sigDistFieldArray, localPoints, worldPoints, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize)
+	
+	# calculate relative position of articular surfaces
+
+	proxCoords = relVtcPos(congruencyMeshes[0], initialRotMat[0])
+	distCoords = relVtcPos(congruencyMeshes[1], initialRotMat[1])
 
 # get dimensions of cubic grids
 
@@ -126,10 +132,10 @@ zDir = (zVecPos - origPos) / (dims[2] - 1)
 
 # get rotation matrix of default cubic grid coordinate system
 
-gridRotMat = om.MMatrix([xDir.x, 	xDir.y,		xDir.z, 	0,
-			 yDir.x, 	yDir.y, 	yDir.z, 	0,
-			 zDir.x, 	zDir.y, 	zDir.z, 	0,
-			 origPos.x,	origPos.y,	origPos.z,	1]) 
+gridRotMat = MMatrix([xDir.x, xDir.y, xDir.z, 0,
+		      yDir.x, yDir.y, yDir.z, 0,
+		      zDir.x, zDir.y, zDir.z, 0,
+		      origPos.x, origPos.y, origPos.z, 1]) 
 
 mid = time.time()
 
@@ -200,10 +206,6 @@ cmds.progressWindow(title = 'Translation optimisation in progress...',
 
 print('Translation optimisation in progress...')
 
-# calculate relative position of articular surfaces
-
-proxCoords = relVtcPos(congruencyMeshes[0], initialRotMat[0])
-distCoords = relVtcPos(congruencyMeshes[1], initialRotMat[1])
 
 # get joint exclusive transformation matrix (parent)
 
@@ -242,8 +244,8 @@ for i in range(keyDiff):
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(om.MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
-	rotMat.append(om.MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
+	rotMat.append(MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
+	rotMat.append(MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
 	rotMat.append(jExclMat) # get parent rotMat (prox) without scale
 
 	# optimise the joint translations
