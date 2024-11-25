@@ -7,13 +7,13 @@
 #	distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 15.11.2024 - Oliver Demuth
+#	Last updated 25.11.2024 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
 #		INPUT params:
-#			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-#			string  meshes:			Names of the two bone meshes, i.e., several individual meshes representing the bones (e.g., in the form of ['prox_mesh','dist_mesh'])
+#			string	jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+#			string	meshes:			Names of the two bone meshes, i.e., several individual meshes representing the bones (e.g., in the form of ['prox_mesh','dist_mesh'])
 #			string	congruencyMeshes:	Names of the meshes to check articular congruency, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
 #			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 #			float	gridSize:		Float value indicating the size of the cubic grid, i.e., the length of a side (e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
@@ -50,6 +50,7 @@
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
+from maya.api.OpenMaya import MVector, MMatrix, MPoint
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
@@ -84,7 +85,7 @@ def optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat,
 	
 	if results.success: 
 	
-		diff = om.MVector(results.x).length() # get offset from glenoid centre
+		diff = MVector(results.x).length() # get offset from glenoid centre
 
 		# check for disarticulation 
 						  
@@ -94,11 +95,11 @@ def optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat,
 	
 			signDist = []
 
-			for i in range(len(proxCoords)): # more indepth (get mean articular distance and check if within threshold)
+			for coords in proxCoords: # more indepth (get mean articular distance and check if within threshold)
 		
 				# transform relative grid position into default cubic grid space for tricubic interpolation using rotation matrices
 		
-				relWSProx = getPosInWS(rotMat[0], proxCoords[i])
+				relWSProx = getPosInWS(rotMat[0], coords)
 				relPosProx = getPosInOS(gridRotMat, getPosInOS(transMat,relWSProx))
 				
 				# calculate distance 
@@ -152,8 +153,8 @@ def sigDistField(jointName, meshes, subdivision, size):
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(om.MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
-	rotMat.append(om.MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
+	rotMat.append(MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
+	rotMat.append(MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
 
 	# create variables
 
@@ -198,7 +199,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	
 	# get the meshs transformation matrix
 
-	meshMat = om.MMatrix(dag.inclusiveMatrix())
+	meshMat = MMatrix(dag.inclusiveMatrix())
 
 	# create the intersector
 
@@ -212,7 +213,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	
 	points = [[i, j, k] for i in elements  # length along x
 			    for j in elements  # length along y
-		  	    for k in elements] # length along z
+			    for k in elements] # length along z
 
 	# go through grid points and calculate signed distance for each of them
 
@@ -223,7 +224,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 		# get 3D position of grid points 
 
-		gridPoint = om.MPoint(getPosInWS(rotMat, point))
+		gridPoint = MPoint(getPosInWS(rotMat, point))
 		gridPoints.append(gridPoint)
 		
 		# get grid point in local coordinate system of mesh
@@ -233,13 +234,13 @@ def sigDistMesh(mesh, rotMat, subdivision):
 		# find closest points on mesh and get their distance to the grid points
 							  
 		ptON = polyIntersect.getClosestPoint(gridPoint) # get point on mesh
-		ptNorm = om.MVector(ptON.normal)  # get normal
+		ptNorm = MVector(ptON.normal)  # get normal
 		
 		# get vector from localPoint to ptON
 
-		diff = om.MVector(ptON.point.x - localPoint[0],
-				  ptON.point.y - localPoint[1],
-				  ptON.point.z - localPoint[2])
+		diff = MVector(ptON.point.x - localPoint[0],
+			       ptON.point.y - localPoint[1],
+			       ptON.point.z - localPoint[2])
 
 		# get distance from localPoint to ptON    
 	
@@ -312,14 +313,14 @@ def getPosInWS(rotMat,point):
 	#	point = 3D coordinates (translation) of point in object space (i.e., relative to parent)
 	# ======================================== #
 
-	localMat = om.MMatrix(((1, 0, 0, 0),
-			       (0, 1, 0, 0),
-			       (0, 0, 1, 0),
-			       (point[0], point[1], point[2], 1))) # position of point
+	localMat = MMatrix(((1, 0, 0, 0),
+			    (0, 1, 0, 0),
+			    (0, 0, 1, 0),
+			    (point[0], point[1], point[2], 1))) # position of point
 
 	worldPos = localMat * rotMat
 
-	return om.MVector(worldPos[12], worldPos[13], worldPos[14])
+	return MVector(worldPos[12], worldPos[13], worldPos[14])
 
 
 # ========== get point in object space function ==========	
@@ -331,14 +332,14 @@ def getPosInOS(rotMat, point):
 	#	point = 3D coordinates (translation) of point in world space
 	# ======================================== #
 
-	ptWS = om.MMatrix(((1, 0, 0, 0),
-			   (0, 1, 0, 0),
-			   (0, 0, 1, 0),
-			   (point[0], point[1], point[2], 1))) # world space matrix of point
+	ptWS = MMatrix(((1, 0, 0, 0),
+			(0, 1, 0, 0),
+			(0, 0, 1, 0),
+			(point[0], point[1], point[2], 1))) # world space matrix of point
 
 	ptPosOS = ptWS * rotMat.inverse() # multiply with inverse of rotation matrix
 
-	return om.MVector(ptPosOS[12], ptPosOS[13], ptPosOS[14])
+	return MVector(ptPosOS[12], ptPosOS[13], ptPosOS[14])
 
 
 # ========== get add translation to rotmat function ==========	
@@ -350,10 +351,10 @@ def getTransMat(rotMat, point):
 	#	point = 3D coordinates (translation) of point in world space
 	# ======================================== #
 
-	trans = om.MMatrix(((rotMat[0], rotMat[1], rotMat[2], 0),
-			    (rotMat[4], rotMat[5], rotMat[6], 0),
-			    (rotMat[8], rotMat[9], rotMat[10], 0),
-			    (point[0], point[1], point[2], 1))) # object space coordinates of point
+	trans = MMatrix(((rotMat[0], rotMat[1], rotMat[2], 0),
+			 (rotMat[4], rotMat[5], rotMat[6], 0),
+			 (rotMat[8], rotMat[9], rotMat[10], 0),
+			 (point[0], point[1], point[2], 1))) # object space coordinates of point
 
 	return trans
 
@@ -397,9 +398,9 @@ def meanRad(mesh):
 	for i in range(MFnMesh.numVertices):
 
 		worldPos = MFnMesh.getPoint(i, space = om.MSpace.kWorld)  # get world position of vertex
-		vtcDist.append(om.MVector(worldPos[0] - centerPos[0],
-					  worldPos[1] - centerPos[1],
-					  worldPos[2] - centerPos[2]).length())
+		vtcDist.append(MVector(worldPos[0] - centerPos[0], 
+				       worldPos[1] - centerPos[1],
+				       worldPos[2] - centerPos[2]).length())
 			
 	meanRad = np.mean(vtcDist)
 	
@@ -419,7 +420,7 @@ def meshCenter(mesh):
 	dag = dagObjFromName(mesh)[1]
 	shape = dag.extendToShape()
 
-	transMat = om.MMatrix(dag.inclusiveMatrix()) 
+	transMat = MMatrix(dag.inclusiveMatrix()) 
 
 	# get mesh object
 
@@ -459,9 +460,9 @@ def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickn
 
 	# set constraints functions
 
-	cons = ({'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
-			 'fun': cons_fun,	# set constraint function
-			 'args': arguments})	# pass arguments to constrain function
+	cons = ({'type': 'ineq',	# set type to inequality, which means that it is to be non-negative
+		 'fun': cons_fun,	# set constraint function
+		 'args': arguments})	# pass arguments to constrain function
 
 	# set bounds
 
@@ -470,13 +471,13 @@ def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickn
 
 	# set options
 
-	options = {"maxiter": 20} # if it doesn't solve within 12 iterations it usually won't solve
+	options = {"maxiter": 20} # if it doesn't solve within 15 iterations it usually won't solve. Any more than 20 will just increase computational time without much benefit
 
 	# optimization using SLSQP
 
 	res = sp.optimize.minimize(cost_fun, initial_guess, args = arguments, bounds = bnds, method = 'SLSQP', constraints = cons, options = options)
 
-	# get results: res.X = joint centre point coordinates, res.fun = mean articular distance
+	# get results: res.X = joint centre point coordinates, res.fun = mean articular distance - thickness
 
 	return res
 
@@ -505,41 +506,41 @@ def cons_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 
 	# go through each distal articular surface point and check if any of them intersect with a proximal mesh (i.e., sigDist < 0)
 
-	for i in range(len(distCoords)):	
+	for coords in distCoords:	
 
 		# transform relative grid position into default cubic grid space for tricubic interpolation using rotation matrices
 
-		relWSDist = getPosInWS(rotMat[1], getPosInOS(transMat, distCoords[i]))
+		relWSDist = getPosInWS(transMat, coords)
 		relPosDist = getPosInOS(gridRotMat, getPosInOS(rotMat[0],relWSDist))
 		tempSignDist = ipProx.ip([relPosDist[0], relPosDist[1], relPosDist[2]]) # get smaller of the two values
 		distSignDist.append(tempSignDist) # enforces thickness threshold on top of min distance (i.e., always min thickness distance in between)
 
 		# check if current point is negative, i.e., inside a mesh, and break loop if so
 
-		if tempSignDist < -1.0e-05: # added minimum value for break condition (below 0 to consider other points as well)
+		if tempSignDist < -1.0e-03: # added minimum value for break condition (below 0 to consider other points as well)
 			return(tempSignDist)
 		
-	distMin = np.min(distSignDist)
+	distMin = min(distSignDist)
 
 	# go through each proximal articular surface point and check if any of them intersect with a distal mesh (i.e., sigDist < 0)
 
-	for i in range(len(proxCoords)):
+	for coords in proxCoords:
 
 		# transform relative grid position into default cubic grid space for tricubic interpolation using rotation matrices
 
-		relWSProx = getPosInWS(rotMat[0], proxCoords[i])
+		relWSProx = getPosInWS(rotMat[0], coords)
 		relPosProx = getPosInOS(gridRotMat, getPosInOS(transMat,relWSProx))
 		tempSignDist = ipDist.ip([relPosProx[0], relPosProx[1], relPosProx[2]])
 		proxSignDist.append((tempSignDist))
 		
 		# check if current point is negative, i.e., inside a mesh, and break loop if so
 		
-		if tempSignDist < -1.0e-05: # added minimum value for break condition (below 0 to consider other points as well)
+		if tempSignDist < -1.0e-03: # added minimum value for break condition (below 0 to consider other points as well)
 			return(tempSignDist)
 	
-	proxMin = np.min(proxSignDist)
+	proxMin = min(proxSignDist)
 
-	return np.min([proxMin,distMin]) # return minimal value, if any of the points is inside a mesh it will be negative
+	return min([proxMin,distMin]) # return minimal value, if any of the points is inside a mesh it will be negative
 
 
 # ========== cost function for optimisation ==========
@@ -564,18 +565,16 @@ def cost_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 	
 	signDist = []
 
-	for i in range(len(proxCoords)):
+	for coords in proxCoords:
 
 		# transform relative grid position into default cubic grid space for tricubic interpolation using rotation matrices
 
-		relWSProx = getPosInWS(rotMat[0], proxCoords[i])
+		relWSProx = getPosInWS(rotMat[0], coords)
 		relPosProx = getPosInOS(gridRotMat, getPosInOS(transMat,relWSProx))
 		tempSignDist = ipDist.ip([relPosProx[0], relPosProx[1], relPosProx[2]])
-		signDist.append((tempSignDist)) 
-
-	avgdist = np.mean(signDist) # average distance enforces largest possible overlap
+		signDist.append(tempSignDist) 
 	
-	cost = abs(avgdist-thickness)
+	cost = abs(np.mean(signDist)-thickness) # average distance enforces largest possible overlap
 		
 	return cost
 
