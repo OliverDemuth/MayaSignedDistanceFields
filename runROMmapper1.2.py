@@ -213,7 +213,7 @@ jExclMat = jDag.exclusiveMatrix() # world rotation matrix of parent joint
 jExclNPMat = np.array(jExclMat).reshape(4,4) # convert into numpy 4x4 array
 
 jExclTransMat = om.MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
-jExclTransMat.setScale([gridSize,gridSize,gridSize],om.MSpace.kWorld) # set scale in world space
+jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 jExclTransNPMat = np.array(jExclTransMat.asMatrix()).reshape(4,4) # convert into numpy 4x4 array
 
 # go through all possible combinations
@@ -238,7 +238,7 @@ for i in range(keyDiff):
 
 	localTransMat = om.MTransformationMatrix()
 	localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order=0)) # set rotation (om.MEulerRotation.kXYZ = 0)
-	localTransMat.setTranslation(om.MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
+	localTransMat.setTranslation(MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
 
 	jInclTransMat = localTransMat.asMatrix()*gridSize*jExclMat
 	jInclTransMat[-1] = 1 # reset last element to 1
