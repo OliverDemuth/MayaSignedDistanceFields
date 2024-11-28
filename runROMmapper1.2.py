@@ -1,4 +1,4 @@
-#	runROMmapper1.1.py
+#	runROMmapper1.2.py
 #
 #	This script estimates the (mobile) joint centre position and moves the distal bone
 #	mesh into position for a set of presribed joint orientations. Only feasible joint 
@@ -7,7 +7,7 @@
 #	approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 25.11.2024 - Oliver Demuth
+#	Last updated 28.11.2024 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -17,7 +17,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ROMmapper1.1.py'
+#		- 'ROMmapper1.2.py'
 #
 #	For further information please check the Python script(s) referenced above
 
@@ -74,7 +74,7 @@ jDag = dagObjFromName(jointName)[1]
 
 sphereRad = meanRad(fittedShapes[0])
 thickness = sphereRad/2
-gridSize = 6 * sphereRad
+gridSize = 8 * sphereRad
 
 # initialise signed distance fields
 
@@ -99,7 +99,7 @@ if var_exists == False:
 
 	print('Calculating signed distance fields...')
 
-	sigDistFieldArray, localPoints, worldPoints, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize)
+	sigDistFieldArray, localPoints, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize)
 	
 	# calculate relative position of articular surfaces
 
@@ -119,10 +119,10 @@ ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be i
 
 # get corner points of cubic grids (both grids are set up identically)
 
-origPos = om.MVector(localPoints[0])
-zVecPos = om.MVector(localPoints[dims[1] - 1])
-yVecPos = om.MVector(localPoints[dims[1] * (dims[2] - 1)])
-xVecPos = om.MVector(localPoints[dims[1] * dims[2] * (dims[0] - 1)])
+origPos = MVector(localPoints[0])
+zVecPos = MVector(localPoints[dims[1] - 1])
+yVecPos = MVector(localPoints[dims[1] * (dims[2] - 1)])
+xVecPos = MVector(localPoints[dims[1] * dims[2] * (dims[0] - 1)])
 
 # get direction vectors to cubic grid corners and normalize by number of grid subdivisions
 
@@ -130,12 +130,12 @@ xDir = (xVecPos - origPos) / (dims[0] - 1)
 yDir = (yVecPos - origPos) / (dims[1] - 1)
 zDir = (zVecPos - origPos) / (dims[2] - 1)
 
-# get rotation matrix of default cubic grid coordinate system
+# get inverse of rotation matrix of default cubic grid coordinate system
 
-gridRotMat = MMatrix([xDir.x, xDir.y, xDir.z, 0,
-		      yDir.x, yDir.y, yDir.z, 0,
-		      zDir.x, zDir.y, zDir.z, 0,
-		      origPos.x, origPos.y, origPos.z, 1]) 
+gridRotMat = np.linalg.inv(np.array([[xDir.x, xDir.y, xDir.z, 0],
+				     [yDir.x, yDir.y, yDir.z, 0],
+				     [zDir.x, zDir.y, zDir.z, 0],
+				     [origPos.x, origPos.y, origPos.z, 1]])) 
 
 mid = time.time()
 
@@ -210,8 +210,11 @@ print('Translation optimisation in progress...')
 # get joint exclusive transformation matrix (parent)
 
 jExclMat = jDag.exclusiveMatrix() # world rotation matrix of parent joint
+jExclNPMat = np.array(jExclMat).reshape(4,4) # convert into numpy 4x4 array
+
 jExclTransMat = om.MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
 jExclTransMat.setScale([gridSize,gridSize,gridSize],om.MSpace.kWorld) # set scale in world space
+jExclTransNPMat = np.array(jExclTransMat.asMatrix()).reshape(4,4) # convert into numpy 4x4 array
 
 # go through all possible combinations
 
@@ -226,27 +229,26 @@ for i in range(keyDiff):
 
 	if cmds.progressWindow(query=True, isCancelled=True):
 			break
-			
-	# reset joint translations
 
-	cmds.move(0, 0, 0, jointName)
-
-	# set rotation
+	# extract rotation
 
 	rotation = [float(rotations[j][0]),float(rotations[j][1]),float(rotations[j][2])]
-	cmds.rotate(rotation[0], rotation[1], rotation[2], jointName)
 
 	# get joint inclusive transformation matrix (child)
 
-	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jInclTransMat.setScale([gridSize,gridSize,gridSize],om.MSpace.kWorld) # set scale in world space
+	localTransMat = om.MTransformationMatrix()
+	localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order=0)) # set rotation (om.MEulerRotation.kXYZ = 0)
+	localTransMat.setTranslation(om.MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
 
+	jInclTransMat = localTransMat.asMatrix()*gridSize*jExclMat
+	jInclTransMat[-1] = 1 # reset last element to 1
+	
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
-	rotMat.append(MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
-	rotMat.append(jExclMat) # get parent rotMat (prox) without scale
+	rotMat.append(jExclTransNPMat) # parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(np.array(jInclTransMat).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
+	rotMat.append(jExclNPMat) # get parent rotMat (prox) without scale as numpy 4x4 array
 
 	# optimise the joint translations
 
