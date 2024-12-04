@@ -469,7 +469,7 @@ def cost_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 
 	identityMat = np.identity(4)
 	
-	# extract coordinates from paramsand transform them into transformation matrix coords
+	# extract coordinates from params and transform them into transformation matrix coords
 
 	paramCoords = identityMat.copy()
 	paramCoords[3,0:3] = params
