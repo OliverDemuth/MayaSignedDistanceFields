@@ -7,7 +7,7 @@
 #	distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 28.11.2024 - Oliver Demuth
+#	Last updated 04.12.2024 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -508,8 +508,12 @@ def cost_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 
 	for vtx in vtcRelArr:
 		signDist.append(ipDist.ip(vtx))
+
+	meanDist = sum(signDist)/len(signDist)
+
+	# calculate variance 
 	
-	cost = abs(sum(signDist)/len(signDist)-thickness) # average distance enforces largest possible overlap
-		
-	return cost
+	return abs(meanDist-thickness) + (sum((dist - meanDist) ** 2 for dist in signDist) / len(signDist)) # average distance + variance enforces largest possible overlap
+
+
 
