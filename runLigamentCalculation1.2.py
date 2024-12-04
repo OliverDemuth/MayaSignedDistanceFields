@@ -1,11 +1,11 @@
-#	runLigamentCalculation1.1.py
+#	runLigamentCalculation1.2.py
 #
 #	This script calculates and keys the length of a ligament from origin to insertion,
 #	wrapping around the proximal and distal bone meshes, for each frame. The script can
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 15.08.2024 - Oliver Demuth
+#	Last updated 04.12.2024 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -18,7 +18,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ligamentCalculation1.1.py'
+#		- 'ligamentCalculation1.2.py'
 #
 #	For further information please check the Python script(s) referenced above
 
@@ -29,19 +29,13 @@
 
 
 jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-
 meshes = ['prox_mesh', 'dist_mesh']	# specify according to meshes or boolean object in the Maya scene
-
 gridSubdiv = 100			# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-
 ligSubdiv = 20				# Integer value for the number of ligament segments (e.g., 20, see Marai et al., 2004 for details)
-
 StartFrame = None 			# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
-
 FrameInterval = None			# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-
 KeyPathPoints = False			# Boolean to specify whether ligament point positions are to be keyed or not. True = yes, False = no
-
+debug = 0 				# Debug mode to check if signed distance fields have already been calculated
 
 
 
@@ -53,7 +47,14 @@ KeyPathPoints = False			# Boolean to specify whether ligament point positions ar
 # ============= load modules =============
 
 import maya.cmds as cmds
+import numpy as np
+import scipy as sp
+import maya.api.OpenMaya as om
 import time
+
+from maya.api.OpenMaya import MPoint, MVector
+from math import sqrt
+from tricubic import tricubic
 
 # ========================================
 
@@ -83,17 +84,35 @@ else:
 if keyDiff <=0:
 	keyDiff = 1
 
-# set current time
-
-cmds.currentTime(minKeys)
 start = time.time()
 
-# calculate signed distance fields
+if debug == 1:
 
-print('Calculating signed distance fields...')
+	# check if distance fields have already been calculated
+	
+	var_exists = False
 
-sigDistFieldArray, localPoints, worldPoints, initialRotMat, LigAttributes, gridScale = sigDistField(jointName, meshes, gridSubdiv)
+	try:
+		sigDistFieldArray
+	except NameError:
+		var_exists = False
+	else:
+		var_exists = True # signed distance field already calculated, no need to do it again
 
+else:
+	var_exists = False
+
+if not var_exists:
+	# calculate signed distance fields
+
+	print('Calculating signed distance fields...')
+	
+	cmds.currentTime(0)
+	cmds.move(0,0,0, jointName, localSpace=True)
+	cmds.rotate(0,0,0,jointName)
+	
+	sigDistFieldArray, localPoints, initialRotMat, LigAttributes, gridScale = sigDistField(jointName, meshes, gridSubdiv)
+	
 # get dimensions of cubic grids
 
 dims = sigDistFieldArray[0].shape
@@ -102,15 +121,15 @@ distSigDistList = sigDistFieldArray[1].tolist()
 
 # initialise tricubic interpolator with signed distance data on default cubic grid
 
-ipProx = tricubic(proxSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv, gridSubdiv, gridSubdiv].
-ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv, gridSubdiv, gridSubdiv].
+ipProx = tricubic(proxSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
 
 # get corner points of cubic grids (both grids are set up identically)
 
-origPos = om.MVector(localPoints[0])
-zVecPos = om.MVector(localPoints[dims[1] - 1])
-yVecPos = om.MVector(localPoints[dims[1] * (dims[2] - 1)])
-xVecPos = om.MVector(localPoints[dims[1] * dims[2] * (dims[0] - 1)])
+origPos = MVector(localPoints[0])
+zVecPos = MVector(localPoints[dims[1] - 1])
+yVecPos = MVector(localPoints[dims[1] * (dims[2] - 1)])
+xVecPos = MVector(localPoints[dims[1] * dims[2] * (dims[0] - 1)])
 
 # get direction vectors to cubic grid corners and normalize by number of grid subdivisions
 
@@ -120,14 +139,17 @@ zDir = (zVecPos - origPos) / (dims[2] - 1)
 
 # get rotation matrix of default cubic grid coordinate system
 
-gridRotMat = om.MMatrix([xDir.x, 	xDir.y,		xDir.z, 	0,
-			 yDir.x, 	yDir.y, 	yDir.z, 	0,
-			 zDir.x, 	zDir.y, 	zDir.z, 	0,
-			 origPos.x,	origPos.y,	origPos.z,	1]) 
+gridRotMat = np.linalg.inv(np.array([[xDir.x, xDir.y, xDir.z, 0],
+				     [yDir.x, yDir.y, yDir.z, 0],
+				     [zDir.x, zDir.y, zDir.z, 0],
+				     [origPos.x, origPos.y, origPos.z, 1]])) 
 
 mid = time.time()
 
-print('Signed distance fields calculated in {0:.3f} seconds!'.format(mid - start))
+if not var_exists:
+	print('Signed distance fields calculated in {0:.3f} seconds!'.format(mid - start))
+else:
+	print('Signed distance fields succesfully loaded in {0:.3f} seconds!'.format(mid - start))
 
 # define progress bar
 
@@ -139,6 +161,10 @@ cmds.progressWindow(title = 'Ligament calculation in progress...',
 
 print('Ligament calculation in progress...')
 
+# set current time
+
+cmds.currentTime(minKeys)
+
 # check if ligament points are to be keyed
 
 if KeyPathPoints == True:
@@ -147,8 +173,10 @@ if KeyPathPoints == True:
 
 		# check if groups and their locators exist
 
-		if not cmds.objExists(ligament + '_LOC_GRP'): 
-			cmds.group(em = True, name = ligament + '_LOC_GRP') # create group if it doesn't exist already
+		lig_GRP = ligament + '_LOC_GRP'
+
+		if not cmds.objExists(lig_GRP): 
+			cmds.group(em = True, name = lig_GRP) # create group if it doesn't exist already
 
 		for k in range(ligSubdiv + 1):
 
@@ -160,7 +188,11 @@ if KeyPathPoints == True:
 
 			if not cmds.objExists(loc):
 			       cmds.spaceLocator(name = loc) # create locator
-			       cmds.parent(loc, ligament + '_LOC_GRP') # parent locator under their ligament locator group
+			       cmds.parent(loc, lig_GRP) # parent locator under their ligament locator group
+
+# define constant x coords
+
+x = np.linspace(0.0, 1.0, num = ligSubdiv + 1, endpoint=True)
 
 # go through each frame and key ligament lengths into attributes
 
@@ -185,18 +217,21 @@ for i in range(keyDiff):
 
 	# normalize matrices by gridScale
 
-	jInclTransMat.setScale([gridScale,gridScale,gridScale],om.MSpace.kWorld) # set scale in world space
-	jExclTransMat.setScale([gridScale,gridScale,gridScale],om.MSpace.kWorld) # set scale in world space
+	jInclTransMat.setScale([gridScale,gridScale,gridScale],4) # set scale in world space (om.MSpace.kWorld = 4)
+	jExclTransMat.setScale([gridScale,gridScale,gridScale],4) # set scale in world space (om.MSpace.kWorld = 4)
 
 	# get rotation matrices
 
+	jExclMatInv = np.linalg.inv(np.array(jExclTransMat.asMatrix()).reshape(4,4))
+	jInclMatInv = np.linalg.inv(np.array(jInclTransMat.asMatrix()).reshape(4,4))
+
 	rotMat = []
-	rotMat.append(om.MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
-	rotMat.append(om.MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
+	rotMat.append(np.dot(jExclMatInv,gridRotMat)) # inverse of parent rotMat (prox)
+	rotMat.append(np.dot(jInclMatInv,gridRotMat)) # inverse of child rotMat (dist)
 
 	# calculate the length of each ligament 
 
-	ligNames,pathLengths,ligPoints,results = ligCalc(jPos, ipProx, ipDist, gridRotMat, rotMat, LigAttributes ,ligSubdiv)
+	ligNames,pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes ,ligSubdiv)
 
 	# key the attributes on the animated joint
 
@@ -205,6 +240,9 @@ for i in range(keyDiff):
 		if results[index].status == 0:
 			cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
 		else:
+			if debug == 1:
+			    print(results[index].message, results[index].nit)
+			    
 			cmds.setKeyframe(jointName, at = ligament, v = -1)
 
 		# check if ligament points are to be keyed
@@ -233,8 +271,8 @@ for i in range(keyDiff):
 end = time.time()
 
 if cmds.progressWindow( query=True, isCancelled=True ):
-	print('# Abort: Ligament calculation cancelled after {0:.3f} seconds. Total frames keyed: {1}'.format(end - start,i))
+	print('# Abort: Ligament calculation cancelled after {0:.3f} seconds. Total frames keyed: {1}'.format(end - mid,i))
 else:
-	print('# Result: Ligament calculation done in {0:.3f} seconds! Successfully keyed {1} frames.'.format(end - start,keyDiff))
+	print('# Result: Ligament calculation done in {0:.3f} seconds! Successfully keyed {1} frames.'.format(end - mid,keyDiff))
 
 cmds.progressWindow( edit=True, endProgress=True )
