@@ -94,7 +94,7 @@ if debug == 1 or ContinueKeys == True:
 else:
 	var_exists = False
 
-if var_exists == False:
+if not var_exists:
 	# calculate signed distance fields
 
 	print('Calculating signed distance fields...')
@@ -139,7 +139,10 @@ gridRotMat = np.linalg.inv(np.array([[xDir.x, xDir.y, xDir.z, 0],
 
 mid = time.time()
 
-print('Signed distance fields calculated in {0:.3f} seconds!'.format(mid - start))
+if not var_exists:
+	print('Signed distance fields calculated in {0:.3f} seconds!'.format(mid - start))
+else:
+	print('Signed distance fields succesfully loaded in {0:.3f} seconds!'.format(mid - start))
 
 # create 3D grid for rotations
 
