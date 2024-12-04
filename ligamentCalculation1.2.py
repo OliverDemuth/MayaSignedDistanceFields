@@ -1,4 +1,4 @@
-#	ligamentCalculation1.1.py
+#	ligamentCalculation1.2.py
 #
 #	This script calculates the shortest distance of a ligament from origin to insertion 
 #	wrapping around the bone meshes. It is an implementation of the Marai et al., 2004.
@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 09.10.2024 - Oliver Demuth
+#	Last updated 03.12.2024 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -50,11 +50,12 @@
 
 # ========== load modules ==========
 
-import maya.api.OpenMaya as om
-import maya.cmds as cmds
 import numpy as np
 import scipy as sp
+import maya.cmds as cmds
+import maya.api.OpenMaya as om
 
+from maya.api.OpenMaya import MVector, MPoint
 from math import sqrt
 from tricubic import tricubic
 
@@ -65,13 +66,13 @@ from tricubic import tricubic
 
 
 # ========== ligament length calculation function ==========
-def ligCalc(jPos, ipProx, ipDist, gridRotMat, rotMat, LigAttributes, ligSubdiv):
+def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, ligSubdiv):
 
 	# Input variables:
+	#	x = constant X coordinates for ligament points
 	#	jPos = world coordinates of joint
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
-	#	gridRotMat = rotation matrix of default cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	LigAttributes = array consisting of names of ligaments
 	#	ligSubdiv = number of ligament points, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details
@@ -84,13 +85,20 @@ def ligCalc(jPos, ipProx, ipDist, gridRotMat, rotMat, LigAttributes, ligSubdiv):
 	ligPoints = []
 	results = []
 
-	for i in range(len(LigAttributes)):
+	identityMat = np.identity(4)
+	ligArr = np.stack([identityMat] * (ligSubdiv + 1), axis=0)
+
+	# define initual guess condition for optimiser
+
+	initial_guess = np.zeros(2 * (ligSubdiv + 1))
+
+	for ligament in LigAttributes:
 
 		# get names of ligaments and their origins and insertions
 
-		ligNames.append(LigAttributes[i]) 
-		ligOrigin = LigAttributes[i] + '_orig'
-		ligInsertion = LigAttributes[i] + '_ins'
+		ligNames.append(ligament) 
+		ligOrigin = ligament + '_orig'
+		ligInsertion = ligament + '_ins'
 
 		# get ligament transformation matrices
 
@@ -98,19 +106,13 @@ def ligCalc(jPos, ipProx, ipDist, gridRotMat, rotMat, LigAttributes, ligSubdiv):
 
 		# minimise ligament length through optimiser
 
-		res = ligLengthOptMin(ipProx, ipDist, gridRotMat, rotMat, ligRotMat, ligSubdiv)
-		
-		# get x, y and z coordinates
-
-		x = np.linspace(0.0, 1.0, num = ligSubdiv + 1, endpoint=True)
-		y = res.x[0::2] # extract y coordinates from optimiser results
-		z = res.x[1::2] # extract z coordinates from optimiser results
+		res = ligLengthOptMin(x, initial_guess, ipProx, ipDist, rotMat, ligRotMat, ligSubdiv)
 
 		# get world position of ligament points
 
-		coords = []
-		for j in range(ligSubdiv + 1):
-			coords.append(getPosInWS(ligRotMat, [x[j],y[j],z[j]])) 
+		ligArr[:,3,0] = x 
+		ligArr[:,3,1] = res.x[0::2] # extract y coordinates from optimiser results
+		ligArr[:,3,2] = res.x[1::2] # extract z coordinates from optimiser results
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
@@ -118,7 +120,7 @@ def ligCalc(jPos, ipProx, ipDist, gridRotMat, rotMat, LigAttributes, ligSubdiv):
 
 		# gather results
 
-		ligPoints.append(coords)
+		ligPoints.append(np.dot(ligArr,ligRotMat)[:,3,0:3].tolist())
 		results.append(res)
 
 	return ligNames, ligLengths, ligPoints, results
@@ -149,12 +151,12 @@ def sigDistField(jointName, meshes, subdivision):
 
 	distArr = []
 
-	for i in range(len(LigAttributes)):
+	for ligament in LigAttributes:
 
 		# get names of ligaments and their origins and insertions
 
-		ligOrigin = LigAttributes[i] + '_orig'
-		ligInsertion = LigAttributes[i] + '_ins'
+		ligOrigin = ligament + '_orig'
+		ligInsertion = ligament + '_ins'
 
 		# get positions of points of interest
 
@@ -163,32 +165,21 @@ def sigDistField(jointName, meshes, subdivision):
 
 		# get distances from origin and insertion to joint centre
 					
-		distArr.append(om.MVector(jPos[0] - iPos[0],
-					  jPos[1] - iPos[1],
-					  jPos[2] - iPos[2]).length()) # Euclidean distance from insertion to joint centre, i.e., scale factor for grid point positions
-
-		distArr.append(om.MVector(jPos[0] - oPos[0],
-					  jPos[1] - oPos[1],
-					  jPos[2] - oPos[2]).length()) # Euclidean distance from origin to joint centre, i.e., scale factor for grid point positions
+		distArr.append((jPos - iPos).length()) # Euclidean distance from insertion to joint centre, i.e., scale factor for grid point positions
+		distArr.append((jPos - oPos).length()) # Euclidean distance from origin to joint centre, i.e., scale factor for grid point positions
 
 	maxDist = max(distArr) # maximal distance from joint centre to ligament attachment
 
 	# normalize matrices by maxDist
 
-	jInclTransMat.setScale([maxDist,maxDist,maxDist],om.MSpace.kWorld) # set scale in world space
-	jExclTransMat.setScale([maxDist,maxDist,maxDist],om.MSpace.kWorld) # set scale in world space
+	jInclTransMat.setScale([maxDist,maxDist,maxDist],4) # set scale in world space (om.MSpace.kWorld = 4)
+	jExclTransMat.setScale([maxDist,maxDist,maxDist],4) # set scale in world space (om.MSpace.kWorld = 4)
 
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(om.MMatrix(jExclTransMat.asMatrix())) # parent rotMat (prox)
-	rotMat.append(om.MMatrix(jInclTransMat.asMatrix())) # child rotMat (dist)
-
-	# create variables
-
-	sigDistances = []
-	localPoints = []
-	worldPoints = []
+	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(np.array(jInclTransMat.asMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
 
 	# cycle through all meshes
 
@@ -197,13 +188,12 @@ def sigDistField(jointName, meshes, subdivision):
 	elif len(meshes) < 2:
 		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
 	
+	sigDistances = []
 	for j,mesh in enumerate(meshes):
-		meshSigDist, osPoints, wsPoints = sigDistMesh(mesh, rotMat[j], subdivision) # get signed distance field for each mesh
+		meshSigDist, osPoints = sigDistMesh(mesh, rotMat[j], subdivision) # get signed distance field for each mesh
 		sigDistances.append(np.array(meshSigDist).reshape(subdivision + 1, subdivision + 1, subdivision + 1))
-		localPoints = osPoints # osPoints are identical for both cubic grids
-		worldPoints.append(wsPoints)
 	
-	return sigDistances, localPoints, worldPoints, rotMat, LigAttributes, maxDist
+	return sigDistances, osPoints, rotMat, LigAttributes, maxDist
 
 
 # ========== signed distance field per mesh function ==========
@@ -224,11 +214,11 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	shape = dag.extendToShape()
 	mObj = shape.node()
-	meshFn = om.MFnMesh(dag)
 	
 	# get the meshs transformation matrix
 
-	meshMat = om.MMatrix(dag.inclusiveMatrix())
+	meshMat = dag.inclusiveMatrix()
+	meshMatInv = np.linalg.inv(np.array(meshMat).reshape(4,4)) # get inverse of mesh matrix as numpy 4x4 array
 
 	# create the intersector
 
@@ -236,40 +226,38 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	polyIntersect.create(mObj,meshMat)
 	ptON = om.MPointOnMesh()
 
-	# create 3D grid where all axes are 1.5 times the distance between origin and insertion
+	# create 3D grid
 
 	elements = np.linspace(-1.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
 	
-	points = [[i, j, k] for i in elements  # length along x
-			    for j in elements  # length along y
-			    for k in elements] # length along z
+	points = np.array([[i, j, k] for i in elements  # length along x
+				     for j in elements  # length along y
+				     for k in elements]) # length along z
+
+	# get coordinates and transform them into matrices
+
+	gridArr = np.stack([np.identity(4)] * points.shape[0],axis=0)
+	gridArr[:,3,0:3] = points # append coordinates to rotation matrix array
+
+	# calculate position of vertices relative to cubic grid
+
+	gridWSArr = np.dot(gridArr,rotMat)
+	gridWSList = gridWSArr[:,3,0:3].tolist()
+	localList = np.dot(gridWSArr,meshMatInv)[:,3,0:3].tolist()
 
 	# go through grid points and calculate signed distance for each of them
 
 	signedDist = []
-	gridPoints = []
 
-	for point in points:
-
-		# get 3D position of grid points 
-
-		gridPoint = om.MPoint(getPosInWS(rotMat, point))
-		gridPoints.append(gridPoint)
-		
-		# get grid point in local coordinate system of mesh
-
-		localPoint = getPosInOS(meshMat, gridPoint)
+	for i in range(points.shape[0]):
 		
 		# find closest points on mesh and get their distance to the grid points
 							  
-		ptON = polyIntersect.getClosestPoint(gridPoint) # get point on mesh
-		ptNorm = om.MVector(ptON.normal)  # get normal
+		ptON = polyIntersect.getClosestPoint(MPoint(gridWSList[i])) # get point on mesh
 		
 		# get vector from localPoint to ptON
 
-		diff = om.MVector(ptON.point.x - localPoint[0], 
-				  ptON.point.y - localPoint[1],
-				  ptON.point.z - localPoint[2])
+		diff = (MVector(ptON.point) -  MVector(localList[i]))
 
 		# get distance from localPoint to ptON    
 	
@@ -277,7 +265,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 		# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 		
-		dot = ptNorm.normal() * diff.normal() 
+		dot = MVector(ptON.normal).normal() * diff.normal() 
 
 		# get sign for distance
 
@@ -286,7 +274,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 		else: # point is outside of mesh
 			signedDist.append(dist)
 
-	return signedDist, points, gridPoints
+	return signedDist, points.tolist()
 
 
 # ========== ligament rotation matrix function ==========
@@ -306,28 +294,23 @@ def getLigTransMat(origin, insertion, jPos):
 
 	# calculate vectors from origin to insertion and to joint centre
 				
-	LigDir = om.MVector(iPos[0] - oPos[0],
-			    iPos[1] - oPos[1],
-			    iPos[2] - oPos[2])
-
-	JointDir = om.MVector(jPos[0] - oPos[0],
-			      jPos[1] - oPos[1],
-			      jPos[2] - oPos[2])
+	LigDir = iPos - oPos
+	JointDir = jPos - oPos
 
 	Offset = LigDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
 
 	# calculate planes relative to ligaments
 
 	uDir = LigDir.normal() * Offset
-	wDir = (JointDir.normal() ^ uDir).normal() * Offset# cross product to get z axis
+	wDir = (JointDir.normal() ^ uDir).normal() * Offset # cross product to get z axis
 	vDir = (wDir ^ uDir).normal() * Offset # cross product to get y axis 
 
 	# get transformation matrix from liagament plane directions
 
-	transMat = om.MMatrix([uDir.x, uDir.y, uDir.z, 0,
-			       vDir.x, vDir.y, vDir.z, 0,
-			       wDir.x, wDir.y, wDir.z, 0,
-			       oPos[0],oPos[1],oPos[2],1]) # centre position around origin
+	transMat = np.array([[uDir.x, uDir.y, uDir.z, 0],
+			     [vDir.x, vDir.y, vDir.z, 0],
+			     [wDir.x, wDir.y, wDir.z, 0],
+			     [oPos[0],oPos[1],oPos[2],1]]) # centre position around origin
 		
 	return transMat, Offset 
 
@@ -341,48 +324,8 @@ def getWSPos(name):
 	# ======================================== #
 	
 	dag = dagObjFromName(name)[1]
-
-	translate = om.MTransformationMatrix(dag.inclusiveMatrix()).translation(om.MSpace.kWorld) # extract translation in world space from transformation matrix (3x faster than xform)
 	
-	return translate
-
-
-# ========== get point in world space function ==========	
-
-def getPosInWS(rotMat,point):
-
-	# Input variables:
-	#	rotMat = rotation matrix
-	#	point = 3D coordinates (translation) of point in object space (i.e., relative to parent)
-	# ======================================== #
-
-	localMat = om.MMatrix(((1, 0, 0, 0),
-			       (0, 1, 0, 0),
-			       (0, 0, 1, 0),
-			       (point[0], point[1], point[2], 1))) # position of point
-
-	worldPos = localMat * rotMat
-
-	return om.MVector(worldPos[12], worldPos[13], worldPos[14])
-
-
-# ========== get point in object space function ==========	
-	
-def getPosInOS(rotMat, point):
-
-	# Input variables:
-	#	rotMat = rotation matrix
-	#	point = 3D coordinates (translation) of point in world space
-	# ======================================== #
-
-	ptWS = om.MMatrix(((1, 0, 0, 0),
-			   (0, 1, 0, 0),
-			   (0, 0, 1, 0),
-			   (point[0], point[1], point[2], 1))) # world space matrix of point
-
-	ptPosOS = ptWS * rotMat.inverse() # multiply with inverse of rotation matrix
-
-	return om.MVector(ptPosOS[12],ptPosOS[13],ptPosOS[14]) 
+	return om.MTransformationMatrix(dag.inclusiveMatrix()).translation(4) # extract translation in world space from transformation matrix (3x faster than xform; om.MSpace.kWorld = 4)
 
 
 # ========== get dag path function ==========
@@ -407,25 +350,23 @@ def dagObjFromName(name):
 # ============ optimiser functions =========== #
 ################################################
 
-def ligLengthOptMin(ipProx, ipDist, gridRotMat, rotMat, ligRotMat, ligSubdiv):
+def ligLengthOptMin(x, initial_guess, ipProx, ipDist, rotMat, ligRotMat, ligSubdiv):
 
 	# Input variables:
+	#	x = constant X coordinates for ligament points
+	#	initial_guess = initual guess condition for optimiser
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
-	#	gridRotMat = rotation matrix of default cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	ligRotMat = transformation matrix of the ligament
 	#	ligSubdiv = number of ligament points, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details
 	# ======================================== #
 
-	# define initual guess condition
-
-	xCoords = np.linspace(0.0, 1.0, num = ligSubdiv + 1, endpoint = True)
-	initial_guess = np.zeros(2 * (ligSubdiv + 1))
-
 	# create tuple for arguments passed to both constraints and cost functions
 
-	arguments = (xCoords, ipProx, ipDist, rotMat, ligRotMat, gridRotMat)
+	ligArr = np.stack([np.identity(4)] * (len(x)-2), axis=0)
+
+	arguments = (x, ipProx, ipDist, rotMat, ligRotMat, ligArr)
 
 	# set constraints functions
 
@@ -438,8 +379,10 @@ def ligLengthOptMin(ipProx, ipDist, gridRotMat, rotMat, ligRotMat, ligSubdiv):
 
 	# set bounds
 
-	boundsList = [(-10,10)] * (len(initial_guess)) # set y and z coordinate boundaries to 10 times euclidean distance between  origin and insertion
-	boundsList[0] = boundsList[1] = boundsList[len(initial_guess) - 2] = boundsList[len(initial_guess) - 1] = (0,0) # set y and z bounds of origin and insertion to zero
+	length_init = len(initial_guess)
+
+	boundsList = [(-10,10)] * length_init # set y and z coordinate boundaries to 10 times euclidean distance between  origin and insertion
+	boundsList[0] = boundsList[1] = boundsList[length_init - 2] = boundsList[length_init - 1] = (0,0) # set y and z bounds of origin and insertion to zero
 	bnds = tuple(boundsList)
 
 	# set options
@@ -457,7 +400,7 @@ def ligLengthOptMin(ipProx, ipDist, gridRotMat, rotMat, ligRotMat, ligSubdiv):
 
 # ========== signed distance field constraint function ==========
 
-def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
+def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, ligArr):
 
 	# Input variables:
 	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
@@ -466,7 +409,7 @@ def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	ligRotMat = transformation matrix of the ligament
-	#	gridRotMat = rotation matrix of default cubic grid coordinate system
+	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates
 	# ======================================== #
 
 	# extract coordinates from params
@@ -474,37 +417,29 @@ def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 	y = params[0::2]
 	z = params[1::2]
 
+	# setup 3D array for matrix multiplications
+
+	ligArr[:,3,0] = x[1:-1] # skip first and last ligament coords (i.e., origin and insertion)
+	ligArr[:,3,1] = y[1:-1] # skip first and last ligament coords (i.e., origin and insertion)
+	ligArr[:,3,2] = z[1:-1] # skip first and last ligament coords (i.e., origin and insertion)
+
+	relPosProxArr = np.dot(ligArr,np.dot(ligRotMat,rotMat[0]))[:,3,0:3].tolist()
+	relPosDistArr = np.dot(ligArr,np.dot(ligRotMat,rotMat[1]))[:,3,0:3].tolist()
+
 	signDist = []
 
 	# go through each ligament point (except origin and insertion) and check if any of them intersect with a mesh (i.e., sigDist < 0)
 
-	n = len(x)-2
-
-	for i in range(n):
-
-		# transform relative grid position into default cubic grid space for tricubic interpolation using rotation matrices
-
-		ligWSPoint = getPosInWS(ligRotMat,[x[i+1], y[i+1], z[i+1]])
-
-		relPosProx = getPosInOS(gridRotMat, getPosInOS(rotMat[0],ligWSPoint))
-		relPosDist = getPosInOS(gridRotMat, getPosInOS(rotMat[1],ligWSPoint))
+	for i in range(len(x)-2):
+		signDist.append(ipProx.ip(relPosProxArr[i]))
+		signDist.append(ipDist.ip(relPosDistArr[i]))		
 		
-		# tricubic interpolation of signed distance at postion relative to default cubic grid
-
-		tempSignDist = min(ipProx.ip([relPosProx[0], relPosProx[1], relPosProx[2]]), ipDist.ip([relPosDist[0], relPosDist[1], relPosDist[2]])) # get smaller of the two values
-		signDist.append(tempSignDist)
-
-		# check if current point is negative, i.e., inside a mesh, and break loop if so
-
-		if 1e-05 <= tempSignDist < 0: # added minimum value for break condition because below threshold optimizer will end without considering other ligament points
-			break
-	
-	return min(signDist) # return minimal value, if any of the points is inside a mesh it will be negative
+	return min(signDist)
 
 
 # ========== path constraint function ==========
 
-def path_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
+def path_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, ligArr):
 
 	# Input variables:
 	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
@@ -513,7 +448,7 @@ def path_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid. Passed through args, not part of this constraint function
 	#	rotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of this constraint function
 	#	ligRotMat = transformation matrix of the ligament. Passed through args, not part of this constraint function
-	#	gridRotMat = rotation matrix of default cubic grid coordinate system. Passed through args, not part of this constraint function
+	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates. Passed through args, not part of this constraint function
 	# ======================================== #
 
 	# extract coordinates from params
@@ -525,34 +460,29 @@ def path_cons_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 
 	n = len(x)-1
 
-	# calculate distance between subsequent points
+	# calculate squared distance between subsequent points
 
-	dist = np.array([])
+	dist = []
 
 	for i in range(n):
 
-		dist = np.append(dist, sqrt((y[i+1] - y[i])**2 + (z[i+1] - z[i])**2))
+		dist.append((y[i+1] - y[i])**2 + (z[i+1] - z[i])**2)
 
-	maxDist = dist.max() # get maximum diagonal YZ distance
-
-	distDiff = 1.7 / n - maxDist # mediolateral offset can be maximally 1.7 times the distance between path segment along X-axis (i.e., 60°). This is to avoid path penetrating through thin parts of the mesh, where path points would be on either side of mesh
-	
-
-	return distDiff
+	return (1.7 / n)**2 - max(dist) # mediolateral offset can be maximally 1.7 times the distance between path segments along X-axis (i.e., 60°). This is to avoid path penetrating through thin parts of the mesh, where path points would be on either side of mesh
 
 
 # ========== cost function for optimisation ==========
 
-def cost_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
+def cost_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, ligArr):
 
 	# Input variables:
 	#	params = array of Y and Z coordinates of ligament points, i.e., params = [[y_0, z_0],[y_1, z_1], ... ,[y_n-1, z_n-1]]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
 	#	x = constant X coordinates for ligament points.
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of this constraint function
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid. Passed through args, not part of this constraint function
-	#	rotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of this constraint function
-	#	ligRotMat = transformation matrix of the ligament. Passed through args, not part of this constraint function
-	#	gridRotMat = rotation matrix of default cubic grid coordinate system. Passed through args, not part of this constraint function
+	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of cost function
+	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid. Passed through args, not part of cost function
+	#	rotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of cost function
+	#	ligRotMat = transformation matrix of the ligament. Passed through args, not part of cost function
+	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates. Passed through args, not part of cost function
 	# ======================================== #
 	
 	# extract coordinates from params
@@ -579,3 +509,6 @@ def cost_fun(params, x, ipProx, ipDist, rotMat, ligRotMat, gridRotMat):
 		cost += sqrt(const + (y[i+1] - y[i])**2 + (z[i+1] - z[i])**2)
 		
 	return cost
+
+
+
