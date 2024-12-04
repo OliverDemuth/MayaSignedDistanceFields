@@ -434,32 +434,19 @@ def cons_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 	proxVtcRelArr = np.dot(np.dot(np.dot(proxVtcArr,rotMat[0]),transMatInv),gridRotMat)[:,3,0:3].tolist()
 	distVtcRelArr = np.dot(np.dot(np.dot(distVtcArr,transMat),rotMatInv),gridRotMat)[:,3,0:3].tolist()
 
-	proxSignDist = []
-	distSignDist = []
+	signDist = []
 
 	# go through each proximal articular surface point and check if any of them intersect with a distal mesh (i.e., sigDist < 0)
 
 	for proxVtx in proxVtcRelArr:
-
-		# get signed distances for each vtx
-
-		tempSignDist = ipDist.ip(proxVtx)
-		proxSignDist.append(tempSignDist)
-
-	proxMin = min(proxSignDist)
+		signDist.append(ipDist.ip(proxVtx)) # get signed distances for each vtx
 
 	# go through each distal articular surface point and check if any of them intersect with a proximal mesh (i.e., sigDist < 0)
 
 	for distVtx in distVtcRelArr:
+		signDist.append(ipProx.ip(distVtx)) # get signed distances for each vtx
 
-		# get signed distances for each vtx
-
-		tempSignDist = ipProx.ip(distVtx)
-		distSignDist.append(tempSignDist)
-
-	distMin = min(distSignDist)
-
-	return min([proxMin,distMin]) # return minimal value, if any of the points is inside a mesh it will be negative
+	return min(signDist) # return minimal value, if any of the points is inside a mesh it will be negative
 
 
 # ========== cost function for optimisation ==========
