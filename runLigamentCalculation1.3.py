@@ -1,11 +1,11 @@
-#	runLigamentCalculation1.2.py
+#	runLigamentCalculation1.3.py
 #
 #	This script calculates and keys the length of a ligament from origin to insertion,
 #	wrapping around the proximal and distal bone meshes, for each frame. The script can
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 04.12.2024 - Oliver Demuth
+#	Last updated 08.01.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -18,7 +18,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ligamentCalculation1.2.py'
+#		- 'ligamentCalculation1.3.py'
 #
 #	For further information please check the Python script(s) referenced above
 
@@ -231,7 +231,7 @@ for i in range(keyDiff):
 
 	# calculate the length of each ligament 
 
-	ligNames,pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes ,ligSubdiv)
+	ligNames,pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes)
 
 	# key the attributes on the animated joint
 
@@ -241,7 +241,7 @@ for i in range(keyDiff):
 			cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
 		else:
 			if debug == 1:
-			    print(results[index].message, results[index].nit)
+			    print(ligament, results[index])
 			    
 			cmds.setKeyframe(jointName, at = ligament, v = -1)
 
