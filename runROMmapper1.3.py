@@ -1,4 +1,4 @@
-#	runROMmapper1.2.py
+#	runROMmapper1.3.py
 #
 #	This script estimates the (mobile) joint centre position and moves the distal bone
 #	mesh into position for a set of presribed joint orientations. Only feasible joint 
@@ -7,7 +7,7 @@
 #	approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 28.11.2024 - Oliver Demuth
+#	Last updated 13.01.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -17,7 +17,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ROMmapper1.2.py'
+#		- 'ROMmapper1.3.py'
 #
 #	For further information please check the Python script(s) referenced above
 
@@ -50,7 +50,7 @@ debug = 0 							# Debug mode to check if signed distance fields have already be
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
-from maya.api.OpenMaya import MVector, MMatrix, MPoint
+from maya.api.OpenMaya import MVector, MPoint
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
@@ -80,7 +80,7 @@ gridSize = 8 * sphereRad
 
 start = time.time()
 
-if debug == 1 or ContinueKeys == True:
+if debug == 1 or ContinueKeys:
 
 	# check if distance fields have already been calculated
 
@@ -90,11 +90,14 @@ if debug == 1 or ContinueKeys == True:
 		var_exists = False
 	else:
 		var_exists = True # signed distance field already calculated, no need to do it again
+		
+	nvit = []
 
 else:
 	var_exists = False
 
 if not var_exists:
+
 	# calculate signed distance fields
 
 	print('Calculating signed distance fields...')
@@ -105,6 +108,17 @@ if not var_exists:
 
 	proxCoords = relVtcPos(congruencyMeshes[0], initialRotMat[0])
 	distCoords = relVtcPos(congruencyMeshes[1], initialRotMat[1])
+
+	# get coordinates and transform them into 3D matrix arrays
+
+	identityMat = np.identity(4)
+
+	proxArr = np.stack([identityMat] * proxCoords.shape[0], axis = 0)
+	proxArr[:,3,:] = proxCoords # append coordinates to 3D rotation matrix array
+
+	distArr = np.stack([identityMat] * distCoords.shape[0], axis = 0)
+	distArr[:,3,:] = distCoords # append coordinates to 3D rotation matrix array
+
 
 # get dimensions of cubic grids
 
@@ -157,7 +171,7 @@ numFrames = len(rotations)
 
 # set time to 1 or to start frame
 
-if ContinueKeys == True:
+if ContinueKeys:
 	lastKey = cmds.keyframe(jointName, attribute='rotateX', query=True, index=(1, cmds.keyframe(jointName, attribute='rotateX', query=True, keyframeCount=True)))[-1]
 
 	xRot = round(cmds.keyframe(jointName, attribute='rotateX', query=True, eval=True, time=(lastKey,lastKey))[0],6)
@@ -240,10 +254,10 @@ for i in range(keyDiff):
 	# get joint inclusive transformation matrix (child)
 
 	localTransMat = om.MTransformationMatrix()
-	localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order=0)) # set rotation (om.MEulerRotation.kXYZ = 0)
+	localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order = 0)) # set rotation (om.MEulerRotation.kXYZ = 0)
 	localTransMat.setTranslation(MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
 
-	jInclTransMat = localTransMat.asMatrix()*gridSize*jExclMat
+	jInclTransMat = localTransMat.asMatrix() * gridSize * jExclMat
 	jInclTransMat[-1] = 1 # reset last element to 1
 	
 	# get rotation matrices
@@ -255,13 +269,16 @@ for i in range(keyDiff):
 
 	# optimise the joint translations
 
-	coords, viable, results = optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness)
+	coords, viable, results = optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness)
 
 	# check if pose was viable
 	
 	if debug == 1:
-	    print(results.nit)
-
+	    print(results.nit, viable)
+	    
+	    if viable == 1:
+	        nvit.append(results.nit)
+	    
 	if viable == 1:
 
 		frame = cmds.currentTime(query=True)
@@ -293,9 +310,9 @@ end = time.time()
 if cmds.progressWindow(query=True, isCancelled=True):
 	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i+1,int(frame-lastKey)))
 else:
-	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames append keyed {2} viable frames.'.format(end - mid,keyDiff,int(frame-lastKey)))
+	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid,keyDiff,int(frame-lastKey)))
 
 cmds.progressWindow(edit=True, endProgress=True)
 
-
-
+if debug == 1:
+    print(max(nvit))
