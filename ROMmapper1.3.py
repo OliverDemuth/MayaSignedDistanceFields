@@ -1,4 +1,4 @@
-#	ROMmapper1.2.py
+#	ROMmapper1.3.py
 #
 #	This script optimises contact-based positions across a set of rotational poses 
 # 	for a set of bone meshes. It is an implementation of the Marai et al., 2006. approach
@@ -7,7 +7,7 @@
 #	distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 04.12.2024 - Oliver Demuth
+#	Last updated 13.01.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -50,7 +50,7 @@
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
-from maya.api.OpenMaya import MVector, MMatrix, MPoint
+from maya.api.OpenMaya import MVector, MPoint
 import numpy as np
 import scipy as sp
 
@@ -61,85 +61,6 @@ from tricubic import tricubic
 ################################################
 # ========== Maya specific functions ========= #
 ################################################
-
-
-# ========== translation optimisation function ==========
-def optimisePosition(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness):
-
-	# Input variables:
-	#	proxCoords = Coordinates of proximal articular surface vertices
-	#	distCoords = Coordinates of distal bone mesh
-	#	ipProx = proximal signed distance field in tricubic form
-	#	ipDist = distal signed distance field in tricubic form
-	#	gridRotMat = rotation matrix of default cubic grid
-	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	thickness = thickness measure correlated with joint spacing
-	# ======================================== #
-
-	# optimise translation for specific rotational pose
-
-	results = posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness)
-	
-	# check if optimisation was successful
-	
-	if results.success: 
-	
-		diff = MVector(results.x).length() # get offset from glenoid centre
-
-		# check for disarticulation 
-						  
-		if diff < (1.05 * thickness * 2): # first crudely (if distal ACS is more than 5% beyond radius of fitted proximal shape)
-
-			# pre allocate variable 
-
-			identityMat = np.identity(4)
-
-			# get coordinates of results and transform them into transformation matrix coords
-
-			resCoords = identityMat.copy()
-			resCoords[3,0:3] = results.x
-
-			# get transformation matrix
-
-			transMat = rotMat[1] # transformation matrix
-			transMat[3,0:3] = np.dot(resCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
-			transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
-
-			# get coordinates and transform them into matrices
-
-			vtcArr = np.stack([identityMat] * proxCoords.shape[0], axis=0)
-			vtcArr[:,3,:] = proxCoords # append coordinates to rotation matrix array
-
-			# calculate position of vertices relative to cubic grid
-
-			vtcRelArr = np.dot(np.dot(np.dot(vtcArr,rotMat[0]),transMatInv),gridRotMat)[:,3,0:3].tolist()
-
-			signDist = []
-
-			for vtx in vtcRelArr: # more indepth (get mean articular distance and check if within threshold)
-
-				# calculate distance 
-
-				tempSignDist = ipDist.ip(vtx)
-				signDist.append(tempSignDist)
-
-			avgdist = sum(signDist)/len(signDist)
-			
-			# if disarticulated or any points penetrate meshes the position becomes inviable
-		
-			if avgdist < (1.05 * thickness) and all(n > 0 for n in signDist):
-				viable = 1
-			else:
-				viable = 0
-		else:
-			viable = 0			
-	else:
-		viable = 0
-
-	# gather results
-
-	return results.x, viable, results
-
 
 
 # ========== signed distance field per joint function ==========
@@ -219,13 +140,13 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	elements = np.linspace(-1, 1, num = subdivision + 1, endpoint=True, dtype=float)
 	
-	points = np.array([[i, j, k] for i in elements  # length along x
-				     for j in elements  # length along y
-				     for k in elements]) # length along z
+	points = np.array([[x, y, z] for x in elements
+				     for y in elements 
+				     for z in elements])
 
 	# get coordinates and transform them into matrices
 
-	gridArr = np.stack([np.identity(4)] * points.shape[0],axis=0)
+	gridArr = np.stack([np.identity(4)] * points.shape[0], axis = 0)
 	gridArr[:,3,0:3] = points # append coordinates to rotation matrix array
 
 	# calculate position of vertices relative to cubic grid
@@ -285,7 +206,7 @@ def relVtcPos(mesh, rotMat):
 
 	# get coordinates and transform them into matrices
 
-	vtxArr = np.stack([np.eye(4)] * vertices.shape[0],axis=0)
+	vtxArr = np.stack([np.identity(4)] * vertices.shape[0], axis = 0)
 	vtxArr[:,3,:] = vertices # append coordinates to rotation matrix array
 
 	return np.dot(vtxArr,np.linalg.inv(rotMat))[:,3,:] # calculate new coordinates and extract them
@@ -337,7 +258,7 @@ def meanRad(mesh):
 
 	# substract center position from vertices and return mean distance
 
-	return np.linalg.norm((vertices - centerPos),axis=1).mean() 
+	return np.linalg.norm((vertices - centerPos), axis = 1).mean() 
 
 
 
@@ -345,11 +266,75 @@ def meanRad(mesh):
 # ============ optimiser functions =========== #
 ################################################
 
-def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickness):
+
+# ========== check viability function ==========
+
+def optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness):
 
 	# Input variables:
-	#	proxCoords = Coordinates of proximal articular surface vertices
-	#	distCoords = Coordinates of distal articular surface vertices
+	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#	ipProx = proximal signed distance field in tricubic form
+	#	ipDist = distal signed distance field in tricubic form
+	#	gridRotMat = rotation matrix of default cubic grid
+	#	rotMat = array with the transformation matrices of the joint and its parent
+	#	thickness = thickness measure correlated with joint spacing
+	# ======================================== #
+
+	# optimise translation for specific rotational pose
+
+	results = posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness)
+	
+	# check if optimisation was successful
+	
+	if results.success: 
+	
+		diff = MVector(results.x).length() # get offset from glenoid centre
+
+		# check for disarticulation 
+						  
+		if diff < (1.05 * thickness * 2): # first crudely (if distal ACS is more than 5% beyond radius of fitted proximal shape)
+
+			# get coordinates of results and transform them into transformation matrix coords
+
+			resCoords = np.identity(4)
+			resCoords[3,0:3] = results.x
+
+			# get transformation matrix
+
+			transMat = rotMat[1] # transformation matrix
+			transMat[3,0:3] = np.dot(resCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
+			transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
+
+			# calculate position of vertices relative to cubic grid
+
+			vtcRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
+			signDist = [ipDist.ip(vtx) for vtx in vtcRelArr]
+			avgdist = sum(signDist) / len(vtcRelArr)
+			
+			# if disarticulated or any points penetrate meshes the position becomes inviable
+		
+			if avgdist < (1.05 * thickness) and all(n > 0 for n in signDist):
+				viable = 1
+			else:
+				viable = 0
+		else:
+			viable = 0			
+	else:
+		viable = 0
+
+	# gather results
+
+	return results.x, viable, results
+
+
+# ========== translation optimisation ==========
+
+def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness):
+
+	# Input variables:
+	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
 	#	gridRotMat = rotation matrix of default cubic grid
@@ -361,9 +346,13 @@ def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickn
 
 	initial_guess = np.zeros(3)
 
+	# create 3D arrays for matrix multiplication
+
+	paramCoords = np.identity(4)
+
 	# create tuple for arguments passed to both constraints and cost functions
 
-	arguments = (proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat, thickness)
+	arguments = (proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords)
 
 	# set constraints functions
 
@@ -373,42 +362,40 @@ def posOptMin(proxCoords, distCoords, ipProx, ipDist, gridRotMat, rotMat, thickn
 
 	# set bounds
 
-	boundsList = [(-10,10)] * (len(initial_guess)) # set y and z coordinate boundaries to 10 times euclidean distance between  origin and insertion
+	boundsList = [(-10,10)] * (len(initial_guess)) # set x, y and z coordinate boundaries
 	bnds = tuple(boundsList)
 
 	# set options
 
-	options = {"maxiter": 20} # if it doesn't solve within 15 iterations it usually won't solve. Any more than 20 will just increase computational time without much benefit
+	options = {"maxiter": 50} # if it doesn't solve within 25 iterations it usually won't solve. Any more than 50 will just increase computational time without much benefit
 
 	# optimization using SLSQP
 
 	res = sp.optimize.minimize(cost_fun, initial_guess, args = arguments, bounds = bnds, method = 'SLSQP', constraints = cons, options = options)
 
-	# get results: res.X = joint centre point coordinates, res.fun = mean articular distance - thickness
+	# get results: res.X = joint centre point coordinates, res.fun = mean articular distance - thickness squared + variance
 
 	return res
 
 
 # ========== signed distance field constraint function ==========
 
-def cons_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat, thickness):
+def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords):
 
 	# Input variables:
 	#	params = array of X, Y and Z coordinates of distal element position
-	#	proxCoords = Coordinates of proximal articular surface vertices
-	#	distCoords = Coordinates of distal articular surface vertices
+	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid
 	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	gridRotMat = rotation matrix of default cubic grid coordinate system
 	#	thickness = thickness measure correlated with joint spacing. Passed through args, not part of this constraint function
+	#	paramCoords = 4x4 identity matrix for matrix multiplications
 	# ======================================== #
 
 	# extract coordinates from paramsand transform them into transformation matrix coords
 
-	identityMat = np.identity(4)
-
-	paramCoords = identityMat.copy()
 	paramCoords[3,0:3] = params
 
 	# get transformation matrix
@@ -421,57 +408,38 @@ def cons_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 
 	rotMatInv = np.linalg.inv(rotMat[0])
 
-	# get prox and dist coordinates and transform them into matrices
-
-	proxVtcArr = np.stack([identityMat] * proxCoords.shape[0], axis=0)
-	proxVtcArr[:,3,:] = proxCoords # append coordinates to rotation matrix array
-
-	distVtcArr = np.stack([identityMat] * distCoords.shape[0], axis=0)
-	distVtcArr[:,3,:] = distCoords # append coordinates to rotation matrix array
-
 	# calculate position of vertices relative to cubic grid
 
-	proxVtcRelArr = np.dot(np.dot(np.dot(proxVtcArr,rotMat[0]),transMatInv),gridRotMat)[:,3,0:3].tolist()
-	distVtcRelArr = np.dot(np.dot(np.dot(distVtcArr,transMat),rotMatInv),gridRotMat)[:,3,0:3].tolist()
+	proxVtcRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
+	distVtcRelArr = np.dot(distArr,np.dot(np.dot(transMat,rotMatInv),gridRotMat))[:,3,0:3].tolist()
 
-	signDist = []
+	# go through each proximal and distal articular surface point and check if any of them intersect with a mesh (i.e., signDist < 0)
 
-	# go through each proximal articular surface point and check if any of them intersect with a distal mesh (i.e., sigDist < 0)
+	signDist = [min([ipDist.ip(vtx) for vtx in proxVtcRelArr]), # minimal proximal signed distance
+		    min([ipProx.ip(vtx) for vtx in distVtcRelArr])] # minimal distal signed distance
 
-	for proxVtx in proxVtcRelArr:
-		signDist.append(ipDist.ip(proxVtx)) # get signed distances for each vtx
-
-	# go through each distal articular surface point and check if any of them intersect with a proximal mesh (i.e., sigDist < 0)
-
-	for distVtx in distVtcRelArr:
-		signDist.append(ipProx.ip(distVtx)) # get signed distances for each vtx
-
-	return min(signDist) # return minimal value, if any of the points is inside a mesh it will be negative
+	return min(signDist) # return minimal value, if any of the points are inside a mesh it will be negative
 
 
 # ========== cost function for optimisation ==========
 
-def cost_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat, thickness):
+def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords):
 
 	# Input variables:
 	#	params = array of X, Y and Z coordinates of distal element position
-	#	proxCoords = Coordinates of proximal articular surface vertices
-	#	distCoords = Coordinates of distal articular surface vertices. Passed through args, not part of cost function
+	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of cost function
 	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	gridRotMat = rotation matrix of default cubic grid coordinate system
 	#	thickness = thickness measure correlated with joint spacing
+	#	paramCoords = 4x4 identity matrix for matrix multiplications
 	#
 	# ======================================== #
-
-	# pre allocate variable 
-
-	identityMat = np.identity(4)
 	
 	# extract coordinates from params and transform them into transformation matrix coords
 
-	paramCoords = identityMat.copy()
 	paramCoords[3,0:3] = params
 
 	# get transformation matrix
@@ -480,27 +448,19 @@ def cost_fun(params, proxCoords, distCoords, ipProx, ipDist, rotMat, gridRotMat,
 	transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
 	transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
 
-	# get coordinates and transform them into matrices
-
-	vtcArr = np.stack([identityMat] * proxCoords.shape[0], axis=0)
-	vtcArr[:,3,:] = proxCoords # append coordinates to rotation matrix array
-
 	# calculate position of vertices relative to cubic grid
 
-	vtcRelArr = np.dot(np.dot(np.dot(vtcArr,rotMat[0]),transMatInv),gridRotMat)[:,3,0:3].tolist()
+	vtcRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
 
 	# calculate distance 
 
-	signDist = []
-
-	for vtx in vtcRelArr:
-		signDist.append(ipDist.ip(vtx))
-
+	signDist = [ipDist.ip(vtx) for vtx in vtcRelArr]
 	meanDist = sum(signDist)/len(signDist)
 
-	# calculate variance 
-	
-	return abs(meanDist-thickness) + (sum((dist - meanDist) ** 2 for dist in signDist) / len(signDist)) # average distance + variance enforces largest possible overlap
+	# calculate variance
 
+	var = sum([(dist - meanDist) ** 2 for dist in signDist]) / len(signDist)
+		
+	return (meanDist - thickness) ** 2 + var # minimising variance enforces largest possible overlap
 
 
