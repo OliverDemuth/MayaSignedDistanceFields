@@ -5,7 +5,7 @@
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 08.01.2025 - Oliver Demuth
+#	Last updated 21.01.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -231,7 +231,7 @@ for i in range(keyDiff):
 
 	# calculate the length of each ligament 
 
-	ligNames,pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes)
+	ligNames,pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints)
 
 	# key the attributes on the animated joint
 
