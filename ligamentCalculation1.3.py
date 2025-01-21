@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 08.01.2025 - Oliver Demuth
+#	Last updated 21.01.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -66,7 +66,7 @@ from tricubic import tricubic
 
 
 # ========== ligament length calculation function ==========
-def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
+def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints):
 
 	# Input variables:
 	#	x = constant X coordinates for ligament points
@@ -75,11 +75,11 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
 	#	ipDist = distal signed distance field in tricubic form
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	LigAttributes = array consisting of names of ligaments
+	#	KeyPathPoints = boolean if ligament path points are to be calculated
 	# ======================================== #
 
 	# create variables
 
-	ligNames = []
 	ligLengths = []
 	ligPoints = []
 	results = []
@@ -96,7 +96,6 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
 
 		# get names of ligaments and their origins and insertions
 
-		ligNames.append(ligament) 
 		ligOrigin = ligament + '_orig'
 		ligInsertion = ligament + '_ins'
 
@@ -112,24 +111,28 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
 
 		# minimise ligament length through optimiser
 
-		res = ligLengthOptMin(x, initial_guess, ipProx, ipDist, relRotMat)
-
-		# get world position of ligament points
-
-		ligArr[:,3,0] = x 
-		ligArr[:,3,1] = res.x[0::2] # extract y coordinates from optimiser results
-		ligArr[:,3,2] = res.x[1::2] # extract z coordinates from optimiser results
+		res = ligLengthOptMin(x, initial_guess, ipProx, ipDist, relRotMat, ligArr[0:-2,:,:])
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
 		ligLengths.append(res.fun * Offset)
 
-		# gather results
+		# check if path points are to be calculate
+		
+		if KeyPathPoints:
 
-		ligPoints.append(np.dot(ligArr,ligRotMat)[:,3,0:3].tolist()) # global coordinates of ligament points
+			# get world position of ligament points
+			ligArr[:,3,0] = x 
+			ligArr[:,3,1] = res.x[0::2] # extract y coordinates from optimiser results
+			ligArr[:,3,2] = res.x[1::2] # extract z coordinates from optimiser results
+			
+			ligPoints.append(np.dot(ligArr,ligRotMat)[:,3,0:3].tolist()) # global coordinates of ligament points
+		
+		# gather results
+		
 		results.append(res)
 
-	return ligNames, ligLengths, ligPoints, results
+	return ligLengths, ligPoints, results
 
 
 # ========== signed distance field per joint function ==========
@@ -356,7 +359,7 @@ def dagObjFromName(name):
 # ============ optimiser functions =========== #
 ################################################
 
-def ligLengthOptMin(x, initial_guess, ipProx, ipDist, rotMat):
+def ligLengthOptMin(x, initial_guess, ipProx, ipDist, rotMat, ligArr):
 
 	# Input variables:
 	#	x = constant X coordinates for ligament points
@@ -364,11 +367,8 @@ def ligLengthOptMin(x, initial_guess, ipProx, ipDist, rotMat):
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
 	#	rotMat = array with the transformation matrices of the joint and its parent
+	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates
 	# ======================================== #
-
-	# define 3D array of rotation matrices representing ligament points
-
-	ligArr = np.stack([np.identity(4)] * (len(x)-2), axis=0)
 
 	# create tuple for arguments passed to both constraints and cost functions
 
