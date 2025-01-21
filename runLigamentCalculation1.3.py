@@ -167,7 +167,7 @@ cmds.currentTime(minKeys)
 
 # check if ligament points are to be keyed
 
-if KeyPathPoints == True:
+if KeyPathPoints:
 
 	for ligament in LigAttributes:
 
@@ -231,11 +231,11 @@ for i in range(keyDiff):
 
 	# calculate the length of each ligament 
 
-	ligNames,pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints)
+	pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints)
 
 	# key the attributes on the animated joint
 
-	for index, ligament in enumerate(ligNames):
+	for index, ligament in enumerate(LigAttributes):
 	
 		if results[index].status == 0:
 			cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
@@ -247,7 +247,7 @@ for i in range(keyDiff):
 
 		# check if ligament points are to be keyed
 
-		if KeyPathPoints == True:
+		if KeyPathPoints:
 
 			for k in range(len(ligPoints[index])):
 
