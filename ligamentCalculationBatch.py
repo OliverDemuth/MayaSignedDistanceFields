@@ -668,7 +668,6 @@ def processMayaFiles(filePath,args):
 	# define outpule file name and path
 
 	namei = fileName.replace('.mb','')
-	parentDir = filePath.split('/')[0:-2]
 	fname = outDir + '/' + namei + '.csv'
 	
 	# write to output file
