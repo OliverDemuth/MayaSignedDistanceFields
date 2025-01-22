@@ -9,7 +9,7 @@
 #	meshes, for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 17.02.2023 - Oliver Demuth
+#	Last updated 22.01.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -22,8 +22,7 @@
 #	This script relies on the following other (Python) script(s) which need to be in the
 #	same folder before executing this script
 #
-#		- 'ligamentCalculation.py'
-#		- 'progressBar.py'
+#		- 'ligamentCalculationBatch.py'
 #
 #	For further information please check the Python script(s) referenced above
 #
@@ -51,150 +50,98 @@
 
 # ========== set variables ========== 
 
-jointName = 'myJoint' 	# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint, e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018
-meshes = ['bones_boo']	# specify according to meshes in the Maya scene, e.g., the boolean object if following the ROM mapping protocol of Manafzadeh & Padian, 2018, i.e., 'boo', or several individual meshes in the form of e.g., ['prox_mesh','dist_mesh']
-gridSubdiv = 16		# Integer value for the subdivision of the cube, i.e., number of grid points for any given axis, e.g., 20 will result in a cube grid with 21 x 11 x 11 grid points. Please note this scales to O((n+1)^3)
-ligSubdiv = 20		# Integer value for the number of ligament segments, e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004, for details
-FrameInterval = None	# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-
+jointName = 'myJoint' 		# Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+meshes = ['prox_mesh', 		# Names of the two bone meshes (e.g., individual meshes in the form of ['prox_mesh','dist_mesh'])
+	  'dist_mesh']	
+gridSubdiv = 100		# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+ligSubdiv = 20			# Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
+FrameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+cores = 8			# Integer value to specify number of CPU cores to be assigned. Depending on the number of files and/or avialable CPU cores the actual number can be lower. Maximally two thirds of all cores will be assigned.
 
 # ========== set directories ========== 
 
-path = '\\Volumes\\PhD\\XROMM\\Maya\\ligaments\\python' # add your file path. Make sure 'ligamentLength.py' is in this folder
+# make sure you have set directories as follows:
+# 	project folder directory: 	"path/to/project folder"		Project folder with the following subfolders: 'python', 'maya files' and 'results'
+#	python scripts directory:	"path/to/project folder/python"		Ligament calculation python scripts go in here
+#	Maya files directory:		"path/to/project folder/maya files"	Maya scenes (.mb) to be processed go in here
+#	output/results directory:	"path/to/project folder/results"	CSV files will be saved here
+# ======================================== #
 
-fileDir = '/Volumes/PhD/XROMM/Maya/ligaments/maya files' # path for Maya files
-outDir = '/Volumes/PhD/XROMM/Maya/ligaments/results' # path for Maya output
+path = '\\path\\to\\python files' # add your file path. Make sure 'ligamenCalculationWrapper.py' and 'ligamenCalculationBatch.py' are in this folder
 
-#########################################################################################
+fileDir = '/path/to/maya files' # path for Maya files
+outDir = '/path/to/results' # path for Maya output
+
 
 #################################################
 # ==========    main script below    ========== #
 #################################################
 
-# ========== initialise ========== 
-
-import maya.standalone
-maya.standalone.initialize(name='python')
+# ========== load modules  ========== 
 
 import sys
-sys.path.append(path)
-
-# ========== load plugins  ========== 
-
+import maya.standalone
 import maya.api.OpenMaya as om
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
-import progressBar as pb
+import functools
 import os
 import time
 
 from tricubic import tricubic
-from ligamentCalculation import * # source the ligament functions
+from maya.api.OpenMaya import MVector, MPoint
+from math import sqrt, floor
+from multiprocessing import cpu_count, Process, Queue
+from ligamentCalculationBatch import * # source the ligament functions
 
+# ========== append path to python files ========== 
+
+sys.path.append(path)
 
 # ========== simulation setup ========== 
 
-# supress error messages
+if __name__ == "__main__":
 
-cmds.scriptEditorInfo(sw=True,se=True)
+	# get Maya files
 
-# get Maya files
+	mayaFiles = os.listdir(fileDir)
+	mayaFiles[:] = [item for item in mayaFiles if not item.startswith('._') if item.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
 
-models = os.listdir(fileDir)
-models[:] = [item for item in models if not item.startswith('._')] # remove macOS specific files from list
+	numFiles = len(mayaFiles)
 
-# go through each Maya file individually
-
-for mod in range(0,len(models)):
-	
-	# open Maya scene and initialise calculations 
-
-	modi = fileDir + '/' + models[mod]
-	cmds.file(modi, open=True, force=True)
-
-	# set to starting frame 
-
-	cmds.currentTime(1)
-
-	# get number of ligaments and their names 
-
-	LigAttributes = cmds.listAttr(jointName,ud=True) # get user defined attributes of 'jointName', i.e. the float attributes that will contain the ligament lengths
-
-	# get ligament names
-
-	ligNames = []
-	for i in range(len(LigAttributes)):
-		ligNames.append(LigAttributes[i])
-
-	# initialise results array
-
-	ligRes = []
-	ligRes.append(ligNames) # set array header
-
-	# get total number of keyed frames from 'jointName', i.e., max number of frames to be calculated
-
-	if FrameInterval == None:
-		frames = cmds.keyframe(jointName, attribute='rotateX', query=True, keyframeCount=True)
-	else:
-		frames = FrameInterval
-
-	# initialise progress bar
-
-	start = time.time()
-
-	print('Current file: ', models[mod])
-	pb.printProgressBar(0, frames, prefix = 'Ligament calculation in progress:', suffix = 'Complete. Calculating {} frames'.format(frames), length = 50)
-
-
-	# ========== run ligamentCalculation script ==========
-
-	# go through each frame and calculate ligament lengths 
-
-	for j in range(frames):
-
-		# calculate the length of the ligaments for the current frame and append it to results array
-
-		ligRes.append(ligCalc(jointName, meshes, gridSubdiv ,ligSubdiv)[1]) # add row of ligament lengths to result array
+	print('Detected following {0} Maya files within the \'{1}\' directory:'.format(numFiles,fileDir))
+	[print(file) for file in mayaFiles]
 		
-		# update progress bar
+	filePaths = [fileDir + '/' + mayaFile for mayaFile in mayaFiles]
 
-		progress = j + 1
-		pb.printProgressBar(progress, frames, prefix = 'Ligament calculation in progress:', suffix = 'Complete. Frame {0} of {1}.          '.format(progress,frames), length = 50)
+	# get available CPU cores (max two thirds)
 
-		# go to next frame and update progress bar
+	availableCores = floor(cpu_count()/3*2)
+	maxCores = availableCores if availableCores <= numFiles else numFiles 
+	CPUcores = cores if cores and cores <= maxCores else maxCores
 
-		cmds.currentTime(j + 2)
-		
-	
-	# ========== Save results ==========
+	print('Assigning {0} cores to process {1} Maya files.'.format(CPUcores,numFiles))
 
-	# define outpule file name
+	# append maya files to queue
 
-	namei = models[mod]
-	namei= namei.replace('.mb','')
-	fname = outDir + '/' + namei + '.csv'
-	
-	# write output file
+	q = Queue()
 
-	with open(fname, 'w') as filehandle:
-		for listitem in ligRes:
-			s = ",".join(map(str, listitem))
-			filehandle.write('%s\n' % s)
-	
-	# shut down the Maya scene
+	for file in filePaths:
+		q.put(file)
 
-	cmds.file(modified=0) 
+	# create tuple for arguments passed to ligament calculation functions
 
-	# print simulation time for each Maya scene
+	arguments = (jointName, meshes, gridSubdiv, ligSubdiv, FrameInterval, outDir)
 
-	end = time.time()
-	convert = time.strftime("%H hours %M minutes %S seconds", time.gmtime(end - start))
-	print('Ligament calculation for {0} done in {1}!'.format(models[mod],convert))
+	# initialise multiprocessing
 
-	cmds.file(new=True)
+	processes = [Process(target = processMayaFiles, args = (q,arguments)) for _ in range(CPUcores)]
 
-# close Maya
+	for process in processes:
+		process.start()
 
-maya.standalone.uninitialize()
+	for process in processes:
+		process.join()
+
 
