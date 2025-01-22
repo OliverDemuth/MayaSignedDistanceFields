@@ -118,7 +118,10 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints):
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
-		ligLengths.append(res.fun * Offset)
+		if res.status == 0: # check if optimiser terminated successfully
+			ligLengths.append(res.fun * Offset)
+		else
+			ligLengths.append(-1) # optimiser was unsuccessful; mark as outlier
 
 		# check if path points are to be calculate
 		
