@@ -120,7 +120,7 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints):
 
 		if res.status == 0: # check if optimiser terminated successfully
 			ligLengths.append(res.fun * Offset)
-		else
+		else:
 			ligLengths.append(-1) # optimiser was unsuccessful; mark as outlier
 
 		# check if path points are to be calculate
