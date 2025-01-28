@@ -5,19 +5,19 @@
 #	wrapper can be run directly from command line using mayapy. 
 #
 #	This script wraps the ligament length calculation and exports the length of a 
-#	ligament from origin to insertion, wrapping around the proximal and distal bone 
-#	meshes, for each frame. 
+#	ligament from origin to insertion wrapping around the proximal and distal bone 
+#	meshes for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 22.01.2025 - Oliver Demuth
+#	Last updated 28.01.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
 #	accordingly. Rename the strings in the user defined variables below according to the
 #	objects in your Maya scene and make sure that the naming convention for the ligament 
-#	origins and insertions is correct, i.e. the locators should be named 'ligament*_orig'
-#	and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'.
-#	
+#	origins and insertions is correct (i.e. the locators should be named 'ligament*_orig'
+#	and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*').
+#
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
 #	same folder before executing this script
@@ -28,7 +28,7 @@
 #
 #	How to execute this script:
 #
-#		On Windows:	
+#		On Windows:
 #			Change the directory to your Maya Python 3 Interpretor in the command line: 
 #				cd C:\Program Files\Autodesk\Maya<VersionNumber>\bin\
 #			then run the following command:
@@ -90,7 +90,7 @@ import os
 import time
 
 from tricubic import tricubic
-from maya.api.OpenMaya import MVector, MPoint
+from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 from math import sqrt, floor
 from multiprocessing import cpu_count, Process, Queue
 from ligamentCalculationBatch import * # source the ligament functions
