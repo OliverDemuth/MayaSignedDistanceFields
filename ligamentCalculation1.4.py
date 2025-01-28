@@ -1,4 +1,4 @@
-#	ligamentCalculation1.3.py
+#	ligamentCalculation1.4.py
 #
 #	This script calculates the shortest distance of a ligament from origin to insertion 
 #	wrapping around the bone meshes. It is an implementation of the Marai et al., 2004.
@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 21.01.2025 - Oliver Demuth
+#	Last updated 28.01.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -54,7 +54,7 @@ import scipy as sp
 import maya.cmds as cmds
 import maya.api.OpenMaya as om
 
-from maya.api.OpenMaya import MVector, MPoint
+from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 from math import sqrt
 from tricubic import tricubic
 
@@ -65,16 +65,16 @@ from tricubic import tricubic
 
 
 # ========== ligament length calculation function ==========
-def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints):
+def ligCalc(xCoords, jPos, ipProx, ipDist, rotMat, LigAttributes, keyPathPoints):
 
 	# Input variables:
-	#	x = constant X coordinates for ligament points
+	#	xCoords = constant X coordinates for ligament points
 	#	jPos = world coordinates of joint
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	LigAttributes = array consisting of names of ligaments
-	#	KeyPathPoints = boolean if ligament path points are to be calculated
+	# 	keyPathPoints = boolean to specify whether ligament point positions are to be keyed or not. True = yes, False = no
 	# ======================================== #
 
 	# create variables
@@ -83,9 +83,9 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints):
 	ligPoints = []
 	results = []
 
-	numPoints = len(x)
+	numPoints = len(xCoords)
 
-	ligArr = np.stack([np.identity(4)] * numPoints, axis = 0)
+	ligArr = np.stack([np.eye(4)] * numPoints, axis = 0)
 
 	# define initual guess condition for optimiser
 
@@ -93,14 +93,9 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints):
 
 	for ligament in LigAttributes:
 
-		# get names of ligaments and their origins and insertions
-
-		ligOrigin = ligament + '_orig'
-		ligInsertion = ligament + '_ins'
-
 		# get ligament transformation matrices
 
-		ligRotMat, Offset = getLigTransMat(ligOrigin, ligInsertion, jPos)
+		ligRotMat, Offset = getLigTransMat(ligament + '_orig', ligament + '_ins', jPos)
 
 		# get ligament specific transformation matrix to cubic grid
 		
@@ -110,23 +105,27 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints):
 
 		# minimise ligament length through optimiser
 
-		res = ligLengthOptMin(x, initial_guess, ipProx, ipDist, relRotMat, ligArr[0:-2,:,:])
+		res = ligLengthOptMin(xCoords, initial_guess, ipProx, ipDist, relRotMat, ligArr[0:-2,:,:])
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
-		ligLengths.append(res.fun * Offset)
+		if res.status == 0: # check if optimiser terminated successfully
+			ligLengths.append(res.fun * Offset)
+		else:
+			ligLengths.append(-Offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
 
 		# check if path points are to be calculate
-		
-		if KeyPathPoints:
 
+		if keyPathPoints:
+			
 			# get world position of ligament points
-			ligArr[:,3,0] = x 
+
+			ligArr[:,3,0] = xCoords 
 			ligArr[:,3,1] = res.x[0::2] # extract y coordinates from optimiser results
 			ligArr[:,3,2] = res.x[1::2] # extract z coordinates from optimiser results
 			
 			ligPoints.append(np.dot(ligArr,ligRotMat)[:,3,0:3].tolist()) # global coordinates of ligament points
-		
+
 		# gather results
 		
 		results.append(res)
@@ -148,8 +147,8 @@ def sigDistField(jointName, meshes, subdivision):
 
 	jPos = getWSPos(jointName)
 	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
+	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
+	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
 
 	# get number and names of ligaments
 
@@ -161,15 +160,10 @@ def sigDistField(jointName, meshes, subdivision):
 
 	for ligament in LigAttributes:
 
-		# get names of ligaments and their origins and insertions
-
-		ligOrigin = ligament + '_orig'
-		ligInsertion = ligament + '_ins'
-
 		# get positions of points of interest
 
-		oPos = getWSPos(ligOrigin)
-		iPos = getWSPos(ligInsertion)
+		oPos = getWSPos(ligament + '_orig')
+		iPos = getWSPos(ligament + '_ins')
 
 		# get distances from origin and insertion to joint centre
 					
@@ -201,7 +195,7 @@ def sigDistField(jointName, meshes, subdivision):
 		meshSigDist, osPoints = sigDistMesh(mesh, rotMat[j], subdivision) # get signed distance field for each mesh
 		sigDistances.append(np.array(meshSigDist).reshape(subdivision + 1, subdivision + 1, subdivision + 1))
 	
-	return sigDistances, osPoints, rotMat, LigAttributes, maxDist
+	return sigDistances, osPoints, LigAttributes, maxDist
 
 
 # ========== signed distance field per mesh function ==========
@@ -244,7 +238,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# get coordinates and transform them into matrices
 
-	gridArr = np.stack([np.identity(4)] * points.shape[0], axis = 0)
+	gridArr = np.stack([np.eye(4)] * points.shape[0], axis = 0)
 	gridArr[:,3,0:3] = points # append coordinates to rotation matrix array
 
 	# calculate position of vertices relative to cubic grid
@@ -278,7 +272,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 		# get sign for distance
 
 		if dot >= 0: # point is inside mesh
-			signedDist.append(dist * -1)
+			signedDist.append(-dist)
 		else: # point is outside of mesh
 			signedDist.append(dist)
 
@@ -333,7 +327,7 @@ def getWSPos(name):
 	
 	dag = dagObjFromName(name)[1]
 	
-	return om.MTransformationMatrix(dag.inclusiveMatrix()).translation(4) # extract translation in world space from transformation matrix (3x faster than xform; om.MSpace.kWorld = 4)
+	return MTransformationMatrix(dag.inclusiveMatrix()).translation(4) # extract translation in world space from transformation matrix (3x faster than xform; om.MSpace.kWorld = 4)
 
 
 # ========== get dag path function ==========
@@ -347,10 +341,7 @@ def dagObjFromName(name):
 	sel = om.MSelectionList()
 	sel.add(name)
 
-	dag = sel.getDagPath(0)
-	mobj = sel.getDependNode(0)
-
-	return mobj, dag
+	return sel.getDependNode(0), sel.getDagPath(0)
 
 
 
@@ -448,7 +439,7 @@ def path_cons_fun(params, x, ipProx, ipDist, rotMat, ligArr):
 
 	offset = sum(np.diff([params[0::2],params[1::2]])**2) # y = params[0::2], z = params[1::2]
 
-	return(1.7 / len(offset)) - sqrt(max(offset)) # perpendicular offset can be maximally 1.7 times the distance between path segment along X-axis (i.e., arctan(offset/dist) <= ~60°)
+	return(1.7 / len(offset)) - sqrt(max(offset)) # mediolateral offset can be maximally 1.7 times the distance between path segment along X-axis (i.e., arctan(offset/dist) <= ~60°)
 
 
 # ========== cost function for optimisation ==========
