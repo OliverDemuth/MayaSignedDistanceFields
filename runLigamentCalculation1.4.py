@@ -1,11 +1,11 @@
-#	runLigamentCalculation1.3.py
+#	runLigamentCalculation1.4.py
 #
 #	This script calculates and keys the length of a ligament from origin to insertion,
 #	wrapping around the proximal and distal bone meshes, for each frame. The script can
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 21.01.2025 - Oliver Demuth
+#	Last updated 28.01.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -18,7 +18,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ligamentCalculation1.3.py'
+#		- 'ligamentCalculation1.4.py'
 #
 #	For further information please check the Python script(s) referenced above
 
@@ -52,7 +52,7 @@ import scipy as sp
 import maya.api.OpenMaya as om
 import time
 
-from maya.api.OpenMaya import MPoint, MVector
+from maya.api.OpenMaya import MPoint, MVector, MTransformationMatrix
 from math import sqrt
 from tricubic import tricubic
 
@@ -81,16 +81,16 @@ else:
     keyDiff = keyframes - minKeys
 
 
-if keyDiff <=0:
+if keyDiff <= 0:
 	keyDiff = 1
 
 start = time.time()
 
+var_exists = False
+
 if debug == 1:
 
 	# check if distance fields have already been calculated
-	
-	var_exists = False
 
 	try:
 		sigDistFieldArray
@@ -98,9 +98,6 @@ if debug == 1:
 		var_exists = False
 	else:
 		var_exists = True # signed distance field already calculated, no need to do it again
-
-else:
-	var_exists = False
 
 if not var_exists:
 	# calculate signed distance fields
@@ -111,7 +108,7 @@ if not var_exists:
 	cmds.move(0,0,0, jointName, localSpace=True)
 	cmds.rotate(0,0,0,jointName)
 	
-	sigDistFieldArray, localPoints, initialRotMat, LigAttributes, gridScale = sigDistField(jointName, meshes, gridSubdiv)
+	sigDistFieldArray, localPoints, LigAttributes, gridScale = sigDistField(jointName, meshes, gridSubdiv)
 	
 # get dimensions of cubic grids
 
@@ -212,8 +209,8 @@ for i in range(keyDiff):
 
 	jPos = getWSPos(jointName)
 	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
+	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
+	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
 
 	# normalize matrices by gridScale
 
@@ -237,13 +234,10 @@ for i in range(keyDiff):
 
 	for index, ligament in enumerate(LigAttributes):
 	
-		if results[index].status == 0:
-			cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
-		else:
-			if debug == 1:
-			    print(ligament, results[index])
-			    
-			cmds.setKeyframe(jointName, at = ligament, v = -1)
+		cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
+		
+		if debug == 1 and results[index].status != 0: # optimisation not successful, print info why not
+		    print(ligament, results[index])
 
 		# check if ligament points are to be keyed
 
