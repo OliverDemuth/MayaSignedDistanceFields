@@ -50,7 +50,7 @@
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
-from maya.api.OpenMaya import MVector, MPoint
+from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 import numpy as np
 import scipy as sp
 
@@ -77,8 +77,8 @@ def sigDistField(jointName, meshes, subdivision, size):
 	# get joint centre position
 
 	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
+	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
+	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
 
 	# normalize matrices by size
 
@@ -311,7 +311,7 @@ def optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thick
 			
 			# if disarticulated or any points penetrate meshes the position becomes inviable
 		
-			if avgdist < (1.05 * thickness) and all(n > 0 for n in signDist):
+			if avgdist < (1.05 * thickness) and all(dist > 0 for dist in signDist):
 				viable = 1
 			else:
 				viable = 0
