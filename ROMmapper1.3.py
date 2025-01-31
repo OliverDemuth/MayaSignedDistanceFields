@@ -7,7 +7,7 @@
 #	distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 13.01.2025 - Oliver Demuth
+#	Last updated 31.01.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -146,7 +146,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# get coordinates and transform them into matrices
 
-	gridArr = np.stack([np.identity(4)] * points.shape[0], axis = 0)
+	gridArr = np.stack([np.eye(4)] * points.shape[0], axis = 0)
 	gridArr[:,3,0:3] = points # append coordinates to rotation matrix array
 
 	# calculate position of vertices relative to cubic grid
@@ -180,7 +180,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 		# get sign for distance
 
 		if dot >= 0: # point is inside mesh
-			signedDist.append(dist * -1)
+			signedDist.append(-dist)
 		else: # point is outside of mesh
 			signedDist.append(dist)
 
@@ -206,7 +206,7 @@ def relVtcPos(mesh, rotMat):
 
 	# get coordinates and transform them into matrices
 
-	vtxArr = np.stack([np.identity(4)] * vertices.shape[0], axis = 0)
+	vtxArr = np.stack([np.eye(4)] * vertices.shape[0], axis = 0)
 	vtxArr[:,3,:] = vertices # append coordinates to rotation matrix array
 
 	return np.dot(vtxArr,np.linalg.inv(rotMat))[:,3,:] # calculate new coordinates and extract them
@@ -222,10 +222,7 @@ def dagObjFromName(name):
 	sel = om.MSelectionList()
 	sel.add(name)
 
-	dag = sel.getDagPath(0)
-	mobj = sel.getDependNode(0)
-
-	return mobj, dag
+	return sel.getDependNode(0), sel.getDagPath(0)
 
 
 # ========== get mean distance from center ==========
@@ -247,7 +244,7 @@ def meanRad(mesh):
 
 	fnMesh = om.MFnMesh(shape)
 
-	fnMeshMat = np.identity(4)
+	fnMeshMat = np.eye(4)
 	fnMeshMat[3,:] = np.array(fnMesh.boundingBox.center)
 
 	centerPos = np.dot(fnMeshMat,transMat)[3,:]
@@ -297,7 +294,7 @@ def optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thick
 
 			# get coordinates of results and transform them into transformation matrix coords
 
-			resCoords = np.identity(4)
+			resCoords = np.eye(4)
 			resCoords[3,0:3] = results.x
 
 			# get transformation matrix
@@ -348,7 +345,7 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness):
 
 	# create 3D arrays for matrix multiplication
 
-	paramCoords = np.identity(4)
+	paramCoords = np.eye(4)
 
 	# create tuple for arguments passed to both constraints and cost functions
 
