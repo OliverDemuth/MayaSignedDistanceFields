@@ -7,7 +7,7 @@
 #	approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 13.01.2025 - Oliver Demuth
+#	Last updated 31.01.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -27,19 +27,18 @@
 #################################################
 
 
-jointName = 'myJoint' 						# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-meshes = ['RLP3_scapulocoracoid', 				# specify according to meshes in the Maya scene
+jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+meshes = ['RLP3_scapulocoracoid', 			# specify according to meshes in the Maya scene
 	  'RLP3_humerus']				
-congruencyMeshes = ['RLP3_glenoid_art_surf', 			# specify according to meshes in the Maya scene
+congruencyMeshes = ['RLP3_glenoid_art_surf', 		# specify according to meshes in the Maya scene
 		    'RLP3_humeral_head']	
-fittedShapes = ['RLP3_glenoid_fitted_sphere_Mesh',		# specify according to meshes in the Maya scene
-		'RLP3_humeral_head_fitted_ellipsoid_Mesh']				
-gridSubdiv = 100						# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
-StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
-FrameInterval = None						# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-ContinueKeys = False						# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
-debug = 0 							# Debug mode to check if signed distance fields have already been calculated
+fittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to meshes in the Maya scene		
+gridSubdiv = 100					# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+interval = 5						# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+StartFrame = None 					# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
+FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+ContinueKeys = False					# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
+debug = 0 						# Debug mode to check if signed distance fields have already been calculated
 
 
 #################################################
@@ -50,7 +49,7 @@ debug = 0 							# Debug mode to check if signed distance fields have already be
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
-from maya.api.OpenMaya import MVector, MPoint
+from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
@@ -72,7 +71,7 @@ jDag = dagObjFromName(jointName)[1]
 
 # get gridsize from glenoid sphere radius
 
-sphereRad = meanRad(fittedShapes[0])
+sphereRad = meanRad(fittedShape)
 thickness = sphereRad/2
 gridSize = 8 * sphereRad
 
@@ -209,7 +208,7 @@ else:
 	keyframes = minKeys + FrameInterval
 	keyDiff = FrameInterval
 
-if keyDiff <=0:
+if keyDiff <= 0:
 	keyDiff = 1
 
 
@@ -229,7 +228,7 @@ print('Translation optimisation in progress...')
 jExclMat = jDag.exclusiveMatrix() # world rotation matrix of parent joint
 jExclNPMat = np.array(jExclMat).reshape(4,4) # convert into numpy 4x4 array
 
-jExclTransMat = om.MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
+jExclTransMat = MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
 jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 jExclTransNPMat = np.array(jExclTransMat.asMatrix()).reshape(4,4) # convert into numpy 4x4 array
 
@@ -253,7 +252,7 @@ for i in range(keyDiff):
 
 	# get joint inclusive transformation matrix (child)
 
-	localTransMat = om.MTransformationMatrix()
+	localTransMat = MTransformationMatrix()
 	localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order = 0)) # set rotation (om.MEulerRotation.kXYZ = 0)
 	localTransMat.setTranslation(MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
 
