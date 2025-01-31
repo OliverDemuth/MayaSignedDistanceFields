@@ -318,13 +318,13 @@ def optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thick
 			# if disarticulated or any points penetrate meshes the position becomes inviable
 
 			if avgdist < (1.05 * thickness) and all(dist > 0 for dist in signDist):
-				viable = true
+				viable = True
 			else:
-				viable = false
+				viable = False
 		else:
-			viable = false		
+			viable = False		
 	else:
-		viable = false
+		viable = False
 
 	# gather results
 
@@ -673,7 +673,7 @@ def processMayaFiles(filePath,args):
 		# check if pose was viable
 
 		if viable:
-			transRes.append(coords.extend(rotation))
+			transRes.append(coords.tolist().extend(rotation))
 
 		# update progress
 		
