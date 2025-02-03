@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 31.01.2025 - Oliver Demuth
+#	Last updated 01.02.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -600,7 +600,7 @@ def processMayaFiles(filePath,args):
 
 	rotations = [[x, y, z] for x in xRots  # length along x
 			       for y in yRots  # length along y
-			       for z in zRots] # length along z
+			       for z in zRots] # length along z	       
 
 	frames = len(rotations)
 
@@ -673,7 +673,7 @@ def processMayaFiles(filePath,args):
 		# check if pose was viable
 
 		if viable:
-			transRes.append(coords.tolist().extend(rotation))
+			transRes.append(coords.tolist() + rotation)
 
 		# update progress
 		
@@ -716,7 +716,7 @@ def processMayaFiles(filePath,args):
 
 	end = time.time()
 	convert = time.strftime("%H hours %M min %S seconds", time.gmtime(end - mid))
-	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,transRes.shape[0]))
+	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,len(transRes)))
 
 
 
