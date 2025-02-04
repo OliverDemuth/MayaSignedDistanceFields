@@ -1,4 +1,4 @@
-#	runROMmapper1.3.py
+#	runROMmapper1.4.py
 #
 #	This script estimates the (mobile) joint centre position and moves the distal bone
 #	mesh into position for a set of presribed joint orientations. Only feasible joint 
@@ -7,7 +7,7 @@
 #	approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 31.01.2025 - Oliver Demuth
+#	Last updated 04.02.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -105,19 +105,9 @@ if not var_exists:
 	
 	# calculate relative position of articular surfaces
 
-	proxCoords = relVtcPos(congruencyMeshes[0], initialRotMat[0])
-	distCoords = relVtcPos(congruencyMeshes[1], initialRotMat[1])
-
-	# get coordinates and transform them into 3D matrix arrays
-
-	identityMat = np.identity(4)
-
-	proxArr = np.stack([identityMat] * proxCoords.shape[0], axis = 0)
-	proxArr[:,3,:] = proxCoords # append coordinates to 3D rotation matrix array
-
-	distArr = np.stack([identityMat] * distCoords.shape[0], axis = 0)
-	distArr[:,3,:] = distCoords # append coordinates to 3D rotation matrix array
-
+	proxArr = relVtcPos(congruencyMeshes[0], initialRotMat[0])
+	proxArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
+	proxMeshArr = relVtcPos(meshes[1], initialRotMat[1])
 
 # get dimensions of cubic grids
 
@@ -268,7 +258,7 @@ for i in range(keyDiff):
 
 	# optimise the joint translations
 
-	coords, viable, results = optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness)
+	coords, viable, results = optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, rotMat, thickness)
 
 	# check if pose was viable
 	
