@@ -17,7 +17,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ROMmapper1.3.py'
+#		- 'ROMmapper1.4.py'
 #
 #	For further information please check the Python script(s) referenced above
 
@@ -106,8 +106,8 @@ if not var_exists:
 	# calculate relative position of articular surfaces
 
 	proxArr = relVtcPos(congruencyMeshes[0], initialRotMat[0])
-	proxArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
-	proxMeshArr = relVtcPos(meshes[1], initialRotMat[1])
+	distArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
+	proxMeshArr = relVtcPos(meshes[0], initialRotMat[0])
 
 # get dimensions of cubic grids
 
