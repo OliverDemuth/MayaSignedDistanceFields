@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 01.02.2025 - Oliver Demuth
+#	Last updated 04.02.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -214,7 +214,7 @@ def relVtcPos(mesh, rotMat):
 	vtxArr = np.stack([np.eye(4)] * vertices.shape[0], axis = 0)
 	vtxArr[:,3,:] = vertices # append coordinates to rotation matrix array
 
-	return np.dot(vtxArr,np.linalg.inv(rotMat))[:,3,:] # calculate new coordinates and extract them
+	return np.dot(vtxArr,np.linalg.inv(rotMat)) # calculate new coordinates and return 3D array
 
 
 # ========== get dag path function ==========
@@ -271,11 +271,12 @@ def meanRad(mesh):
 
 # ========== check viability function ==========
 
-def optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, initial_guess, paramCoords):
+def optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, rotMat, thickness, initial_guess, paramCoords):
 
 	# Input variables:
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#	proxMeshArr = 3D array of proximal mesh vertex transformation matrices for fast computation of relative coordinates
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
 	#	gridRotMat = rotation matrix of default cubic grid
@@ -308,12 +309,15 @@ def optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thick
 			transMat = rotMat[1] # transformation matrix
 			transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
 			transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
+			relMat = np.dot(np.dot(rotMat[0],transMatInv),gridRotMat) # get relative transformation matrix
 
 			# calculate position of vertices relative to cubic grid
 
-			vtcRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
-			signDist = [ipDist.ip(vtx) for vtx in vtcRelArr]
-			avgdist = sum(signDist) / len(vtcRelArr)
+			artRelArr = np.dot(proxArr,relMat)[:,3,0:3].tolist()
+			avgdist = sum([ipDist.ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
+
+			meshRelArr = np.dot(proxMeshArr,relMat)[:,3,0:3].tolist()
+			signDist = [ipDist.ip(vtx) for vtx in meshRelArr] # make sure that bone meshes do not intersect
 
 			# if disarticulated or any points penetrate meshes the position becomes inviable
 
@@ -326,9 +330,9 @@ def optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thick
 	else:
 		viable = False
 
-	# gather results
+	# gather outputs
 
-	return results.x, viable
+	return results.x.tolist(), viable
 
 
 # ========== translation optimisation ==========
@@ -539,21 +543,6 @@ def processMayaFiles(filePath,args):
 
 	sigDistFieldArray, localPoints, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize)
 
-	# calculate relative position of articular surfaces
-
-	proxCoords = relVtcPos(congruencyMeshes[0], initialRotMat[0])
-	distCoords = relVtcPos(congruencyMeshes[1], initialRotMat[1])
-
-	# get coordinates and transform them into 3D matrix arrays
-
-	identityMat = np.eye(4)
-
-	proxArr = np.stack([identityMat] * proxCoords.shape[0], axis = 0)
-	proxArr[:,3,:] = proxCoords # append coordinates to 3D rotation matrix array
-
-	distArr = np.stack([identityMat] * distCoords.shape[0], axis = 0)
-	distArr[:,3,:] = distCoords # append coordinates to 3D rotation matrix array
-
 	# get dimensions of cubic grids
 
 	dims = sigDistFieldArray[0].shape
@@ -592,6 +581,12 @@ def processMayaFiles(filePath,args):
 
 	# ==== initialise variables and precalculations ====
 
+	
+	# calculate relative position of articular surfaces
+
+	proxArr = relVtcPos(congruencyMeshes[0], initialRotMat[0])
+	distArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
+	proxMeshArr = relVtcPos(meshes[0], initialRotMat[0])
 
 	# create 3D grid for rotations
 
@@ -668,12 +663,12 @@ def processMayaFiles(filePath,args):
 
 		# optimise the joint translations
 
-		coords, viable = optimisePosition(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, initial_guess, paramCoords)
+		coords, viable = optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, rotMat, thickness, initial_guess, paramCoords)
 
 		# check if pose was viable
 
 		if viable:
-			transRes.append(coords.tolist() + rotation)
+			transRes.append(coords.extend(rotation))
 
 		# update progress
 		
