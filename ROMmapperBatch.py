@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 04.02.2025 - Oliver Demuth
+#	Last updated 06.02.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -61,6 +61,7 @@ import time
 from tricubic import tricubic
 from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 from math import ceil
+from datetime import timedelta
 
 
 ################################################
@@ -519,7 +520,7 @@ def processMayaFiles(filePath,args):
 
 	# extract arguments	
 
-	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, interval, outDir] = args
+	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, simBounds, interval, outDir] = args
 
 
 	# ==== calculate signed distance fields ====
@@ -590,12 +591,13 @@ def processMayaFiles(filePath,args):
 
 	# create 3D grid for rotations
 
-	xRots = zRots = np.arange(-180, ceil(180+interval/2), interval, dtype = int)
-	yRots = np.arange(-90, ceil(90+interval/2), interval, dtype = int)
+	xRots = np.arange(simBounds[0][0], ceil(simBounds[0][1]+interval/2), interval, dtype = float)
+	yRots = np.arange(simBounds[1][0], ceil(simBounds[1][1]+interval/2), interval, dtype = float)
+	zRots = np.arange(simBounds[2][0], ceil(simBounds[2][1]+interval/2), interval, dtype = float)
 
 	rotations = [[x, y, z] for x in xRots  # length along x
 			       for y in yRots  # length along y
-			       for z in zRots] # length along z	       
+			       for z in zRots] # length along z
 
 	frames = len(rotations)
 
@@ -642,7 +644,7 @@ def processMayaFiles(filePath,args):
 
 		# extract rotation
 
-		rotation = [float(rotations[frame][0]),float(rotations[frame][1]),float(rotations[frame][2])]
+		rotation = [rotations[frame][0],rotations[frame][1],rotations[frame][2]]
 
 		# get joint inclusive transformation matrix (child)
 
@@ -668,7 +670,7 @@ def processMayaFiles(filePath,args):
 		# check if pose was viable
 
 		if viable:
-			transRes.append(coords.extend(rotation))
+			transRes.append(coords + rotation) # combine both lists and append to results array
 
 		# update progress
 		
@@ -679,7 +681,7 @@ def processMayaFiles(filePath,args):
 			updateSwitch = False
 
 		if percent > previous:
-			ETA = time.strftime("%H h %M min %S sec", time.gmtime((100 - percent) * (time.time() - mid) / percent))
+			ETA = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil((100 - percent) * (time.time() - mid) / percent))).split(':'))
 			print('{0} Translation optimisation progress: {1:.1f}%. Estimated completion in: {2}'.format(fileName,percent,ETA)) 
 			updateSwitch = True
 
@@ -710,10 +712,6 @@ def processMayaFiles(filePath,args):
 	# print simulation time for each Maya scene
 
 	end = time.time()
-	convert = time.strftime("%H hours %M min %S seconds", time.gmtime(end - mid))
+	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil(end - mid))).split(':'))
 	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,len(transRes)))
-
-
-
-
 
