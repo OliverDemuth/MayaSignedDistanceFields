@@ -90,6 +90,7 @@ import time
 from tricubic import tricubic
 from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 from math import sqrt, floor
+from datetime import timedelta
 from multiprocessing import cpu_count, Process, Queue
 from ROMmapperBatch import * # source the ligament functions
 
