@@ -8,9 +8,9 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 31.01.2025 - Oliver Demuth
+#	Last updated 06.02.2025 - Oliver Demuth
 #
-#	
+#
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
 #	same folder before executing this script
@@ -43,15 +43,18 @@
 
 # ========== set variables ========== 
 
-jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-meshes = ['RLP2_scapulocoracoid_mesh', 			# specify according to meshes in the Maya scene
-          'RLP2_humerus_mesh']				
-congruencyMeshes = ['RLP2_glenoid_art_surf', 		# specify according to meshes in the Maya scene
-                    'RLP2_humeral_head_art_surf']	
-fittedShape = 'RLP2_glenoid_sphere'			# specify according to meshes in the Maya scene		
-gridSubdiv = 100					# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-interval = 5						# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
-cores = 8						# Integer value to specify number of CPU cores to be assigned
+jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+meshes = ['prox_mesh', 			# specify according to meshes in the Maya scene
+	  'dist_mesh']				
+congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
+		    'dist_art_surf']	
+fittedShape = 'prox_sphere'		# specify according to meshes in the Maya scene		
+xBounds = [-180,180]			# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
+yBounds = [-90,90]			# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
+zBounds = [-180,180]			# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
+interval = 5				# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+gridSubdiv = 100			# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+cores = 8				# Integer value to specify number of CPU cores to be assigned
 
 # ========== set directories ========== 
 
@@ -62,10 +65,10 @@ cores = 8						# Integer value to specify number of CPU cores to be assigned
 #	output/results directory:	"path/to/project folder/results"	CSV files will be saved here
 # ======================================== #
 
-path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\RLP2\\ROM\\python' # add your file path. Make sure 'ligamenCalculationWrapper.py' and 'ligamenCalculationBatch.py' are in this folder
+path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\ROM\\python' # add your file path. Make sure 'ligamenCalculationWrapper.py' and 'ligamenCalculationBatch.py' are in this folder
 
-fileDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/RLP2/ROM/maya files' # path for Maya files
-outDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/RLP2/ROM/results' # path for Maya output
+fileDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/maya files' # path for Maya files
+outDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/results' # path for Maya output
 
 
 #################################################
@@ -107,7 +110,7 @@ if __name__ == "__main__":
 
 	print('Detected following {0} Maya files within the \'{1}\' directory:'.format(numFiles,fileDir))
 	[print(file) for file in mayaFiles]
-		
+
 	filePaths = [fileDir + '/' + mayaFile for mayaFile in mayaFiles]
 
 	# get available CPU cores (max two thirds)
@@ -127,7 +130,7 @@ if __name__ == "__main__":
 
 	# create tuple for arguments passed to ligament calculation functions
 
-	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, interval, outDir)
+	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, [xBounds,yBounds,zBounds], interval, outDir)
 
 	# initialise multiprocessing
 
