@@ -1,6 +1,6 @@
 # Implementation of signed distance field based simulations in Autodesk Maya
 
-Automated estimation of joint range of motion via optimisation of joint translations using a congruency based approach (1) and 3D ligaments wrapping around bone meshes (2). These are implementations of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) and [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) approaches for Autodesk Maya. The scripts create signed distance fields of the bone meshes which are then used for subsequent simulations.
+Automated estimation of (1) joint range of motion via optimisation of joint translations (2) 3D ligament paths wrapping around bone meshes using signed distance fields (SDF). These are implementations of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) and [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) approaches for Autodesk Maya. The scripts create SDFs of the bone meshes which are then used for subsequent simulations.
 
 ## Installation 
 #### Make sure to have the required Python modules installed for Autodesk Maya
