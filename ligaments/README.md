@@ -13,7 +13,7 @@
 
 3. For each ligament create a float attribute at ``jointName`` and name it accordingly. Make sure that the naming convention for the ligament origins  and insertions is correct, (i.e. the locators should be named ``ligament*_orig`` and ``ligament*_ins`` for an attribute in ``jointName`` called *``ligament*``*). Make sure to remove the *``viable``* attribute from ``jointName`` if previously followed [Manafzadeh & Padian, 2018](https://doi.org/10.1098/rspb.2018.0727) before executing the ligament calculations.
 
-4. Meshes need realtively uniform face areas, otherwise large faces might skew vertex normals towards their direction. It is, therefore, important to extrude edges around large faces prior to closing the hole at edges with otherwise acute angles to circumvent this issue (e.g., if meshes have been cut to reduce polycount) prior to executing the Python scripts.
+4. Meshes representing the bones (i.e., ``meshes``) need realtively uniform face areas, otherwise large faces might skew vertex normals towards their direction. It is, therefore, important to extrude edges around large faces prior to closing the hole at edges with otherwise acute angles to circumvent this issue (e.g., if the bone meshes have been cut to reduce polycount) prior to executing the Python scripts.
 
 ### Execute the scripts
 #### From within Maya
