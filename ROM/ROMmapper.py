@@ -1,4 +1,4 @@
-#	ROMmapper1.4.py
+#	ROMmapper.py
 #
 #	This script optimises contact-based positions across a set of rotational poses 
 # 	for a set of bone meshes. It is an implementation of the Marai et al., 2006. approach
