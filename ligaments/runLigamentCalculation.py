@@ -18,7 +18,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ligamentCalculation1.4.py'
+#		- 'ligamentCalculation.py'
 #
 #	For further information please check the Python script(s) referenced above
 
