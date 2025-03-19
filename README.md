@@ -3,6 +3,16 @@
 ### ROM simulations
 Automated estimation of joint range of motion via optimisation of joint translations using signed distance fields (SDF). The scripts optimise contact-based positions across a given set of rotational poses for a set of bone meshes. It is an implementation of the [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) and [Lee et al. 2023](https://doi.org/10.1098/rspb.2023.1446) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes which are then used to caculate intersections between the meshes and the distance between them. The (mobile) joint centre position is estimated and the distal bone mesh is moved into position for a set of presribed joint orientations. Only feasible joint position are be keyed/exported. The resulting set of frames represent vialbe joint positions and orientations.
 
+The following multiterm objective function $C$ to optimise the translational joint position for each given joint orientation was implemented
+
+$$C=\left(\frac{1}{N_V} \sum_{v=1}^{N_V} d_v -d_t \right)^2 + \frac{1}{N_V} \sum_{v=1}^{N_V} \left(d_v - \bar{d} \right)^2 $$
+
+subject to 
+
+$$d_v= f(x_v,y_v,z_v )>0$$
+
+where $d_v$ is the calculated signed distance for vertex $v$, $N_V$ is the number of vertices of the articular surface, $d_t$ is the target joint proximity and $\bar{d}$ is the mean joint proximity.
+
 ### Ligament calculations
 Automated estimation of 3D ligament path wrapping around bone meshes using SDFs.
 The scripts calculate the shortest distance of a ligament from origin to insertion wrapping around the bone meshes. It is an implementation of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes, which are then used to approximate the 3D path of each ligament accross them to calculate their shortest path length from origin to insertion while preventing penetration of the bones.
