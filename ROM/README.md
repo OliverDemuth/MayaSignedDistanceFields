@@ -11,7 +11,7 @@
    
    (3) ``fittedShape`` - representing the fitted shape to the proximal articular surfaces (which is a proxy for the target joint spacing; e.g., ``'prox_ftted_sphere'``)
 
-   (4) ``jointName`` - representing the joint (e.g., a joint called ``'myJoint'`` if following [Manafzadeh & Padian, 2018](https://doi.org/10.1098/rspb.2018.0727)). Note that an attribute called *viable* in ``jointName`` is no longer required
+   (4) ``jointName`` - representing the joint (e.g., a joint called ``'myJoint'`` if following [Manafzadeh & Padian, 2018](https://doi.org/10.1098/rspb.2018.0727)). Note that an attribute called *``viable``* in ``jointName`` is no longer required
 
 2. Meshes representing the bones (i.e., ``meshes``) need realtively uniform face areas, otherwise large faces might skew vertex normals towards their direction. It is, therefore, important to extrude edges around large faces prior to closing the hole at edges with otherwise acute angles to circumvent this issue (e.g., if meshes have been cut to reduce polycount) prior to executing the Python scripts.
 
