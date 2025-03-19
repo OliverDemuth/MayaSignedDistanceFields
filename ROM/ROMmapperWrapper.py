@@ -11,7 +11,6 @@
 #	Last updated 06.02.2025 - Oliver Demuth
 #
 #
-#
 #	This script relies on the following other (Python) script(s) which need to be in the
 #	same folder before executing this script
 #
