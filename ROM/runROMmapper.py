@@ -3,8 +3,8 @@
 #	This script estimates the (mobile) joint centre position and moves the distal bone
 #	mesh into position for a set of presribed joint orientations. Only feasible joint 
 #	positions will be keyed. The resulting set of keyed frames represent vialbe joint 
-#	positions and orientations. It is an implementation of the Marai et al., 2006. 
-#	approach for Autodesk Maya.
+#	positions and orientations. It is an implementation of the Marai et al., 2006 and 
+#	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
 #	Last updated 04.02.2025 - Oliver Demuth
