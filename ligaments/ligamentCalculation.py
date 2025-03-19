@@ -1,4 +1,4 @@
-#	ligamentCalculation1.4.py
+#	ligamentCalculation.py
 #
 #	This script calculates the shortest distance of a ligament from origin to insertion 
 #	wrapping around the bone meshes. It is an implementation of the Marai et al., 2004.
