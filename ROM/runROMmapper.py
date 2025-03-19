@@ -1,4 +1,4 @@
-#	runROMmapper1.4.py
+#	runROMmapper.py
 #
 #	This script estimates the (mobile) joint centre position and moves the distal bone
 #	mesh into position for a set of presribed joint orientations. Only feasible joint 
@@ -17,7 +17,7 @@
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
 #
-#		- 'ROMmapper1.4.py'
+#		- 'ROMmapper.py'
 #
 #	For further information please check the Python script(s) referenced above
 
