@@ -1,10 +1,10 @@
 #	ROMmapper.py
 #
-#	This script optimises contact-based positions across a set of rotational poses 
-# 	for a set of bone meshes. It is an implementation of the Marai et al., 2006. approach
-#	for Autodesk Maya. It creates signed distance fields for the proximal and distal bone 
-#	meshes which are then used to caculate intersections between the meshes and the
-#	distance between them. 
+#	This script optimises contact-based positions across a set of rotational poses for
+#	a set of bone meshes. It is an implementation of the Marai et al., 2006 and Lee
+#	et al. 2023 approach for Autodesk Maya. It creates signed distance fields for the
+#	proximal and distal bone meshes which are then used to caculate intersections
+#	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
 #	Last updated 04.02.2025 - Oliver Demuth
