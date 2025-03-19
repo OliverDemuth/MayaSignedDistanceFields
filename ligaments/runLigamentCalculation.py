@@ -1,4 +1,4 @@
-#	runLigamentCalculation1.4.py
+#	runLigamentCalculation.py
 #
 #	This script calculates and keys the length of a ligament from origin to insertion,
 #	wrapping around the proximal and distal bone meshes, for each frame. The script can
