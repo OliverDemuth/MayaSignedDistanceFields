@@ -69,7 +69,7 @@ $$d_v= f(x_v,y_v,z_v ) \geq 0$$
 
 and the additional inequality constraint
 
-$$tan^{-1}\sqrt{\frac{\max\limits_i⁡ \lbrace (y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 \rbrace }{const}} \leq  \frac{π}{3}$$
+$$tan^{-1}\left(\frac{\sqrt{\max\limits_i⁡ \lbrace (y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 \rbrace }}{const}\right) \leq  \frac{π}{3}$$
 
 where $x_{+1}-x_i =  {}^1/_n = const$ and $i = 0,\dotsc,n-1$, to ensure the smoothness of the optimised ligament paths, and to prevent the ligaments from abruptly changing direction or intersecting the bone meshes between two path points. 
 
