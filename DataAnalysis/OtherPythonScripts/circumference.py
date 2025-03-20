@@ -3,8 +3,8 @@
 #	This script calculates the circumference of a bone based on a cutting
 #	plane using Andrew's monotone chain convex hull algorithm in Autodesk
 #	Maya. First run this script and then cut a bone with a plane using a 
-#	Boolean operation.Sselect the resulting slice while and execute the
-#	'circumference()' command in the Python command line in Maya. 
+#	Boolean operation. Select the resulting slice and execute the command
+#	'circumference()' in the Python command line in Maya. 
 #
 #	Written by Oliver Demuth 
 #	Last updated 19.03.2025 - Oliver Demuth 
