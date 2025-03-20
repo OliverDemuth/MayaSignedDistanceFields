@@ -43,13 +43,13 @@ ligaments/
 ## ROM simulations
 Automated estimation of joint range of motion via optimisation of joint translations using signed distance fields (SDF). The scripts optimise contact-based positions across a given set of rotational poses for a set of bone meshes. It is an implementation of the [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) and [Lee et al. 2023](https://doi.org/10.1098/rspb.2023.1446) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes which are then used to caculate intersections between the meshes and the distance between the bones. The (mobile) joint centre position is estimated and the distal bone mesh is moved into position for a set of presribed joint orientations. Only feasible joint position are be keyed/exported. The resulting set of frames represent vialbe joint positions and orientations.
 
-The following multiterm objective function $C$ to optimise the translational joint position for each given joint orientation was implemented:
+The multiterm objective function $C$ to optimise the translational joint position for each given joint orientation was implemented as follows:
 
 $$C=\underbrace{\left(\frac{1}{n_v} \sum_{v=1}^{n_v} d_v -d_t \right)^2}\_{\text{joint proximity goal}} + \underbrace{\frac{1}{n_v} \sum_{v=1}^{n_v} \left(d_v - \bar{d} \right)^2}\_{\text{joint congruency goal}} $$
 
-subject to the constraints imposed by the signed distance fields
+subject to the inequality constraint imposed by the SDFs 
 
-$$d_v= f(x_v,y_v,z_v ) \geq 0$$
+$$f(x_v,y_v,z_v ) \geq 0$$
 
 where $d_v$ is the calculated signed distance for vertex $v$, $n_v$ is the number of vertices of the articular surfaces, $d_t$ is the target joint proximity and $\bar{d}$ is the mean joint proximity.
 
@@ -63,9 +63,9 @@ The ligament path optimisation was be formulated as the following problem: Find 
 
 $$argmin_{y_i z_i }  \sum_{i=0}^{n-1} \sqrt{const^2+(y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 }$$
 
-subject to the constraints imposed by the signed distance fields
+subject to the inequality constraint imposed by the SDFs
 
-$$d_v= f(x_v,y_v,z_v ) \geq 0$$
+$$f(x_v,y_v,z_v ) \geq 0$$
 
 and the additional inequality constraint
 
