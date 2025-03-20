@@ -1,37 +1,5 @@
 # Implementation of signed distance field based simulations in Autodesk Maya
 
-## ROM simulations
-Automated estimation of joint range of motion via optimisation of joint translations using signed distance fields (SDF). The scripts optimise contact-based positions across a given set of rotational poses for a set of bone meshes. It is an implementation of the [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) and [Lee et al. 2023](https://doi.org/10.1098/rspb.2023.1446) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes which are then used to caculate intersections between the meshes and the distance between the bones. The (mobile) joint centre position is estimated and the distal bone mesh is moved into position for a set of presribed joint orientations. Only feasible joint position are be keyed/exported. The resulting set of frames represent vialbe joint positions and orientations.
-
-The following multiterm objective function $C$ to optimise the translational joint position for each given joint orientation was implemented:
-
-$$C=\underbrace{\left(\frac{1}{n_v} \sum_{v=1}^{n_v} d_v -d_t \right)^2}\_{\text{joint proximity goal}} + \underbrace{\frac{1}{n_v} \sum_{v=1}^{n_v} \left(d_v - \bar{d} \right)^2}\_{\text{joint congruency goal}} $$
-
-subject to the constraints imposed by the signed distance fields
-
-$$d_v= f(x_v,y_v,z_v ) \geq 0$$
-
-where $d_v$ is the calculated signed distance for vertex $v$, $n_v$ is the number of vertices of the articular surfaces, $d_t$ is the target joint proximity and $\bar{d}$ is the mean joint proximity.
-
-## Ligament calculations
-Automated estimation of 3D ligament path wrapping around bone meshes using SDFs.
-The scripts calculate the shortest distance of a ligament from origin to insertion wrapping around the bone meshes. It is an implementation of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes, which are then used to approximate the 3D path of each ligament accross them to calculate their shortest path length from origin to insertion while preventing penetration of the bones.
-
-The ligament path optimisation was be formulated as the following problem: Find the coordinates of the n-1 points between $p_0$ and $p_n$, so that the Euclidean distance of the path along $p_0,p_1,p_2,\dotsc,p_n$ is minimal while the distance between the path points and the bony obstacles is non-negative. In the initial guess the points were equally spaced along the X-axis (i.e., their distance was constant, and their y and z values were set to 0). Thus the length of the shortest path could be approximated by minimising its Euclidean distance only over the y and z coordinates for each point:
-
-$$argmin_{y_i z_i }  \sum_{i=0}^{n-1} \sqrt{const^2+(y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 }$$
-
-subject to the constraints imposed by the signed distance fields
-
-$$d_v= f(x_v,y_v,z_v ) \geq 0$$
-
-and the additional inequality constraint
-
-$$tan^{-1}\sqrt{\frac{\max\limits_i⁡ \lbrace (y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 \rbrace }{const}} \leq  \frac{π}{3}$$
-
-where $x_{+1}-x_i =  {}^1/_n = const$ and $i = 0,\dotsc,n-1$, to ensure the smoothness of the optimised ligament paths, and to prevent the ligaments from abruptly changing direction or intersecting the bone meshes between two path points. 
-
-
 ## Installation 
 #### Make sure to have the required Python modules installed for Autodesk Maya
 
@@ -71,5 +39,40 @@ ligaments/
   ligamentCalculationBatch.py
   ligamentCalculationWrapper.py
 ```
+
+## ROM simulations
+Automated estimation of joint range of motion via optimisation of joint translations using signed distance fields (SDF). The scripts optimise contact-based positions across a given set of rotational poses for a set of bone meshes. It is an implementation of the [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) and [Lee et al. 2023](https://doi.org/10.1098/rspb.2023.1446) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes which are then used to caculate intersections between the meshes and the distance between the bones. The (mobile) joint centre position is estimated and the distal bone mesh is moved into position for a set of presribed joint orientations. Only feasible joint position are be keyed/exported. The resulting set of frames represent vialbe joint positions and orientations.
+
+The following multiterm objective function $C$ to optimise the translational joint position for each given joint orientation was implemented:
+
+$$C=\underbrace{\left(\frac{1}{n_v} \sum_{v=1}^{n_v} d_v -d_t \right)^2}\_{\text{joint proximity goal}} + \underbrace{\frac{1}{n_v} \sum_{v=1}^{n_v} \left(d_v - \bar{d} \right)^2}\_{\text{joint congruency goal}} $$
+
+subject to the constraints imposed by the signed distance fields
+
+$$d_v= f(x_v,y_v,z_v ) \geq 0$$
+
+where $d_v$ is the calculated signed distance for vertex $v$, $n_v$ is the number of vertices of the articular surfaces, $d_t$ is the target joint proximity and $\bar{d}$ is the mean joint proximity.
+
+Information about how to run the ROM simulations can be found [here](https://github.com/OliverDemuth/MayaSignedDistanceFields/tree/main/ROM).
+
+## Ligament calculations
+Automated estimation of 3D ligament path wrapping around bone meshes using SDFs.
+The scripts calculate the shortest distance of a ligament from origin to insertion wrapping around the bone meshes. It is an implementation of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes, which are then used to approximate the 3D path of each ligament accross them to calculate their shortest path length from origin to insertion while preventing penetration of the bones.
+
+The ligament path optimisation was be formulated as the following problem: Find the coordinates of the n-1 points between $p_0$ and $p_n$, so that the Euclidean distance of the path along $p_0,p_1,p_2,\dotsc,p_n$ is minimal while the distance between the path points and the bony obstacles is non-negative. In the initial guess the points were equally spaced along the X-axis (i.e., their distance was constant, and their y and z values were set to 0). Thus the length of the shortest path could be approximated by minimising its Euclidean distance only over the y and z coordinates for each point:
+
+$$argmin_{y_i z_i }  \sum_{i=0}^{n-1} \sqrt{const^2+(y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 }$$
+
+subject to the constraints imposed by the signed distance fields
+
+$$d_v= f(x_v,y_v,z_v ) \geq 0$$
+
+and the additional inequality constraint
+
+$$tan^{-1}\sqrt{\frac{\max\limits_i⁡ \lbrace (y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 \rbrace }{const}} \leq  \frac{π}{3}$$
+
+where $x_{+1}-x_i =  {}^1/_n = const$ and $i = 0,\dotsc,n-1$, to ensure the smoothness of the optimised ligament paths, and to prevent the ligaments from abruptly changing direction or intersecting the bone meshes between two path points. 
+
+Information about how to run the ligament simulations can be found [here](https://github.com/OliverDemuth/MayaSignedDistanceFields/tree/main/ligaments).
 
 ###### The Python scripts have been written in Python 3 and were tested with Python 3.11 and Autodesk Maya 2025
