@@ -21,7 +21,7 @@ The scripts calculate the shortest distance of a ligament from origin to inserti
 
 The ligament path optimisation was be formulated as the following problem: Find the coordinates of the n-1 points between $p_0$ and $p_n$, so that the Euclidean distance of the path along $p_0,p_1,p_2,\dotsc,p_n$ is minimal while the distance between the path points and the bony obstacles is non-negative. In the initial guess the points were equally spaced along the X-axis (i.e., their distance was constant, and their y and z values were set to 0). Thus the length of the shortest path could be approximated by minimising its Euclidean distance only over the y and z coordinates for each point:
 
-$$argmin_{y_i z_i }  \sum_{i=0}^{n-1} \sqrt{const^2+(y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 }$$
+$$\text{argmin}\_{y_i z_i }  \sum_{i=0}^{n-1} \sqrt{const^2+(y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 }$$
 
 subject to the inequality constraint imposed by the SDFs
 
@@ -29,7 +29,7 @@ $$f(x_v,y_v,z_v ) \geq 0$$
 
 and the additional inequality constraint
 
-$$tan^{-1}\left(\frac{\sqrt{\max\limits_i⁡ \lbrace (y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 \rbrace }}{const}\right) \leq  \frac{π}{3}$$
+$$\tan^{-1}\left(\frac{\sqrt{\max\limits_i⁡ \lbrace (y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 \rbrace }}{const}\right) \leq  \frac{π}{3}$$
 
 where $x_{+1}-x_i =  {}^1/_n = const$ and $i = 0,\dotsc,n-1$, to ensure the smoothness of the optimised ligament paths, and to prevent the ligaments from abruptly changing direction or intersecting the bone meshes between two path points. 
 
