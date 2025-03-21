@@ -27,11 +27,11 @@ subject to the inequality constraint imposed by the SDFs
 
 $$f(x_v,y_v,z_v ) \geq 0$$
 
-and the additional inequality constraint
+and the additional inequality constraint to ensure the smoothness of the optimised ligament paths
 
 $$\tan^{-1}\left(\frac{\sqrt{\max\limits_i⁡ \lbrace (y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 \rbrace }}{const}\right) \leq  \frac{π}{3}$$
 
-where $x_{+1}-x_i =  {}^1/_n = const$ and $i = 0,\dotsc,n-1$, to ensure the smoothness of the optimised ligament paths, and to prevent the ligaments from abruptly changing direction or intersecting the bone meshes between two path points. 
+where $x_{+1}-x_i =  {}^1/_n = const$ and $i = 0,\dotsc,n-1$. This prevents the ligaments from abruptly changing direction or intersecting the bone meshes between two path points. 
 
 Information about how to run the ligament simulations can be found [here](https://github.com/OliverDemuth/MayaSignedDistanceFields/tree/main/ligaments).
 
