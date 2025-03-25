@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 04.02.2025 - Oliver Demuth
+#	Last updated 25.03.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -33,6 +33,9 @@ meshes = ['RLP3_scapulocoracoid', 			# specify according to meshes in the Maya s
 congruencyMeshes = ['RLP3_glenoid_art_surf', 		# specify according to meshes in the Maya scene
 		    'RLP3_humeral_head']	
 fittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to meshes in the Maya scene		
+xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
+yBounds = [-90,90]					# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
+zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
 gridSubdiv = 100					# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 interval = 5						# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 StartFrame = None 					# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
@@ -149,8 +152,9 @@ else:
 
 # create 3D grid for rotations
 
-xRots = zRots = np.arange(-180, ceil(180+interval/2), interval, dtype = int)
-yRots = np.arange(-90, ceil(90+interval/2), interval, dtype = int)
+xRots = np.arange(xBounds[0], ceil(xBounds[1]+interval/2), interval, dtype = int)
+yRots = np.arange(yBounds[0], ceil(yBounds[1]+interval/2), interval, dtype = int)
+zRots = np.arange(zBounds[0], ceil(zBounds[1]+interval/2), interval, dtype = int)
 
 rotations = [[x, y, z] for x in xRots  # length along x
 		       for y in yRots  # length along y
