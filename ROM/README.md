@@ -22,7 +22,7 @@
 2. Copy and paste the *runROMmapper.py* script into the *Python Script Editor*
 3. Adjust the user defined variables in the script and execute it
 
-The optimised translations and the correspondng rotations for each viable pose will be keyed into the translation and rotation attributes of ``jointName`` or each viable frame. Only viable poses will be keyed. Maya will become unresponsive until the ROM simulation is done. A progress bar will be updated according to the progress made. The ROM simulations can be cancelled at any time by pressing *esc* without losing any progress.
+The optimised translations and the corresponding rotations for each viable pose will be keyed into the translation and rotation attributes of ``jointName`` or each viable frame. Only viable poses will be keyed. Maya will become unresponsive until the ROM simulation is done. A progress bar will be updated according to the progress made. The ROM simulations can be cancelled at any time by pressing *esc* without losing any progress.
 
 #### From the command line (terminal) 
 Autodesk Maya does not need to be open.
