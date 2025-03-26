@@ -22,7 +22,7 @@
 2. Copy and paste the *runLigamentCalculation.py* script into the *Python Script Editor*
 3. Adjust the user defined variables in the script and execute it
 
-The ligament lengths will be keyed into the attributes of 'jointName' for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress made. The ligament length calculations can be cancelled at any time by pressing *esc* without losing any progress.
+The ligament lengths will be keyed into the attributes of ``jointName`` for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress made. The ligament length calculations can be cancelled at any time by pressing *esc* without losing any progress.
 
 #### From the command line (terminal) 
 Autodesk Maya does not need to be open.
