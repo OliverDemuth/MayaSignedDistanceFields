@@ -17,7 +17,7 @@ Information about how to run the ROM simulations can be found [here](https://git
 
 ## Ligament simulation and length calculation
 Automated estimation of 3D ligament path wrapping around bone meshes using SDFs.
-The scripts calculate the shortest distance of a ligament from origin to insertion wrapping around the bone meshes. It is an implementation of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes, which are then used to approximate the 3D path of each ligament accross them to calculate their shortest path length from origin to insertion while preventing penetration of the bones.
+The scripts calculate the shortest distance of a ligament from origin to insertion wrapping around the bone meshes. It is an implementation of the [Marai et al., 2004](https://doi.org/10.1109/TBME.2004.826606) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes, which are then used to approximate the 3D path of each ligament across them to calculate their shortest path length from origin to insertion while preventing penetration of the bones.
 
 The ligament path optimisation was be formulated as the following problem: Find the coordinates of the n-1 points between $p_0$ and $p_n$, so that the Euclidean distance of the path along $p_0,p_1,p_2,\dotsc,p_n$ is minimal while the distance between the path points and the bony obstacles is non-negative. In the initial guess the points were equally spaced along the X-axis (i.e., their distance was constant, and their y and z values were set to 0). Thus the length of the shortest path could be approximated by minimising its Euclidean distance only over the y and z coordinates for each point:
 
