@@ -256,7 +256,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
-	dotProd = np.sum(N * normDiff, axis = 1) # opposite of normal to check whether point is inside or outside
+	dotProd = np.sum(N * normDiff, axis = 1)
 
 	# get sign from dot product for distance
 
