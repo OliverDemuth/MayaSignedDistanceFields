@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 06.02.2025 - Oliver Demuth
+#	Last updated 13.04.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -159,36 +159,37 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	gridWSArr = np.dot(gridArr,rotMat)
 	gridWSList = gridWSArr[:,3,0:3].tolist()
-	localList = np.dot(gridWSArr,meshMatInv)[:,3,0:3].tolist()
 
 	# go through grid points and calculate signed distance for each of them
 
-	signedDist = []
+	P = np.zeros((points.shape[0],3))
+	N = np.zeros((points.shape[0],3))
 
-	for i in range(points.shape[0]):
-		
-		# find closest points on mesh and get their distance to the grid points
-							  
-		ptON = polyIntersect.getClosestPoint(MPoint(gridWSList[i])) # get point on mesh
-		
-		# get vector from localPoint to ptON
+	for i, gridPoint in enumerate(gridWSList):
 
-		diff = (MVector(ptON.point) -  MVector(localList[i]))
+		ptON = polyIntersect.getClosestPoint(MPoint(gridPoint)) # get point on mesh
+		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # point on mesh coordinates in mesh coordinate system
+		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # normal at point on mesh
 
-		# get distance from localPoint to ptON    
-	
-		dist = diff.length()
+	# get vector from gridPoints to points on mesh
 
-		# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
-		
-		dot = MVector(ptON.normal).normal() * diff.normal() 
+	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P # vector difference
 
-		# get sign for distance
+	# get distances from gridPoints to points on mesh
 
-		if dot >= 0: # point is inside mesh
-			signedDist.append(-dist)
-		else: # point is outside of mesh
-			signedDist.append(dist)
+	dist = np.linalg.norm(diff, axis = 1) # distance
+
+	# get vector direction from gridPoints to points on mesh
+
+	normDiff = diff/dist.reshape(-1,1) # direction of distance
+
+	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
+
+	dotProd = np.sum(N * normDiff, axis = 1)
+
+	# get sign from dot product for distance
+
+	signedDist = dist * np.sign(dotProd)
 
 	return signedDist, points.tolist()
 
