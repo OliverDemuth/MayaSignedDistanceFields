@@ -167,7 +167,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# get vector from gridPoints to points on mesh
 
-	diff = P - np.dot(gridWSArr,meshMatInv)[:,3,0:3] # vector difference
+	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P # vector difference
 
 	# get distances from gridPoints to points on mesh
 
@@ -179,7 +179,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
-	dotProd = np.sum(-N * normDiff, axis = 1) # take opposite direction of normal to check whether point is inside or outside
+	dotProd = np.sum(N * normDiff, axis = 1)
 
 	# get sign from dot product for distance
 
