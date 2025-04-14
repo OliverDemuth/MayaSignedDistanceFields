@@ -7,14 +7,15 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 13.04.2025 - Oliver Demuth
+#	Last updated 14.04.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
 #		INPUT params:
-#			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+#			string  jointName:		Name of the joint centre (i.e. the name of a locator or joint; e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 #			string  meshes:			Name(s) of the bone meshes (e.g., several individual meshes in the form of ['prox_mesh','dist_mesh'])
-#			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			int	gridSubdiv:		Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			float	gridScale:		Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 #			int 	ligSubdiv:		Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
 #
 #		RETURN params:
@@ -135,12 +136,13 @@ def ligCalc(xCoords, jPos, ipProx, ipDist, rotMat, LigAttributes, keyPathPoints)
 
 # ========== signed distance field per joint function ==========
 
-def sigDistField(jointName, meshes, subdivision):
+def sigDistField(jointName, meshes, subdivision, gridScale):
 
 	# Input variables:
-	#	jointName = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
+	#	jointName = name of joint centre (represented by object in Maya scene; e.g. joint or locator)
 	#	meshes = name(s) of the mesh(es) for which the signed distance field is calculated
-	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+	#	gridScale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get joint centre position
@@ -152,7 +154,7 @@ def sigDistField(jointName, meshes, subdivision):
 
 	# get number and names of ligaments
 
-	LigAttributes = cmds.listAttr(jointName, ud = True) # get user defined attributes of 'jointName', i.e. the float attributes that will contain the ligament lengths
+	LigAttributes = cmds.listAttr(jointName, ud = True) # get user defined attributes of 'jointName' (i.e. the float attributes that will contain the ligament lengths)
 
 	# cycle through ligaments and extract their information
 
@@ -166,9 +168,9 @@ def sigDistField(jointName, meshes, subdivision):
 		iPos = getWSPos(ligament + '_ins')
 
 		# get distances from origin and insertion to joint centre
-					
-		distArr.append((jPos - iPos).length()) # Euclidean distance from insertion to joint centre, i.e., scale factor for grid point positions
-		distArr.append((jPos - oPos).length()) # Euclidean distance from origin to joint centre, i.e., scale factor for grid point positions
+				
+		distArr.append((jPos - oPos).length()) # Euclidean distance from origin to joint centre (i.e., scale factor for grid point positions)
+		distArr.append((jPos - iPos).length()) # Euclidean distance from insertion to joint centre (i.e., scale factor for grid point positions)
 
 	maxDist = max(distArr) # maximal distance from joint centre to ligament attachment
 
@@ -191,21 +193,22 @@ def sigDistField(jointName, meshes, subdivision):
 		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
 	
 	sigDistances = []
-	for j,mesh in enumerate(meshes):
-		meshSigDist, osPoints = sigDistMesh(mesh, rotMat[j], subdivision) # get signed distance field for each mesh
-		sigDistances.append(np.array(meshSigDist).reshape(subdivision + 1, subdivision + 1, subdivision + 1))
+	for i,mesh in enumerate(meshes):
+		meshSigDist = sigDistMesh(mesh, rotMat[i], subdivision, gridScale) # get signed distance field for each mesh
+		sigDistances.append(meshSigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1))
 	
-	return sigDistances, osPoints, LigAttributes, maxDist
+	return sigDistances, LigAttributes, maxDist
 
 
 # ========== signed distance field per mesh function ==========
 
-def sigDistMesh(mesh, rotMat, subdivision):
+def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	# Input variables:
 	#	mesh = name of the mesh for which the signed distance field is calculated
 	#	rotMat = transformation matrix of parent (joint) of the mesh
 	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	# 	gridScale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get dag paths
@@ -230,7 +233,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# create 3D grid
 
-	elements = np.linspace(-1.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
+	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint=True, dtype=float)
 
 	points = np.array([[x, y, z] for x in elements
 				     for y in elements
@@ -252,32 +255,29 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	N = np.zeros((points.shape[0],3))
 
 	for i, gridPoint in enumerate(gridWSList):
-
 		ptON = polyIntersect.getClosestPoint(MPoint(gridPoint)) # get point on mesh
-		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # point on mesh coordinates in mesh coordinate system
-		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # normal at point on mesh
+		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # coordinates of point on mesh in mesh coordinate system
+		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # surface normal at point on mesh
 
-	# get vector from gridPoints to points on mesh
+	# get vectors from gridPoints to points on mesh
 
-	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P # vector difference
+	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P
 
 	# get distances from gridPoints to points on mesh
 
-	dist = np.linalg.norm(diff, axis = 1) # distance
+	dist = np.linalg.norm(diff, axis = 1)
 
-	# get vector direction from gridPoints to points on mesh
+	# normalise vector to get direction from gridPoints to points on mesh
 
-	normDiff = diff/dist.reshape(-1,1) # direction of distance
+	normDiff = diff/dist.reshape(-1,1)
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
-	dotProd = np.sum(N * normDiff, axis = 1)
+	dot = np.sum(N * normDiff, axis = 1)
 
 	# get sign from dot product for distance
 
-	signedDist = dist * np.sign(dotProd)
-
-	return signedDist, points.tolist()
+	return dist * np.sign(dot)
 
 
 # ========== ligament rotation matrix function ==========
@@ -297,16 +297,16 @@ def getLigTransMat(origin, insertion, jPos):
 
 	# calculate vectors from origin to insertion and to joint centre
 				
-	LigDir = iPos - oPos
-	JointDir = jPos - oPos
+	ligDir = iPos - oPos
+	jointDir = jPos - oPos
 
-	Offset = LigDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
+	offset = ligDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
 
 	# calculate planes relative to ligaments
 
-	uDir = LigDir.normal() * Offset
-	wDir = (JointDir.normal() ^ uDir).normal() * Offset # cross product to get z axis
-	vDir = (wDir ^ uDir).normal() * Offset # cross product to get y axis 
+	uDir = ligDir.normal() * offset
+	wDir = (jointDir.normal() ^ uDir).normal() * Offset # cross product to get z axis
+	vDir = (wDir ^ uDir).normal() * offset # cross product to get y axis 
 
 	# get transformation matrix from liagament plane directions
 
@@ -315,7 +315,7 @@ def getLigTransMat(origin, insertion, jPos):
 			     [wDir.x, wDir.y, wDir.z, 0],
 			     [oPos[0],oPos[1],oPos[2],1]]) # centre position around origin
 		
-	return transMat, Offset 
+	return transMat, offset 
 
 
 # ========== get ws pos ==========
