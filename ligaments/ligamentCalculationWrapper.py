@@ -9,7 +9,7 @@
 #	meshes for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 28.01.2025 - Oliver Demuth
+#	Last updated 14.04.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -54,6 +54,7 @@ jointName = 'myJoint' 		# Name of the joint centre, i.e. the name of a locator o
 meshes = ['prox_mesh', 		# Names of the two bone meshes (e.g., individual meshes in the form of ['prox_mesh','dist_mesh'])
 	  'dist_mesh']	
 gridSubdiv = 100		# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridScale = 1.5			# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 ligSubdiv = 20			# Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
 FrameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 cores = 8			# Integer value to specify number of CPU cores to be assigned. Depending on the number of files and/or avialable CPU cores the actual number can be lower. Maximally two thirds of all cores will be assigned.
@@ -132,7 +133,7 @@ if __name__ == "__main__":
 
 	# create tuple for arguments passed to ligament calculation functions
 
-	arguments = (jointName, meshes, gridSubdiv, ligSubdiv, FrameInterval, outDir)
+	arguments = (jointName, meshes, gridSubdiv, gridScale, ligSubdiv, FrameInterval, outDir)
 
 	# initialise multiprocessing
 
