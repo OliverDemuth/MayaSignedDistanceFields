@@ -31,6 +31,7 @@
 jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['prox_mesh', 'dist_mesh']	# specify according to meshes or boolean object in the Maya scene
 gridSubdiv = 100			# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridScale = 1.5				# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 ligSubdiv = 20				# Integer value for the number of ligament segments (e.g., 20, see Marai et al., 2004 for details)
 StartFrame = None 			# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None			# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
@@ -108,38 +109,20 @@ if not var_exists:
 	cmds.move(0,0,0, jointName, localSpace=True)
 	cmds.rotate(0,0,0,jointName)
 	
-	sigDistFieldArray, localPoints, LigAttributes, gridScale = sigDistField(jointName, meshes, gridSubdiv)
-	
-# get dimensions of cubic grids
-
-dims = sigDistFieldArray[0].shape
-proxSigDistList = sigDistFieldArray[0].tolist()
-distSigDistList = sigDistFieldArray[1].tolist()
+	sigDistFieldArray, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale)
 
 # initialise tricubic interpolator with signed distance data on default cubic grid
 
-ipProx = tricubic(proxSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+ipProx = tricubic(sigDistFieldArray[0].tolist(), list(sigDistFieldArray[0].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
 
-# get corner points of cubic grids (both grids are set up identically)
+# get inverse of rotation matrix for default cubic grid coordinate system
 
-origPos = MVector(localPoints[0])
-zVecPos = MVector(localPoints[dims[1] - 1])
-yVecPos = MVector(localPoints[dims[1] * (dims[2] - 1)])
-xVecPos = MVector(localPoints[dims[1] * dims[2] * (dims[0] - 1)])
-
-# get direction vectors to cubic grid corners and normalize by number of grid subdivisions
-
-xDir = (xVecPos - origPos) / (dims[0] - 1)
-yDir = (yVecPos - origPos) / (dims[1] - 1)
-zDir = (zVecPos - origPos) / (dims[2] - 1)
-
-# get rotation matrix of default cubic grid coordinate system
-
-gridRotMat = np.linalg.inv(np.array([[xDir.x, xDir.y, xDir.z, 0],
-				     [yDir.x, yDir.y, yDir.z, 0],
-				     [zDir.x, zDir.y, zDir.z, 0],
-				     [origPos.x, origPos.y, origPos.z, 1]])) 
+gridVec = 2 * gridScale / gridSubdiv
+gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
+				     [0, gridVec, 0, 0], # y direction
+				     [0, 0, gridVec, 0], # z direction
+				     [-gridScale, -gridScale, -gridScale, 1]])) # origin
 
 mid = time.time()
 
@@ -203,7 +186,7 @@ for i in range(keyDiff):
 	# check if progress is interupted
 
 	if cmds.progressWindow(query=True, isCancelled=True):
-			break
+		break
 
 	# get joint centre position
 
@@ -212,10 +195,10 @@ for i in range(keyDiff):
 	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
 	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
 
-	# normalize matrices by gridScale
+	# normalize matrices by gridSize
 
-	jInclTransMat.setScale([gridScale,gridScale,gridScale],4) # set scale in world space (om.MSpace.kWorld = 4)
-	jExclTransMat.setScale([gridScale,gridScale,gridScale],4) # set scale in world space (om.MSpace.kWorld = 4)
+	jInclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
+	jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 
 	# get rotation matrices
 
