@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 25.03.2025 - Oliver Demuth
+#	Last updated 14.04.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -37,6 +37,7 @@ xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] 
 yBounds = [-90,90]					# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
 zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
 gridSubdiv = 100					# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridScale = 1						# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 interval = 5						# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 StartFrame = None 					# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
@@ -104,7 +105,7 @@ if not var_exists:
 
 	print('Calculating signed distance fields...')
 
-	sigDistFieldArray, localPoints, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize)
+	sigDistFieldArray, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize, gridScale)
 	
 	# calculate relative position of articular surfaces
 
@@ -112,36 +113,18 @@ if not var_exists:
 	distArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
 	proxMeshArr = relVtcPos(meshes[0], initialRotMat[0])
 
-# get dimensions of cubic grids
-
-dims = sigDistFieldArray[0].shape
-proxSigDistList = sigDistFieldArray[0].tolist()
-distSigDistList = sigDistFieldArray[1].tolist()
-
 # initialise tricubic interpolator with signed distance data on default cubic grid
 
-ipProx = tricubic(proxSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+ipProx = tricubic(sigDistFieldArray[0].tolist(), list(sigDistFieldArray[0].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
 
-# get corner points of cubic grids (both grids are set up identically)
+# get inverse of rotation matrix for default cubic grid coordinate system
 
-origPos = MVector(localPoints[0])
-zVecPos = MVector(localPoints[dims[1] - 1])
-yVecPos = MVector(localPoints[dims[1] * (dims[2] - 1)])
-xVecPos = MVector(localPoints[dims[1] * dims[2] * (dims[0] - 1)])
-
-# get direction vectors to cubic grid corners and normalize by number of grid subdivisions
-
-xDir = (xVecPos - origPos) / (dims[0] - 1)
-yDir = (yVecPos - origPos) / (dims[1] - 1)
-zDir = (zVecPos - origPos) / (dims[2] - 1)
-
-# get inverse of rotation matrix of default cubic grid coordinate system
-
-gridRotMat = np.linalg.inv(np.array([[xDir.x, xDir.y, xDir.z, 0],
-				     [yDir.x, yDir.y, yDir.z, 0],
-				     [zDir.x, zDir.y, zDir.z, 0],
-				     [origPos.x, origPos.y, origPos.z, 1]])) 
+gridVec = 2 * gridScale / subdivision
+gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
+				     [0, gridVec, 0, 0], # y direction
+				     [0, 0, gridVec, 0], # z direction
+				     [-gridScale, -gridScale, -gridScale, 1]])) # origin
 
 mid = time.time()
 
@@ -215,7 +198,6 @@ cmds.progressWindow(title = 'Translation optimisation in progress...',
 		    max = keyDiff)
 
 print('Translation optimisation in progress...')
-
 
 # get joint exclusive transformation matrix (parent)
 
