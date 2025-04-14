@@ -301,7 +301,7 @@ def optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, 
 
 		# check for disarticulation 
 						  
-		if diff < (1.05 * thickness * 2): # first crudely (if distal ACS is more than 5% beyond radius of fitted proximal shape)
+		if diff < (1.1 * thickness * 2): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape)
 
 			# get coordinates of results and transform them into transformation matrix coords
 
