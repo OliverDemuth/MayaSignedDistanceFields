@@ -207,6 +207,7 @@ jExclNPMat = np.array(jExclMat).reshape(4,4) # convert into numpy 4x4 array
 jExclTransMat = MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
 jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 jExclTransNPMat = np.array(jExclTransMat.asMatrix()).reshape(4,4) # convert into numpy 4x4 array
+jExclTransNPMatInv = np.linalg.inv(jExclTransNPMat) # inverse of parent rotMat (prox) as numpy 4x4 array
 
 # go through all possible combinations
 
@@ -238,9 +239,10 @@ for i in range(keyDiff):
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(jExclTransNPMat) # parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(np.array(jInclTransMat).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
-	rotMat.append(jExclNPMat) # get parent rotMat (prox) without scale as numpy 4x4 array
+	rotMat.append(jExclTransNPMat) # append parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(np.array(jInclTransMat).reshape(4,4)) # append child rotMat (dist) as numpy 4x4 array
+	rotMat.append(jExclNPMat) # append parent rotMat (prox) without scale as numpy 4x4 array
+	rotMat.append(jExclTransNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
 
 	# optimise the joint translations
 
