@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 13.04.2025 - Oliver Demuth
+#	Last updated 14.04.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -17,6 +17,7 @@
 #			string	congruencyMeshes:	Names of the meshes to check articular congruency, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
 #			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 #			float	gridSize:		Float value indicating the size of the cubic grid, i.e., the length of a side (e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
+#			float	gridScale:		Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 #			float	thickness:		Float value indicating the thickness value which correlates with the joint spacing
 #			
 #		RETURN params:
@@ -65,13 +66,14 @@ from tricubic import tricubic
 
 # ========== signed distance field per joint function ==========
 
-def sigDistField(jointName, meshes, subdivision, size):
+def sigDistField(jointName, meshes, subdivision, size, scale):
 
 	# Input variables:
 	#	jointName = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
 	#	meshes = name(s) of the mesh(es) for which the signed distance field is calculated
 	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
 	#	size = grid size of the cubic grid
+	#	scale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get joint centre position
@@ -100,20 +102,21 @@ def sigDistField(jointName, meshes, subdivision, size):
 	
 	sigDistances = []
 	for j,mesh in enumerate(meshes):
-		meshSigDist, osPoints = sigDistMesh(mesh, rotMat[j], subdivision) # get signed distance field for each mesh
-		sigDistances.append(np.array(meshSigDist).reshape(subdivision + 1, subdivision + 1, subdivision + 1))
+		meshSigDist = sigDistMesh(mesh, rotMat[j], subdivision, scale) # get signed distance field for each mesh
+		sigDistances.append(meshSigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1))
 	
-	return sigDistances, osPoints, rotMat
+	return sigDistances, rotMat
 
 
 # ========== signed distance field per mesh function ==========
 
-def sigDistMesh(mesh, rotMat, subdivision):
+def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# Input variables:
 	#	mesh = name of the mesh for which the signed distance field is calculated
 	#	rotMat = transformation matrix of parent (joint) of the mesh
 	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	#	scale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get dag paths
@@ -138,7 +141,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# create 3D grid
 
-	elements = np.linspace(-1, 1, num = subdivision + 1, endpoint=True, dtype=float)
+	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint=True, dtype=float)
 	
 	points = np.array([[x, y, z] for x in elements
 				     for y in elements 
@@ -179,13 +182,11 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
-	dotProd = np.sum(N * normDiff, axis = 1)
+	dot = np.sum(N * normDiff, axis = 1)
 
 	# get sign from dot product for distance
 
-	signedDist = dist * np.sign(dotProd)
-
-	return signedDist, points.tolist()
+	return dist * np.sign(dot)
 
 
 # ========== get vertices position in reference frame ==========
@@ -210,7 +211,7 @@ def relVtcPos(mesh, rotMat):
 	vtxArr = np.stack([np.eye(4)] * vertices.shape[0], axis = 0)
 	vtxArr[:,3,:] = vertices # append coordinates to rotation matrix array
 
-	return np.dot(vtxArr,np.linalg.inv(rotMat))# calculate new coordinates and return 3D array
+	return np.dot(vtxArr,np.linalg.inv(rotMat)) # calculate new coordinates and return 3D array
 
 # ========== get dag path function ==========
 
@@ -288,11 +289,11 @@ def optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, 
 	
 	if results.success: 
 	
-		diff = MVector(results.x).length() # get offset from glenoid centre
+		diff = MVector(results.x).length() # get offset from joint centre
 
 		# check for disarticulation 
 						  
-		if diff < (1.05 * thickness * 2): # first crudely (if distal ACS is more than 5% beyond radius of fitted proximal shape)
+		if diff < (1.1 * thickness * 2): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape)
 
 			# get coordinates of results and transform them into transformation matrix coords
 
@@ -430,14 +431,13 @@ def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 	# Input variables:
 	#	params = array of X, Y and Z coordinates of distal element position
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates. Passed through args, not part of cost function
 	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of cost function
 	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	gridRotMat = rotation matrix of default cubic grid coordinate system
 	#	thickness = thickness measure correlated with joint spacing
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
-	#
 	# ======================================== #
 	
 	# extract coordinates from params and transform them into transformation matrix coords
