@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 13.04.2025 - Oliver Demuth
+#	Last updated 14.04.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -15,6 +15,7 @@
 #			string  jointName:	Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 #			string  meshes:		Name(s) of the bone meshes (e.g., several individual meshes in the form of ['prox_mesh','dist_mesh'])
 #			int	gridSubdiv:	Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			float	gridScale:	Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 #			int 	ligSubdiv:	Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
 #
 #		RETURN params:
@@ -96,7 +97,7 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
 
 		# get ligament transformation matrices
 
-		ligRotMat, Offset = getLigTransMat(ligament + '_orig', ligament + '_ins', jPos)
+		ligRotMat, offset = getLigTransMat(ligament + '_orig', ligament + '_ins', jPos)
 
 		# get ligament specific transformation matrix to cubic grid
 		
@@ -111,21 +112,22 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
 		if res.status == 0: # check if optimiser terminated successfully
-			ligLengths.append(res.fun * Offset)
+			ligLengths.append(res.fun * offset)
 		else:
-			ligLengths.append(-Offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
+			ligLengths.append(-offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
 
 	return ligLengths
 
 
 # ========== signed distance field per joint function ==========
 
-def sigDistField(jointName, meshes, subdivision):
+def sigDistField(jointName, meshes, subdivision, gridScale):
 
 	# Input variables:
-	#	jointName = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
+	#	jointName = name of joint centre (represented by object in Maya scene; e.g. joint or locator)
 	#	meshes = name(s) of the mesh(es) for which the signed distance field is calculated
-	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+	#	gridScale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get joint centre position
@@ -137,7 +139,7 @@ def sigDistField(jointName, meshes, subdivision):
 
 	# get number and names of ligaments
 
-	LigAttributes = cmds.listAttr(jointName, ud = True) # get user defined attributes of 'jointName', i.e. the float attributes that will contain the ligament lengths
+	LigAttributes = cmds.listAttr(jointName, ud = True) # get user defined attributes of 'jointName' (i.e. the float attributes that will contain the ligament lengths)
 
 	# cycle through ligaments and extract their information
 
@@ -151,9 +153,9 @@ def sigDistField(jointName, meshes, subdivision):
 		iPos = getWSPos(ligament + '_ins')
 
 		# get distances from origin and insertion to joint centre
-					
-		distArr.append((jPos - iPos).length()) # Euclidean distance from insertion to joint centre, i.e., scale factor for grid point positions
-		distArr.append((jPos - oPos).length()) # Euclidean distance from origin to joint centre, i.e., scale factor for grid point positions
+				
+		distArr.append((jPos - oPos).length()) # Euclidean distance from origin to joint centre (i.e., scale factor for grid point positions)
+		distArr.append((jPos - iPos).length()) # Euclidean distance from insertion to joint centre (i.e., scale factor for grid point positions)
 
 	maxDist = max(distArr) # maximal distance from joint centre to ligament attachment
 
@@ -176,21 +178,22 @@ def sigDistField(jointName, meshes, subdivision):
 		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
 	
 	sigDistances = []
-	for j,mesh in enumerate(meshes):
-		meshSigDist, osPoints = sigDistMesh(mesh, rotMat[j], subdivision) # get signed distance field for each mesh
-		sigDistances.append(np.array(meshSigDist).reshape(subdivision + 1, subdivision + 1, subdivision + 1))
+	for i,mesh in enumerate(meshes):
+		meshSigDist = sigDistMesh(mesh, rotMat[i], subdivision, gridScale) # get signed distance field for each mesh
+		sigDistances.append(meshSigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1))
 	
-	return sigDistances, osPoints, LigAttributes, maxDist
+	return sigDistances, LigAttributes, maxDist
 
 
 # ========== signed distance field per mesh function ==========
 
-def sigDistMesh(mesh, rotMat, subdivision):
+def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	# Input variables:
 	#	mesh = name of the mesh for which the signed distance field is calculated
 	#	rotMat = transformation matrix of parent (joint) of the mesh
 	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	# 	gridScale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get dag paths
@@ -215,7 +218,7 @@ def sigDistMesh(mesh, rotMat, subdivision):
 
 	# create 3D grid
 
-	elements = np.linspace(-1.5, 1.5, num = subdivision + 1, endpoint=True, dtype=float)
+	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint=True, dtype=float)
 
 	points = np.array([[x, y, z] for x in elements
 				     for y in elements
@@ -237,32 +240,29 @@ def sigDistMesh(mesh, rotMat, subdivision):
 	N = np.zeros((points.shape[0],3))
 
 	for i, gridPoint in enumerate(gridWSList):
-
 		ptON = polyIntersect.getClosestPoint(MPoint(gridPoint)) # get point on mesh
-		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # point on mesh coordinates in mesh coordinate system
-		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # normal at point on mesh
+		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # coordinates of point on mesh in mesh coordinate system
+		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # surface normal at point on mesh
 
-	# get vector from gridPoints to points on mesh
+	# get vectors from gridPoints to points on mesh
 
-	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P # vector difference
+	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P
 
 	# get distances from gridPoints to points on mesh
 
-	dist = np.linalg.norm(diff, axis = 1) # distance
+	dist = np.linalg.norm(diff, axis = 1)
 
-	# get vector direction from gridPoints to points on mesh
+	# normalise vector to get direction from gridPoints to points on mesh
 
-	normDiff = diff/dist.reshape(-1,1) # direction of distance
+	normDiff = diff/dist.reshape(-1,1)
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
-	dotProd = np.sum(N * normDiff, axis = 1)
+	dot = np.sum(N * normDiff, axis = 1)
 
 	# get sign from dot product for distance
 
-	signedDist = dist * np.sign(dotProd)
-
-	return signedDist, points.tolist()
+	return dist * np.sign(dot)
 
 
 # ========== ligament rotation matrix function ==========
@@ -505,7 +505,7 @@ def processMayaFiles(filePath,args):
 
 	# extract arguments
 
-	[jointName, meshes, gridSubdiv, ligSubdiv, FrameInterval, outDir] = args
+	[jointName, meshes, gridSubdiv, gridScale, ligSubdiv, FrameInterval, outDir] = args
 
 
 	# ==== calculate signed distance fields ====
@@ -519,38 +519,20 @@ def processMayaFiles(filePath,args):
 	cmds.move(0,0,0, jointName, localSpace=True)
 	cmds.rotate(0,0,0,jointName)
 	
-	sigDistFieldArray, localPoints, LigAttributes, gridScale = sigDistField(jointName, meshes, gridSubdiv)
-	
-	# get dimensions of cubic grids
-	
-	dims = sigDistFieldArray[0].shape
-	proxSigDistList = sigDistFieldArray[0].tolist()
-	distSigDistList = sigDistFieldArray[1].tolist()
+	sigDistFieldArray, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale))
 	
 	# initialise tricubic interpolator with signed distance data on default cubic grid
-	
-	ipProx = tricubic(proxSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-	ipDist = tricubic(distSigDistList, [dims[0], dims[1], dims[2]]) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-	
-	# get corner points of cubic grids (both grids are set up identically)
-	
-	origPos = MVector(localPoints[0])
-	zVecPos = MVector(localPoints[dims[1] - 1])
-	yVecPos = MVector(localPoints[dims[1] * (dims[2] - 1)])
-	xVecPos = MVector(localPoints[dims[1] * dims[2] * (dims[0] - 1)])
-	
-	# get direction vectors to cubic grid corners and normalize by number of grid subdivisions
-	
-	xDir = (xVecPos - origPos) / (dims[0] - 1)
-	yDir = (yVecPos - origPos) / (dims[1] - 1)
-	zDir = (zVecPos - origPos) / (dims[2] - 1)
-	
-	# get rotation matrix of default cubic grid coordinate system
-	
-	gridRotMat = np.linalg.inv(np.array([[xDir.x, xDir.y, xDir.z, 0],
-					     [yDir.x, yDir.y, yDir.z, 0],
-					     [zDir.x, zDir.y, zDir.z, 0],
-					     [origPos.x, origPos.y, origPos.z, 1]])) 
+
+	ipProx = tricubic(sigDistFieldArray[0].tolist(), list(sigDistFieldArray[0].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+	ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+
+	# get inverse of rotation matrix for default cubic grid coordinate system
+
+	gridVec = 2 * gridScale / subdivision
+	gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
+					     [0, gridVec, 0, 0], # y direction
+					     [0, 0, gridVec, 0], # z direction
+					     [-gridScale, -gridScale, -gridScale, 1]])) # origin
 
 	mid = time.time()
 
@@ -595,10 +577,10 @@ def processMayaFiles(filePath,args):
 		jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
 		jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
 
-		# normalize matrices by gridScale
+		# normalize matrices by gridSize
 
-		jInclTransMat.setScale([gridScale,gridScale,gridScale],4) # set scale in world space (om.MSpace.kWorld = 4)
-		jExclTransMat.setScale([gridScale,gridScale,gridScale],4) # set scale in world space (om.MSpace.kWorld = 4)
+		jInclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
+		jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 
 		# get rotation matrices
 
