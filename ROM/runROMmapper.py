@@ -120,7 +120,7 @@ ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape
 
 # get inverse of rotation matrix for default cubic grid coordinate system
 
-gridVec = 2 * gridScale / subdivision
+gridVec = 2 * gridScale / gridSubdiv
 gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
 				     [0, gridVec, 0, 0], # y direction
 				     [0, 0, gridVec, 0], # z direction
