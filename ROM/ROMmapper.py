@@ -407,14 +407,10 @@ def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 	transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
 	transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
 
-	# get inverse of rotation matrix
-
-	rotMatInv = np.linalg.inv(rotMat[0])
-
 	# calculate position of vertices relative to cubic grid
 
 	proxVtcRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
-	distVtcRelArr = np.dot(distArr,np.dot(np.dot(transMat,rotMatInv),gridRotMat))[:,3,0:3].tolist()
+	distVtcRelArr = np.dot(distArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist()
 
 	# go through each proximal and distal articular surface point and check if any of them intersect with a mesh (i.e., signDist < 0)
 
