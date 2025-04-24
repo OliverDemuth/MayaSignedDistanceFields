@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 14.04.2025 - Oliver Demuth
+#	Last updated 24.04.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -305,7 +305,7 @@ def getLigTransMat(origin, insertion, jPos):
 	# calculate planes relative to ligaments
 
 	uDir = ligDir.normal() * offset
-	wDir = (jointDir.normal() ^ uDir).normal() * Offset # cross product to get z axis
+	wDir = (jointDir.normal() ^ uDir).normal() * offset # cross product to get z axis
 	vDir = (wDir ^ uDir).normal() * offset # cross product to get y axis 
 
 	# get transformation matrix from liagament plane directions
