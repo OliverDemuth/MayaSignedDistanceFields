@@ -7,12 +7,12 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 14.04.2025 - Oliver Demuth
+#	Last updated 24.04.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
 #	your Maya scene and define the other attributes accordingly.
-#	
+#
 #
 #	This script relies on the following other (Python) script(s) which need to be run
 #	in the Maya script editor before executing this script:
@@ -29,7 +29,8 @@
 
 jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['RLP3_scapulocoracoid', 			# specify according to meshes in the Maya scene
-	  'RLP3_humerus']				
+	  'RLP3_humerus',
+	  'RLP3_convex_hull']				
 congruencyMeshes = ['RLP3_glenoid_art_surf', 		# specify according to meshes in the Maya scene
 		    'RLP3_humeral_head']	
 fittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to meshes in the Maya scene		
@@ -58,6 +59,7 @@ import maya.cmds as cmds
 import numpy as np
 import scipy as sp
 import time
+import random
 
 from tricubic import tricubic
 from math import ceil
@@ -88,7 +90,7 @@ if debug == 1 or ContinueKeys:
 	# check if distance fields have already been calculated
 
 	try:
-		sigDistFieldArray
+		SDF
 	except NameError:
 		var_exists = False
 	else:
@@ -105,18 +107,13 @@ if not var_exists:
 
 	print('Calculating signed distance fields...')
 
-	sigDistFieldArray, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize, gridScale)
+	SDF, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize, gridScale)
 	
 	# calculate relative position of articular surfaces
 
 	proxArr = relVtcPos(congruencyMeshes[0], initialRotMat[0])
 	distArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
-	proxMeshArr = relVtcPos(meshes[0], initialRotMat[0])
-
-# initialise tricubic interpolator with signed distance data on default cubic grid
-
-ipProx = tricubic(sigDistFieldArray[0].tolist(), list(sigDistFieldArray[0].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+	distMeshArr = relVtcPos(meshes[1], initialRotMat[1])
 
 # get inverse of rotation matrix for default cubic grid coordinate system
 
@@ -188,6 +185,10 @@ else:
 if keyDiff <= 0:
 	keyDiff = 1
 
+# randomly assign rotations for testing
+
+if debug == 1 and FrameInterval != None:
+	rotations = random.sample(rotations, FrameInterval)
 
 # define progress bar
 
@@ -246,15 +247,15 @@ for i in range(keyDiff):
 
 	# optimise the joint translations
 
-	coords, viable, results = optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, rotMat, thickness)
+	coords, viable, results = optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thickness)
 
 	# check if pose was viable
 	
 	if debug == 1:
-	    print(results.nit, viable)
-	    
-	    if viable == 1:
-	        nvit.append(results.nit)
+		print(results.nit, viable)
+
+		if viable == 1:
+			nvit.append(results.nit)
 	    
 	if viable == 1:
 
