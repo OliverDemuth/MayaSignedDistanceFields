@@ -5,9 +5,9 @@
 1. Several sets of objects are required:
 
    
-   (1) ``jointName`` - representing the joint (e.g., a joint called ``'myJoint'`` if following [Manafzadeh & Padian, 2018](https://doi.org/10.1098/rspb.2018.0727))
+   (1) ``jointName`` - representing the joint (e.g., a joint called ``'myJoint'`` if following [Manafzadeh & Padian, 2018](https://doi.org/10.1098/rspb.2018.0727)).
    
-   (2) ``meshes`` - representing the bones (e.g., ``['prox_mesh', 'dist_mesh']``)
+   (2) ``meshes`` - representing the bones (e.g., ``['prox_mesh', 'dist_mesh']``).
    
 2. Create two locators for each ligament (i.e., for a ligament called *``lig*``* the origin should be named ``lig*_orig``and the insertion named ``lig*_ins``) and position them on the meshes accordingly and parent them underneath the respective elements/joints.
 
@@ -20,9 +20,9 @@
 
 1. Copy and paste the *ligamentCalculation.py* script into the *Python Script Editor* and execute it
 2. Copy and paste the *runLigamentCalculation.py* script into the *Python Script Editor*
-3. Adjust the user defined variables in the script and execute it
+3. Adjust the user-defined variables in the script and execute it
 
-The ligament lengths will be keyed into the attributes of ``jointName`` for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress made. The ligament length calculations can be cancelled at any time by pressing *esc* without losing any progress.
+The ligament lengths will be keyed into the attributes of ``jointName`` for each frame. Maya will become unresponsive until the calculations are done. A progress bar will be updated according to the progress made. The ligament length calculations can be cancelled at any time by pressing *Esc* without losing any progress.
 
 #### From the command line (terminal) 
 Autodesk Maya does not need to be open.
@@ -37,7 +37,7 @@ outDir = '/your/file/path/ligaments/results'
 ligamentCalculationBatch.py
 ligamentCalculationWrapper.py
 ```
-3. Adjust the user defined variables in *ligamentCalculationWrapper.py* and save it
+3. Adjust the user-defined variables in *ligamentCalculationWrapper.py* and save it
 4. Execute the script as follows:
 
 For **Windows** in the command prompt execute the following
@@ -52,4 +52,4 @@ cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin/
 ```
 The ligament lengths will be saved as .csv files in the results folder, named according to the respective Maya file (.mb) in the Maya files folder. The ligament length calculations cannot be safely aborted and can only be cancelled by closing the command prompt/terminal, however, all progress will be lost.
 
-###### The Python scripts have been written in Python 3 and were tested with Python 3.11 and Autodesk Maya 2025
+###### The Python scripts were written in Python 3 and tested with Python 3.11 and Autodesk Maya 2025
