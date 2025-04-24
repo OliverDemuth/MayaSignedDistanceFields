@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 14.04.2025 - Oliver Demuth
+#	Last updated 24.04.2025 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -44,7 +44,8 @@
 
 jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['prox_mesh', 			# specify according to meshes in the Maya scene
-	  'dist_mesh']				
+	  'dist_mesh',
+	  'conv_hull']				
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
 		    'dist_art_surf']	
 fittedShape = 'prox_sphere'		# specify according to meshes in the Maya scene		
@@ -65,7 +66,7 @@ cores = 8				# integer value to specify number of CPU cores to be assigned
 #	output/results directory:	"path/to/project folder/results"	CSV files will be saved here
 # ======================================== #
 
-path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\ROM\\python' # add your file path. Make sure 'ligamenCalculationWrapper.py' and 'ligamenCalculationBatch.py' are in this folder
+path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\ROM\\python' # add your file path. Make sure 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
 
 fileDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/maya files' # path for Maya files
 outDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/results' # path for Maya output
