@@ -96,7 +96,7 @@ def ligCalc(xCoords, jPos, ipProx, ipDist, rotMat, LigAttributes, keyPathPoints)
 
 		# get ligament transformation matrices
 
-		ligRotMat, Offset = getLigTransMat(ligament + '_orig', ligament + '_ins', jPos)
+		ligRotMat, offset = getLigTransMat(ligament + '_orig', ligament + '_ins', jPos)
 
 		# get ligament specific transformation matrix to cubic grid
 		
@@ -111,9 +111,9 @@ def ligCalc(xCoords, jPos, ipProx, ipDist, rotMat, LigAttributes, keyPathPoints)
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
 		if res.status == 0: # check if optimiser terminated successfully
-			ligLengths.append(res.fun * Offset)
+			ligLengths.append(res.fun * offset)
 		else:
-			ligLengths.append(-Offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
+			ligLengths.append(-offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
 
 		# check if path points are to be calculate
 
