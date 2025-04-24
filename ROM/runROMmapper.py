@@ -185,9 +185,7 @@ else:
 if keyDiff <= 0:
 	keyDiff = 1
 
-# randomly assign rotations for testing
-
-if debug == 1 and FrameInterval != None:
+if debug == 1 and FrameInterval != None: # randomly assign rotations for testing
 	rotations = random.sample(rotations, FrameInterval)
 
 # define progress bar
@@ -292,5 +290,5 @@ else:
 
 cmds.progressWindow(edit=True, endProgress=True)
 
-if debug == 1:
+if debug == 1 and len(nvit) > 0:
     print(max(nvit))
