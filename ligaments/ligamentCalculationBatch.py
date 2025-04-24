@@ -285,13 +285,13 @@ def getLigTransMat(origin, insertion, jPos):
 	LigDir = iPos - oPos
 	JointDir = jPos - oPos
 
-	Offset = LigDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
+	offset = LigDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
 
 	# calculate planes relative to ligaments
 
-	uDir = LigDir.normal() * Offset
-	wDir = (JointDir.normal() ^ uDir).normal() * Offset # cross product to get z axis
-	vDir = (wDir ^ uDir).normal() * Offset # cross product to get y axis 
+	uDir = LigDir.normal() * offset
+	wDir = (JointDir.normal() ^ uDir).normal() * offset # cross product to get z axis
+	vDir = (wDir ^ uDir).normal() * offset # cross product to get y axis 
 
 	# get transformation matrix from liagament plane directions
 
@@ -300,7 +300,7 @@ def getLigTransMat(origin, insertion, jPos):
 			     [wDir.x, wDir.y, wDir.z, 0],
 			     [oPos[0],oPos[1],oPos[2],1]]) # centre position around origin
 		
-	return transMat, Offset 
+	return transMat, offset 
 
 
 # ========== get ws pos ==========
