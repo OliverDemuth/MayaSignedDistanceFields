@@ -37,7 +37,7 @@ outDir = '/your/file/path/ROM/results'
 ROMmapperBatch.py
 ROMmapperWrapper.py
 ```
-3. Adjust the user defined variables in *ROMmapperWrapper.py* and save it
+3. Adjust the user-defined variables in *ROMmapperWrapper.py* and save it
 4. Execute the script as follows:
 
 For **Windows** in the command prompt execute the following
