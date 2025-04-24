@@ -7,16 +7,16 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 14.04.2025 - Oliver Demuth
+#	Last updated 24.04.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
 #		INPUT params:
 #			string	jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-#			string	meshes:			Names of the two bone meshes, i.e., several individual meshes representing the bones (e.g., in the form of ['prox_mesh','dist_mesh'])
-#			string	congruencyMeshes:	Names of the meshes to check articular congruency, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
-#			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-#			float	gridSize:		Float value indicating the size of the cubic grid, i.e., the length of a side (e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
+#			string	meshes:			Names of the two bone meshes and convex hull (i.e., several individual meshes representing the bones and rib cage; e.g., in the form of ['prox_mesh','dist_mesh', 'conv_hull'])
+#			string	congruencyMeshes:	Names of the meshes to check articular congruency (i.e., several individual meshes; e.g., in the form of ['prox_art_surf','dist_art_surf'])
+#			int	gridSubdiv:		Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			float	gridSize:		Float value indicating the size of the cubic grid (i.e., the length of a side; e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
 #			float	gridScale:		Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 #			float	thickness:		Float value indicating the thickness value which correlates with the joint spacing
 #			
@@ -92,20 +92,24 @@ def sigDistField(jointName, meshes, subdivision, size, scale):
 	rotMat = []
 	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
 	rotMat.append(np.array(jInclTransMat.asMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
+	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
 
 	# cycle through all meshes
 
-	if len(meshes) > 2:
-		error('Too many meshes in array. Please specify only the distal and proximal bone mesh in the mesh array.')
-	elif len(meshes) < 2:
-		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
-	
-	sigDistances = []
+	if len(meshes) < 2:
+		error('Too few meshes specified. Please specify at least two meshes in the mesh array.')
+	if len(rotMat) < len(meshes):
+		error('Fewer rotation matrices than meshes supplied. Please assign corresponding rotation matrices for each mesh.')
+
+	SDFs = []
 	for j,mesh in enumerate(meshes):
 		meshSigDist = sigDistMesh(mesh, rotMat[j], subdivision, scale) # get signed distance field for each mesh
-		sigDistances.append(meshSigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1))
+
+		# initialise tricubic interpolator with signed distance data on default cubic grid
+
+		SDFs.append(tricubic(meshSigDist.tolist(), list(meshSigDist.shape))) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
 	
-	return sigDistances, rotMat
+	return SDFs, rotMat
 
 
 # ========== signed distance field per mesh function ==========
@@ -127,7 +131,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	shape = dag.extendToShape()
 	mObj = shape.node()
-	
+
 	# get the meshs transformation matrix
 
 	meshMat = dag.inclusiveMatrix()
@@ -142,7 +146,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 	# create 3D grid
 
 	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint=True, dtype=float)
-	
+
 	points = np.array([[x, y, z] for x in elements
 				     for y in elements 
 				     for z in elements])
@@ -168,25 +172,27 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # point on mesh coordinates in mesh coordinate system
 		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # normal at point on mesh
 
-	# get vector from gridPoints to points on mesh
+	# get vectors from gridPoints to their closest points on mesh
 
-	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P # vector difference
+	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P
 
-	# get distances from gridPoints to points on mesh
+	# get length of vectors (distance)
 
-	dist = np.linalg.norm(diff, axis = 1) # distance
+	dist = np.linalg.norm(diff, axis = 1)
 
-	# get vector direction from gridPoints to points on mesh
+	# get the vectors' direction from gridPoints to points on mesh
 
-	normDiff = diff/dist.reshape(-1,1) # direction of distance
+	normDiff = diff/dist.reshape(-1,1) # direction of points relative to cubic grid points
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
 	dot = np.sum(N * normDiff, axis = 1)
 
-	# get sign from dot product for distance
+	# get sign for distance from dot product
 
-	return dist * np.sign(dot)
+	sigDist = dist * np.sign(dot)
+
+	return sigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1) # convert signed distance array into cubic grid format
 
 
 # ========== get vertices position in reference frame ==========
@@ -268,14 +274,13 @@ def meanRad(mesh):
 
 # ========== check viability function ==========
 
-def optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, rotMat, thickness):
+def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thickness):
 
 	# Input variables:
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#	proxMeshArr = 3D array of proximal mesh vertex transformation matrices for fast computation of relative coordinates
-	#	ipProx = proximal signed distance field in tricubic form
-	#	ipDist = distal signed distance field in tricubic form
+	#	distMeshArr = 3D array of distal mesh vertex transformation matrices for fast computation of relative coordinates
+	#	SDF = list containing multiple signed distance fields in tricubic form
 	#	gridRotMat = rotation matrix of default cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
@@ -283,7 +288,7 @@ def optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, 
 
 	# optimise translation for specific rotational pose
 
-	results = posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness)
+	results = posOptMin(proxArr, distArr, SDF[0], SDF[1], gridRotMat, rotMat, thickness)
 	
 	# check if optimisation was successful
 	
@@ -305,19 +310,23 @@ def optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, 
 			transMat = rotMat[1] # transformation matrix
 			transMat[3,0:3] = np.dot(resCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
 			transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
-			relMat = np.dot(np.dot(rotMat[0],transMatInv),gridRotMat) # get relative transformation matrix
 
 			# calculate position of vertices relative to cubic grid
 
-			artRelArr = np.dot(proxArr,relMat)[:,3,0:3].tolist()
-			avgdist = sum([ipDist.ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
+			artRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
+			meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
+			
+			avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
+			signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect
 
-			meshRelArr = np.dot(proxMeshArr,relMat)[:,3,0:3].tolist()
-			signDist = [ipDist.ip(vtx) for vtx in meshRelArr] # make sure that bone meshes do not intersect
+			# check if convex hull signed distance field is provided (i.e., body shape, e.g., rib cage)
+			
+			if len(SDF) > 2:
+				signDist.extend([SDF[2].ip(vtx) for vtx in meshRelArr]) # make sure that distal meshes does not intersect with convex hull
 			
 			# if disarticulated or any points penetrate meshes the position becomes inviable
 		
-			if avgdist < (1.05 * thickness) and all(dist > 0 for dist in signDist):
+			if avgdist < (1.07 * thickness) and all(dist > 0 for dist in signDist): # set target thickness limit to 7% based on experimental data
 				viable = 1
 			else:
 				viable = 0
