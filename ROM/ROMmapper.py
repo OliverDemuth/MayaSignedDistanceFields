@@ -19,7 +19,7 @@
 #			float	gridSize:		Float value indicating the size of the cubic grid (i.e., the length of a side; e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
 #			float	gridScale:		Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 #			float	thickness:		Float value indicating the thickness value which correlates with the joint spacing
-#			
+#
 #		RETURN params:
 #			array 	coords:			Return value is a an array of 3D coordinates of the distal bone relative to the proximal one
 #			boolean	viable:			Return value is a boolean whether the rotational poses are viable or inviable (i.e, intersection or disarticulation of the bone meshes)
@@ -27,7 +27,7 @@
 #
 #
 #	IMPORTANT notes:
-#		
+#
 #	(1) Meshes need realtively uniform face areas, otherwise large faces might skew 
 #	    vertex normals in their direction. It is, therefore, important to extrude 
 #	    edges around large faces prior to closing the hole at edges with otherwise 
@@ -280,7 +280,7 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distMeshArr = 3D array of distal mesh vertex transformation matrices for fast computation of relative coordinates
-	#	SDF = list containing multiple signed distance fields in tricubic form
+	#	SDF = list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist, ipConv])
 	#	gridRotMat = rotation matrix of default cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
@@ -317,9 +317,9 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 			meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
 			
 			avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
-			signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect
+			signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect (i.e., check the distal mesh versus the proximal signed distance field)
 
-			# check if convex hull signed distance field is provided (i.e., body shape, e.g., rib cage)
+			# check if convex hull signed distance field is provided (i.e., representing body shape, e.g., rib cage)
 			
 			if len(SDF) > 2:
 				signDist.extend([SDF[2].ip(vtx) for vtx in meshRelArr]) # make sure that distal meshes does not intersect with convex hull
