@@ -76,4 +76,4 @@ ligaments/
   ligamentCalculationBatch.py
   ligamentCalculationWrapper.py
 ```
-###### The Python scripts have been written in Python 3 and were tested with Python 3.11 and Autodesk Maya 2025
+###### The Python scripts were written in Python 3 and tested with Python 3.11 and Autodesk Maya 2025
