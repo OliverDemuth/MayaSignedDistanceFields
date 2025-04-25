@@ -8,6 +8,16 @@
 #
 #	Written by Oliver Demuth 
 #	Last updated 25.04.2025 - Oliver Demuth 
+#
+# IMPORTANT notes:
+#		
+#	(1) This script requires several modules for Python (see README files). Make sure
+#	    to have the following external modules installed for the mayapy application:
+#
+#		- 'numpy' 	NumPy:			https://numpy.org/about/
+#
+#	    For further information regarding them, please check the website(s) referenced 
+#	    above.
 
 
 # ========== load plugins ==========
