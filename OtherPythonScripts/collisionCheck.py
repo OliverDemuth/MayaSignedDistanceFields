@@ -41,7 +41,7 @@
 
 
 jointName = 'myJoint' 		# Specify according to the joint centre in the Maya scene (i.e. the name of a locator or joint; e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-proxMesh = 'RLP3_conv_hull'	# Specify according to the proximal mesh in the Maya scene (i.e., parented under the parent of 'jointName'; e.g., 'myJoint' if following Manafzadeh & Padian 2018)
+proxMesh = 'RLP3_conv_hull'	# Specify according to the proximal mesh in the Maya scene (i.e., parented under the parent of 'jointName'/hierarchically on the same layer as 'jointName'; e.g., 'myJoint' if following Manafzadeh & Padian 2018)
 distMesh = 'RLP3_humerus'	# Specify according to the distal mesh in the Maya scene (i.e., parented under 'jointName'; e.g., 'myJoint' if following Manafzadeh & Padian 2018)
 gridSubdiv = 100		# Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 gridSize = 50			# Dimensions of cubic grid (in the Maya working units) which will be initialised from -gridSize to gridSize (e.g., 10 will result in a cubic grid with an edge length of 20 from -10 to 10). Set sufficiently large to make sure that all vertices of the target mesh are within the grid for all joint orientations
