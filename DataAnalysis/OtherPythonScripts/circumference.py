@@ -7,7 +7,7 @@
 #	'circumference()' in the Python command line in Maya. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 19.03.2025 - Oliver Demuth 
+#	Last updated 25.04.2025 - Oliver Demuth 
 
 
 # ========== load plugins ==========
@@ -60,7 +60,7 @@ def circumference():
 	wDir = (BDir.normal() ^ uDir).normal() # cross product to get z axis
 	vDir = (wDir ^ uDir).normal() # cross product to get y axis 
 
-	uDirNorm = ADir.normal() * Offset
+	uDirNorm = uDir * Offset
 	vDirNorm = vDir * Offset
 	wDirNorm = wDir * Offset
 
@@ -73,7 +73,7 @@ def circumference():
 
 	# calculate new coordinates and extract them
 
-	uvCoords = np.dot(vtxArr,np.linalg.inv(rotMat))[:,3,0:2]
+	uvCoords = np.dot(vtxArr,np.linalg.inv(rotMat))[:,3,0:2] # only need first two values (i.e., u and v coordinates)
 
 	# calculate convex hull
 
