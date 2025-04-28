@@ -1,13 +1,13 @@
 #	collisionCheck.py
 #
-#	This script checks for collision between two meshes with one of them represented 
-#	by a signed distance field (SDF). This script is equivalent to the Boolean method
-#	first proposed by Manafzadeh & Padian (2018), however, it is several orders of
-#	magnitude faster (<0.01 seconds per frame based on a target mesh with ~5000 
-#	vertices).
+#	This script checks for collision between two meshes with one of the 'proxMesh' 
+#	represented by a signed distance field (SDF). This script is equivalent to the 
+#	Boolean method first proposed by Manafzadeh & Padian (2018), however, it is 
+#	several orders of magnitude faster. Run time is <0.01 seconds per frame based on 
+#	a target mesh ('distMesh') with ~5000 vertices.
 #
 #	Written by Oliver Demuth
-#	Last updated 25.04.2025 - Oliver Demuth
+#	Last updated 28.04.2025 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -54,6 +54,7 @@ debug = 0 			# Integer value to specify whether signed distance field calculatio
 
 import maya.api.OpenMaya as om
 from maya.api.OpenMaya import MPoint, MTransformationMatrix, MSelectionList
+import maya.cmds as cmds
 import numpy as np
 import time
 
