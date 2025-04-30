@@ -1,12 +1,12 @@
 #	artDistCalc.py
 #
-#	This script calculates the articular disrance(s) within a joint capsule for one
+#	This script calculates the articular distance(s) within a joint capsule for one
 #	or multiple joint orientations. The disal mesh is represented as a signed
 #	distance field (SDF) to measure the relative distances of the proximal articular 
 #	surface vertices. The overlap between the articular surfaces is defined as the
 #	proportion of the articular distances that remain below the target threshold.
-#	Target threshold is defined as 1/2 mean radius of the fitted sphere to the 
-#	proximal articular surface.
+#	Target threshold is defined as 1/2 radius of the fitted sphere to the proximal
+#	articular surface.
 #
 #	Written by Oliver Demuth
 #	Last updated 30.04.2025 - Oliver Demuth
