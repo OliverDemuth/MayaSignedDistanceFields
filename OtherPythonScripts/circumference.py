@@ -7,7 +7,8 @@
 #	'circumference()' in the Python command line in Maya. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 28.04.2025 - Oliver Demuth 
+#	Last updated 30.04.2025 - Oliver Demuth 
+#
 #
 #	IMPORTANT notes:
 #		
