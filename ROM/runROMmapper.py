@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 24.04.2025 - Oliver Demuth
+#	Last updated 30.04.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -252,10 +252,10 @@ for i in range(keyDiff):
 	if debug == 1:
 		print(results.nit, viable)
 
-		if viable == 1:
+		if viable:
 			nvit.append(results.nit)
 	    
-	if viable == 1:
+	if viable:
 
 		frame = cmds.currentTime(query=True)
 
