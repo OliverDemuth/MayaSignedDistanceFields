@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 28.04.2025 - Oliver Demuth
+#	Last updated 30.04.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -327,13 +327,13 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 			# if disarticulated or any points penetrate meshes the position becomes inviable
 		
 			if avgdist < (1.07 * thickness) and all(dist > 0 for dist in signDist): # set target thickness limit to 7% based on experimental data
-				viable = 1
+				viable = True
 			else:
-				viable = 0
+				viable = False
 		else:
-			viable = 0			
+			viable = False		
 	else:
-		viable = 0
+		viable = False
 
 	# gather results
 
