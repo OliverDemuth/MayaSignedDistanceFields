@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 24.04.2025 - Oliver Demuth
+#	Last updated 14.05.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -188,7 +188,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get the vectors direction from gridPoints to points on mesh
 
-	normDiff = diff/dist.reshape(-1,1) # direction of point relative to cubic grid
+	normDiff = diff / dist.reshape(-1,1) # direction of point relative to cubic grid
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
@@ -300,52 +300,46 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 
 	# check if optimisation was successful
 
-	if results.success: 
+	if not results.success: 
+		return [], False # empty list, viable
 
-		diff = MVector(results.x).length() # get offset from glenoid centre
+	diff = MVector(results.x).length() # get offset from glenoid centre (~35% faster than np.linalg.norm())
 
-		# check for disarticulation 
-						  
-		if diff < (1.1 * thickness * 2): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape)
+	# check for disarticulation 
+					  
+	if diff > (1.1 * thickness * 2): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape)
+		return [], False # empty list, viable
 
-			# get coordinates of results and transform them into transformation matrix coords
+	# get coordinates of results and transform them into transformation matrix coords
 
-			paramCoords[3,0:3] = results.x
+	paramCoords[3,0:3] = results.x
 
-			# get transformation matrix
+	# get transformation matrix
 
-			transMat = rotMat[1] # transformation matrix
-			transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
-			transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
-			relMat = np.dot(np.dot(rotMat[0],transMatInv),gridRotMat) # get relative transformation matrix
+	transMat = rotMat[1] # transformation matrix
+	transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
+	transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
+	relMat = np.dot(np.dot(rotMat[0],transMatInv),gridRotMat) # get relative transformation matrix
 
-			# calculate position of vertices relative to cubic grid
+	# calculate position of vertices relative to cubic grid
 
-			artRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
-			meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
-			
-			avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
-			signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect
+	artRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
+	meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
+	
+	avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
+	signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect
 
-			# check if convex hull signed distance field is provided (i.e., body shape, e.g., rib cage)
-			
-			if len(SDF) > 2:
-				signDist.extend([SDF[2].ip(vtx) for vtx in meshRelArr]) # make sure that distal meshes does not intersect with convex hull (i.e., rib cage)
+	# check if convex hull signed distance field is provided (i.e., body shape, e.g., rib cage)
+	
+	if len(SDF) > 2:
+		signDist.extend([SDF[2].ip(vtx) for vtx in meshRelArr]) # make sure that distal meshes does not intersect with convex hull (i.e., rib cage)
 
-			# if disarticulated or any points penetrate meshes the position becomes inviable
+	# if disarticulated or any points penetrate meshes the position becomes inviable
 
-			if avgdist < (1.07 * thickness) and all(dist > 0 for dist in signDist): # set target thickness limit to 7% based on experimental data
-				viable = True
-			else:
-				viable = False
-		else:
-			viable = False		
+	if avgdist < (1.07 * thickness) and all(dist > 0 for dist in signDist): # set target thickness limit to 7% based on experimental data
+		return results.x.tolist(), True # coords list, viable
 	else:
-		viable = False
-
-	# gather outputs
-
-	return results.x.tolist(), viable
+		return [], False # empty list, viable
 
 
 # ========== translation optimisation ==========
@@ -376,7 +370,7 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, i
 
 	# set bounds
 
-	boundsList = [(-10,10)] * (len(initial_guess)) # set x, y and z coordinate boundaries
+	boundsList = [(-5 * thickness, 5 * thickness)] * (len(initial_guess)) # set x, y and z coordinate boundaries; based on 2.5x fitted sphere radius and thus scale/Maya units independent
 	bnds = tuple(boundsList)
 
 	# set options
