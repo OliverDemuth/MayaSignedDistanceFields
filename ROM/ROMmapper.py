@@ -369,7 +369,7 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness):
 
 	# set bounds
 
-	boundsList = [(-10,10)] * (len(initial_guess)) # set x, y and z coordinate boundaries
+	boundsList = [(-5 * thickness, 5 * thickness)] * (len(initial_guess)) # set x, y and z coordinate boundaries; based on 2.5x fitted sphere radius and thus scale/Maya units independent
 	bnds = tuple(boundsList)
 
 	# set options
