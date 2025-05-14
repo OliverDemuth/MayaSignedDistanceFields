@@ -27,7 +27,7 @@ $$C_{lig} = \sum_{i=0}^{n-1} \sqrt{const^2+(y_{i+1}-y_i )^2+(z_{i+1}-z_i )^2 }$$
 
 subject to the inequality constraint imposed by the SDFs
 
-$$f(x_v,y_v,z_v ) \geq 0$$
+$$f(x_i,y_i,z_i ) \geq 0$$
 
 and the additional inequality constraint to ensure the smoothness of the optimised ligament paths
 
