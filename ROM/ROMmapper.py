@@ -7,12 +7,12 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 30.04.2025 - Oliver Demuth
+#	Last updated 14.05.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
 #		INPUT params:
-#			string	jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+#			string	jointName:		Name of the joint centre (i.e. the name of a locator or joint; e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 #			string	meshes:			Names of the two bone meshes and optional convex hull (i.e., several individual meshes representing the bones and rib cage; e.g., in the form of ['prox_mesh','dist_mesh', 'conv_hull'])
 #			string	congruencyMeshes:	Names of the meshes to check articular congruency (i.e., several individual meshes; e.g., in the form of ['prox_art_surf','dist_art_surf'])
 #			int	gridSubdiv:		Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
@@ -182,7 +182,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get the vectors' direction from gridPoints to points on mesh
 
-	normDiff = diff/dist.reshape(-1,1) # direction of points relative to cubic grid points
+	normDiff = diff / dist.reshape(-1,1) # direction of points relative to cubic grid points
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
@@ -292,52 +292,46 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 	
 	# check if optimisation was successful
 	
-	if results.success: 
+	if not results.success: 
+		return results.x, False, results # coords, viable, results
 	
-		diff = MVector(results.x).length() # get offset from joint centre
+	diff = MVector(results.x).length() # get offset from joint centre
 
-		# check for disarticulation 
+	# check for disarticulation 
 						  
-		if diff < (1.1 * thickness * 2): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape)
+	if diff > (1.1 * thickness * 2): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape)
+		return results.x, False, results # coords, viable, results
 
-			# get coordinates of results and transform them into transformation matrix coords
+	# get coordinates of results and transform them into transformation matrix coords
 
-			resCoords = np.eye(4)
-			resCoords[3,0:3] = results.x
+	resCoords = np.eye(4)
+	resCoords[3,0:3] = results.x
 
-			# get transformation matrix
+	# get transformation matrix
 
-			transMat = rotMat[1] # transformation matrix
-			transMat[3,0:3] = np.dot(resCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
-			transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
+	transMat = rotMat[1] # transformation matrix
+	transMat[3,0:3] = np.dot(resCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
+	transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
 
-			# calculate position of vertices relative to cubic grid
+	# calculate position of vertices relative to cubic grid
 
-			artRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
-			meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
+	artRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
+	meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
+	
+	avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
+	signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect (i.e., check the distal mesh versus the proximal signed distance field)
+
+	# check if convex hull signed distance field is provided (i.e., representing body shape; e.g., rib cage)
 			
-			avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
-			signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect (i.e., check the distal mesh versus the proximal signed distance field)
+	if len(SDF) > 2:
+		signDist.extend([SDF[2].ip(vtx) for vtx in meshRelArr]) # make sure that distal meshes does not intersect with convex hull
 
-			# check if convex hull signed distance field is provided (i.e., representing body shape; e.g., rib cage)
-			
-			if len(SDF) > 2:
-				signDist.extend([SDF[2].ip(vtx) for vtx in meshRelArr]) # make sure that distal meshes does not intersect with convex hull
-			
-			# if disarticulated or any points penetrate meshes the position becomes inviable
-		
-			if avgdist < (1.07 * thickness) and all(dist > 0 for dist in signDist): # set target thickness limit to 7% based on experimental data
-				viable = True
-			else:
-				viable = False
-		else:
-			viable = False		
+	# if disarticulated or any points penetrate meshes the position becomes inviable
+
+	if avgdist < (1.07 * thickness) and all(dist > 0 for dist in signDist): # set target thickness limit to 7% based on experimental data
+		return results.x, True, results # coords, viable, results
 	else:
-		viable = False
-
-	# gather results
-
-	return results.x, viable, results
+		return results.x, False, results # coords, viable, results
 
 
 # ========== translation optimisation ==========
