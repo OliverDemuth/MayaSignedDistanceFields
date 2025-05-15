@@ -192,12 +192,15 @@ def sigDistField(jointName, meshes, subdivision, gridScale):
 	elif len(meshes) < 2:
 		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
 	
-	sigDistances = []
+	SDFs = []
 	for i,mesh in enumerate(meshes):
 		meshSigDist = sigDistMesh(mesh, rotMat[i], subdivision, gridScale) # get signed distance field for each mesh
-		sigDistances.append(meshSigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1))
+		
+		# initialise tricubic interpolator with signed distance data on default cubic grid
+
+		SDFs.append(tricubic(meshSigDist.tolist(), list(meshSigDist.shape))) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
 	
-	return sigDistances, LigAttributes, maxDist
+	return SDFs, LigAttributes, maxDist
 
 
 # ========== signed distance field per mesh function ==========
@@ -277,7 +280,10 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	# get sign from dot product for distance
 
-	return dist * np.sign(dot)
+	signDist = dist * np.sign(dot)
+
+	return sigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1) # convert signed distance array into cubic grid format
+
 
 
 # ========== ligament rotation matrix function ==========
