@@ -5,7 +5,7 @@
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 28.01.2025 - Oliver Demuth
+#	Last updated 15.05.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -94,7 +94,7 @@ if debug == 1:
 	# check if distance fields have already been calculated
 
 	try:
-		sigDistFieldArray
+		SDF
 	except NameError:
 		var_exists = False
 	else:
@@ -109,12 +109,7 @@ if not var_exists:
 	cmds.move(0,0,0, jointName, localSpace=True)
 	cmds.rotate(0,0,0,jointName)
 	
-	sigDistFieldArray, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale)
-
-# initialise tricubic interpolator with signed distance data on default cubic grid
-
-ipProx = tricubic(sigDistFieldArray[0].tolist(), list(sigDistFieldArray[0].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
+	SDF, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale)
 
 # get inverse of rotation matrix for default cubic grid coordinate system
 
@@ -211,7 +206,7 @@ for i in range(keyDiff):
 
 	# calculate the length of each ligament 
 
-	pathLengths,ligPoints,results = ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, KeyPathPoints)
+	pathLengths,ligPoints,results = ligCalc(x, jPos, SDF[0], SDF[1], rotMat, LigAttributes, KeyPathPoints)
 
 	# key the attributes on the animated joint
 
