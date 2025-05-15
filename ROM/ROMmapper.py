@@ -320,7 +320,7 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 	meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
 	
 	avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
-	signDist = ([SDF[0].ip(vtx) for vtx in meshRelArr]) # make sure that bone meshes do not intersect (i.e., check the distal mesh versus the proximal signed distance field)
+	signDist = [SDF[0].ip(vtx) for vtx in meshRelArr] # make sure that bone meshes do not intersect (i.e., check the distal mesh versus the proximal signed distance field)
 
 	# check if convex hull signed distance field is provided (i.e., representing body shape; e.g., rib cage)
 			
