@@ -87,7 +87,7 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
 
 	numPoints = len(x)
 
-	ligArr = np.stack([np.eye(4)] * numPoints, axis = 0)
+	ligArr = np.stack([np.eye(4)] * (numPoints-2), axis = 0)
 
 	# define initual guess condition for optimiser
 
@@ -107,11 +107,11 @@ def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes):
 
 		# minimise ligament length through optimiser
 
-		res = ligLengthOptMin(x, initial_guess, ipProx, ipDist, relRotMat, ligArr[0:-2,:,:])
+		res = ligLengthOptMin(x, initial_guess, ipProx, ipDist, relRotMat, ligArr)
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
-		if res.status == 0: # check if optimiser terminated successfully
+		if res.success: # check if optimiser terminated successfully
 			ligLengths.append(res.fun * offset)
 		else:
 			ligLengths.append(-offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
@@ -177,12 +177,15 @@ def sigDistField(jointName, meshes, subdivision, gridScale):
 	elif len(meshes) < 2:
 		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
 	
-	sigDistances = []
-	for i,mesh in enumerate(meshes):
+	SDFs = []
+	for i, mesh in enumerate(meshes):
 		meshSigDist = sigDistMesh(mesh, rotMat[i], subdivision, gridScale) # get signed distance field for each mesh
-		sigDistances.append(meshSigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1))
+
+		# initialise tricubic interpolator with signed distance data on default cubic grid
+		
+		SDFs.append(tricubic(meshSigDist.tolist(), list(meshSigDist.shape))) # grid will be initialised in its relative coordinate system from [0,0,0] to [subdivision+1, subdivision+1, subdivision+1].
 	
-	return sigDistances, LigAttributes, maxDist
+	return SDFs, LigAttributes, maxDist
 
 
 # ========== signed distance field per mesh function ==========
@@ -262,7 +265,9 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	# get sign from dot product for distance
 
-	return dist * np.sign(dot)
+	signDist = dist * np.sign(dot)
+
+	return signDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1) # convert signed distance array into cubic grid format
 
 
 # ========== ligament rotation matrix function ==========
@@ -519,13 +524,8 @@ def processMayaFiles(filePath,args):
 	cmds.move(0,0,0, jointName, localSpace=True)
 	cmds.rotate(0,0,0,jointName)
 	
-	sigDistFieldArray, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale))
+	SDF, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale))
 	
-	# initialise tricubic interpolator with signed distance data on default cubic grid
-
-	ipProx = tricubic(sigDistFieldArray[0].tolist(), list(sigDistFieldArray[0].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-	ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-
 	# get inverse of rotation matrix for default cubic grid coordinate system
 
 	gridVec = 2 * gridScale / subdivision
@@ -593,7 +593,7 @@ def processMayaFiles(filePath,args):
 
 		# calculate the length of the ligaments for the current frame and append it to results array
 
-		ligRes.append(ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes)) # add row of ligament lengths to result array
+		ligRes.append(ligCalc(x, jPos, SDF[0], SDF[1], rotMat, LigAttributes)) # add row of ligament lengths to result array
 
 		# update progress
 		
