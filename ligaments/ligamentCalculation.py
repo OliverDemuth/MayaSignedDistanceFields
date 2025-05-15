@@ -110,7 +110,7 @@ def ligCalc(xCoords, jPos, ipProx, ipDist, rotMat, LigAttributes, keyPathPoints)
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
-		if res.status == 0: # check if optimiser terminated successfully
+		if res.success: # check if optimiser terminated successfully
 			ligLengths.append(res.fun * offset)
 		else:
 			ligLengths.append(-offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
