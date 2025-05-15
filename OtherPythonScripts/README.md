@@ -1,7 +1,7 @@
 ## Additional Python scripts
 This folder contains additional Python scripts for data processing and analysis: 
 ### artDistCalc.py
-This script calculates the articular distance(s) within a joint capsule for one or multiple joint orientations. The disal mesh is represented as a signed distance field (SDF) to measure the relative distances of the proximal articular surface vertices. The overlap between the articular surfaces is defined as the proportion of the articular distances that remain below the target threshold. The target threshold is defined as $0.5\times$ radius of the fitted sphere to the proximal articular surface.
+This script calculates the articular distance(s) within a joint capsule for one or multiple joint orientations. The disal mesh is represented as a signed distance field (SDF) to measure the relative distances of the proximal articular surface vertices. The overlap between the articular surfaces is defined as the proportion of the articular distances that remain below the target threshold. The target threshold is defined as 0.5x radius of the fitted sphere to the proximal articular surface.
 ### circumference.py
 This scripts calculates the circumference of a 2D slice in Autodesk Maya based on a cutting plane using an implementation of the [Andrew (1979)](doi.org/10.1016/0020-0190(79)90072-3) monotone chain convex hull algorithm.
 ### collisionCheck.py
