@@ -296,7 +296,7 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 	if not results.success: 
 		return results.x, False, results # coords, viable, results
 	
-	diff = MVector(results.x).length() # get offset from joint centre
+	diff = MVector(results.x).length() # get offset from joint centre (~35% faster than np.linalg.norm())
 
 	# check for disarticulation 
 						  
