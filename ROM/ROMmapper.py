@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 14.05.2025 - Oliver Demuth
+#	Last updated 15.05.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -418,8 +418,8 @@ def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 
 	# go through each proximal and distal articular surface point and check if any of them intersect with a mesh (i.e., signDist < 0)
 
-	signDist = [min([ipDist.ip(vtx) for vtx in proxVtcRelArr]), # minimal proximal signed distance
-		    min([ipProx.ip(vtx) for vtx in distVtcRelArr])] # minimal distal signed distance
+	signDist = [ipDist.ip(vtx) for vtx in proxVtcRelArr] # proximal signed distance
+	signDist.extend([ipProx.ip(vtx) for vtx in distVtcRelArr]) # distal signed distance
 
 	return min(signDist) # return minimal value, if any of the points are inside a mesh it will be negative
 
