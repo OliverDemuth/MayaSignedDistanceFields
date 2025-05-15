@@ -282,7 +282,7 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	signDist = dist * np.sign(dot)
 
-	return sigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1) # convert signed distance array into cubic grid format
+	return signDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1) # convert signed distance array into cubic grid format
 
 
 
