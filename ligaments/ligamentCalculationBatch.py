@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 24.04.2025 - Oliver Demuth
+#	Last updated 15.05.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -404,8 +404,8 @@ def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligArr):
 	relPosProxArr = np.dot(ligArr,rotMat[0])[:,3,0:3].tolist() # get points in proximal cubic grid coordinates
 	relPosDistArr = np.dot(ligArr,rotMat[1])[:,3,0:3].tolist() # get points in distal cubic grid coordinates
 
-	signDist = [min([ipProx.ip(point) for point in relPosProxArr]), # minimal proximal signed distance
-		    min([ipDist.ip(point) for point in relPosDistArr])] # minimal distal signed distance
+	signDist = [ipProx.ip(point) for point in relPosProxArr] # proximal signed distance
+	signDist.extend([ipDist.ip(point) for point in relPosDistArr]) # distal signed distance
 		
 	return min(signDist)
 
