@@ -303,7 +303,7 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 	if not results.success: 
 		return [], False # empty list, viable
 
-	diff = MVector(results.x).length() # get offset from glenoid centre (~35% faster than np.linalg.norm())
+	diff = MVector(results.x).length() # get offset from joint centre (~35% faster than np.linalg.norm())
 
 	# check for disarticulation 
 					  
