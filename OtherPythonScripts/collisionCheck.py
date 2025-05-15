@@ -1,13 +1,13 @@
 #	collisionCheck.py
 #
-#	This script checks for collision between two meshes with one of the 'proxMesh' 
+#	This script checks for collision between two meshes with one of them ('proxMesh') 
 #	represented by a signed distance field (SDF). This script is equivalent to the 
 #	Boolean method first proposed by Manafzadeh & Padian (2018), however, it is 
-#	several orders of magnitude faster. Run time is <0.01 seconds per frame based on 
-#	a target mesh ('distMesh') with ~5000 vertices.
+#	several orders of magnitude faster. The runtime is <0.01 seconds per frame based 
+#	on a target mesh ('distMesh') with ~5000 vertices.
 #
 #	Written by Oliver Demuth
-#	Last updated 28.04.2025 - Oliver Demuth
+#	Last updated 15.05.2025 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -220,7 +220,7 @@ def artDist(jointName, vtxArr, SDF, gridRotMat, gridSize):
 
 	vtcRelArr = np.dot(vtxArr,np.dot(np.dot(rotMatDist,np.linalg.inv(rotMatProx)),gridRotMat))[:,3,0:3].tolist()
 
-	# calculate distance 
+	# calculate distances 
 
 	return [SDF.ip(vtx) for vtx in vtcRelArr]
 
@@ -294,7 +294,7 @@ if not var_exists:
 	jInclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 	jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 
-	# only need to calculate one signed distance field (convex hull)
+	# only need to calculate one signed distance field (i.e., for 'proxMesh')
 
 	sigDistArray = sigDistMesh(proxMesh, np.array(jExclTransMat.asMatrix()).reshape(4,4), gridSubdiv)
 
