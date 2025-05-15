@@ -418,7 +418,7 @@ def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligArr):
 	relPosDistArr = np.dot(ligArr,rotMat[1])[:,3,0:3].tolist() # get points in distal cubic grid coordinates
 
 	signDist = [ipProx.ip(point) for point in relPosProxArr] # proximal signed distance
-	signdDist.extend([ipDist.ip(point) for point in relPosDistArr]) # distal signed distance
+	signDist.extend([ipDist.ip(point) for point in relPosDistArr]) # distal signed distance
 		
 	return min(signDist)
 
