@@ -6,6 +6,8 @@
 %   are compared with XROMM data and sensitivity tested using different 
 %   thresholds and alpha radii.
 %
+%   Please note, this script requires MATLAB scripts from Lee et al. 2023. 
+%
 %   Written by Oliver Demuth 
 %
 %   Last updated 16.05.2025 - Oliver Demuth
