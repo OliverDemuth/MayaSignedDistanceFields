@@ -3,6 +3,8 @@
 %   freedom in XROMM data and calculates the mean joint centre using
 %   helical axes.
 %
+%   Please note, this script requires MATLAB scripts from Lee et al. 2023. 
+%
 %   Written by Oliver Demuth based on modified scripts from Hazel Richards
 %
 %   Last updated 16.05.2025 - Oliver Demuth
