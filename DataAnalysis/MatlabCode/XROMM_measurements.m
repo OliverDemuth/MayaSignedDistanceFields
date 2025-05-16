@@ -702,15 +702,15 @@ for i = 1:3
 
 end
 
+% get extreme translations from data
 
 [minT,minTidx] = min(plotData);
 [maxT,maxTidx] = max(plotData);
 
 TDataIdcs = horzcat(minTidx,maxTidx);
 
-
-floor(TDataIdcs/5458)
-mod(TDataIdcs,5458)
+floor(TDataIdcs/5458); % get trial
+mod(TDataIdcs,5458); % get frame in respective trial
 
 TData = Data_Norm(horzcat(minTidx,maxTidx),:);
 TData(:,1:3) = TData(:,1:3)*RLP3_HC;
