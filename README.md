@@ -84,7 +84,7 @@ ligaments/
 
 ## Citation
 If you use this method, please cite this GitHub repository [![DOI](https://zenodo.org/badge/489695793.svg)](https://doi.org/10.5281/zenodo.15442127) and the following papers:
-1. Demuth OE, Hutchinson JR, La Barbera V, Warner SE, Field DJ. [Soft tissue constraints on joint mobility in the avian shoulder]
+1. Demuth OE, Hutchinson JR, La Barbera V, Warner SE, Field DJ. [Soft tissue constraints on joint mobility in the avian shoulder](https://doi.org/10.1101/2025.05.16.654461). bioRxiv. 2025.05.16.654461.
 2. Marai GE, Laidlaw DH, Demiralp C, Andrews S, Grimm CM, Crisco JJ. 2004. [Estimating Joint Contact Areas and Ligament Lengths From Bone Kinematics and Surfaces](https://doi.org/10.1109/TBME.2004.826606). IEEE Trans. Biomed. Eng. 51, 790–799.
 3. Marai GE, Crisco JJ, Laidlaw DH. 2006. [A Kinematics-Based Method For Generating Cartilage Maps and Deformations in the Multi-Articulating Wrist Joint From CT Images](https://doi.org/10.1109/IEMBS.2006.259742). In 2006 International Conference of the IEEE Engineering in Medicine and Biology Society, 2079–2082
 4. Lee ECS, Young NM, Rainbow MJ. 2023. [A comparative approach for characterizing the relationship among morphology, range-of-motion and locomotor behaviour in the primate shoulder](https://doi.org/10.1098/rspb.2023.1446). Proc. R. Soc. B Biol. Sci. 290.
