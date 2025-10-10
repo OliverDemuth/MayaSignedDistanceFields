@@ -63,23 +63,17 @@ def circumference():
 	ADir = meanPos - vertices[0]
 	BDir = meanPos - vertices[1]
 
-	Offset = ADir.length()
-
 	# calculate cut plane direction
 
 	uDir = ADir.normal() 
 	wDir = (BDir.normal() ^ uDir).normal() # cross product to get z axis
 	vDir = (wDir ^ uDir).normal() # cross product to get y axis 
 
-	uDirNorm = uDir * Offset
-	vDirNorm = vDir * Offset
-	wDirNorm = wDir * Offset
-
 	# get transformation matrix for cutting plane
 
-	rotMat = np.array([[uDirNorm.x, uDirNorm.y, uDirNorm.z, 0],
-			   [vDirNorm.x, vDirNorm.y, vDirNorm.z, 0],
-			   [wDirNorm.x, wDirNorm.y, wDirNorm.z, 0],
+	rotMat = np.array([[uDir.x, uDir.y, uDir.z, 0],
+			   [vDir.x, vDir.y, vDir.z, 0],
+			   [wDir.x, wDir.y, wDir.z, 0],
 			   [meanPos[0],meanPos[1],meanPos[2],1]]) # centre position around midpoint
 
 	# calculate new coordinates and extract them
@@ -92,7 +86,7 @@ def circumference():
 
 	# calculate perimeter/circumference of convex hull
 
-	return sum(np.sqrt(sum(np.diff(hullPoints,axis=0)**2)))
+	return float(sum(np.sqrt(sum(np.diff(hullPoints,axis=0).T**2))))
 
 
 def MC_convex_hull(points):
