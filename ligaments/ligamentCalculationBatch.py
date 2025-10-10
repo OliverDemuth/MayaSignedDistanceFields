@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 15.05.2025 - Oliver Demuth
+#	Last updated 10.10.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -61,7 +61,8 @@ import time
 
 from tricubic import tricubic
 from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
-from math import sqrt, floor
+from math import sqrt, floor, ceil
+from datetime import timedelta
 
 
 ################################################
@@ -524,11 +525,11 @@ def processMayaFiles(filePath,args):
 	cmds.move(0,0,0, jointName, localSpace=True)
 	cmds.rotate(0,0,0,jointName)
 	
-	SDF, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale))
+	SDF, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale)
 	
 	# get inverse of rotation matrix for default cubic grid coordinate system
 
-	gridVec = 2 * gridScale / subdivision
+	gridVec = 2 * gridScale / gridSubdiv
 	gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
 					     [0, gridVec, 0, 0], # y direction
 					     [0, 0, gridVec, 0], # z direction
@@ -597,15 +598,15 @@ def processMayaFiles(filePath,args):
 
 		# update progress
 		
-		percent = (100 * (frame + 1)) // frames
+		percent = ((1000 * (frame + 1)) // frames) / 10
 
 		if updateSwitch:
 			previous = percent
 			updateSwitch = False
 
 		if percent > previous:
-			ETA = time.strftime("%H h %M min %S sec", time.gmtime((100 - percent) * (time.time() - mid) / percent))
-			print('{0} ligament calculation progress: {1:.0f}%. Estimated completion in: {2}'.format(fileName,percent,ETA)) 
+			ETA = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil((100 - percent) * (time.time() - mid) / percent))).split(':'))
+			print('{0} Ligament calculation progress: {1:.1f}%. Estimated completion in: {2}'.format(fileName,percent,ETA)) 
 			updateSwitch = True
 
 		# go to next frame
@@ -635,7 +636,5 @@ def processMayaFiles(filePath,args):
 	# print simulation time for each Maya scene
 
 	end = time.time()
-	convert = time.strftime("%H hours %M min %S seconds", time.gmtime(end - mid))
+	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil(end - mid))).split(':'))
 	print('Ligament calculation for {0} done in {1}!'.format(fileName,convert))
-
-
