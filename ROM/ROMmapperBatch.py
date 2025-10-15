@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 15.05.2025 - Oliver Demuth
+#	Last updated 15.10.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -614,10 +614,6 @@ def processMayaFiles(filePath,args):
 
 	paramCoords = np.eye(4)
 
-	# set time to 1
-
-	cmds.currentTime(1)
-
 
 	# ==== optimise translations ====
 
@@ -658,7 +654,7 @@ def processMayaFiles(filePath,args):
 		# check if pose was viable
 
 		if viable:
-			transRes.append(coords + rotation) # combine both lists and append to results array
+			transRes.append(coords + rotation) # combine both lists and append to results array [Tx, Ty, Tz, Rx, Ry, Rz]
 
 		# update progress
 		
@@ -672,10 +668,6 @@ def processMayaFiles(filePath,args):
 			ETA = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil((100 - percent) * (time.time() - mid) / percent))).split(':'))
 			print('{0} Translation optimisation progress: {1:.1f}%. Estimated completion in: {2}'.format(fileName,percent,ETA)) 
 			updateSwitch = True
-
-		# go to next frame
-
-		cmds.currentTime(frame + 2)
 
 
 	# ==== save results and print to file ====
