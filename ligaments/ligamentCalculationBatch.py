@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 10.10.2025 - Oliver Demuth
+#	Last updated 15.10.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -133,10 +133,10 @@ def sigDistField(jointName, meshes, subdivision, gridScale):
 
 	# get joint centre position
 
-	jPos = getWSPos(jointName)
 	jDag = dagObjFromName(jointName)[1]
 	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
 	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
+	jPos = jInclTransMat.translation(4) # extract translation in world space from transformation matrix (3x faster than xform; om.MSpace.kWorld = 4)
 
 	# get number and names of ligaments
 
@@ -573,10 +573,10 @@ def processMayaFiles(filePath,args):
 
 		# get joint centre position
 
-		jPos = getWSPos(jointName)
 		jDag = dagObjFromName(jointName)[1]
 		jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
 		jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
+		jPos = jInclTransMat.translation(4) # extract translation in world space from transformation matrix (3x faster than xform; om.MSpace.kWorld = 4)
 
 		# normalize matrices by gridSize
 
@@ -611,7 +611,7 @@ def processMayaFiles(filePath,args):
 
 		# go to next frame
 
-		cmds.currentTime(frame + 2)
+		cmds.currentTime(frame + 2) # frames start from 1 and not from 0 (current frame is frame + 1)
 		
 	
 	# ==== save results and print to file ====
