@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 30.04.2025 - Oliver Demuth
+#	Last updated 01.12.2025 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -27,23 +27,22 @@
 #################################################
 
 
-jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-meshes = ['RLP3_scapulocoracoid', 			# specify according to meshes in the Maya scene
-	  'RLP3_humerus',
-	  'RLP3_convex_hull']				
-congruencyMeshes = ['RLP3_glenoid_art_surf', 		# specify according to meshes in the Maya scene
-		    'RLP3_humeral_head']	
-fittedShape = 'RLP3_glenoid_fitted_sphere_Mesh'		# specify according to meshes in the Maya scene		
-xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
-yBounds = [-90,90]					# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
-zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
-gridSubdiv = 100					# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-gridScale = 1						# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-interval = 5						# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
-StartFrame = None 					# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
-FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-ContinueKeys = False					# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
-debug = 0 						# Debug mode to check if signed distance fields have already been calculated
+jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+meshes = ['prox_mesh', 			# specify according to meshes in the Maya scene
+	  'dist_mesh']
+congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
+		    'dist_art_surf']
+fittedShape = 'prox_sphere'		# specify according to meshes in the Maya scene		
+xBounds = [-180,180]			# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
+yBounds = [-90,90]			# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
+zBounds = [-180,180]			# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
+gridSubdiv = 100			# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridScale = 1				# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+interval = 5				# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+StartFrame = None 			# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
+FrameInterval = None			# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+ContinueKeys = False			# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
+debug = 0 				# Debug mode to check if signed distance fields have already been calculated
 
 
 #################################################
@@ -54,14 +53,12 @@ debug = 0 						# Debug mode to check if signed distance fields have already bee
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
-from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
 import time
 import random
 
-from tricubic import tricubic
 from math import ceil
 
 # ========================================
@@ -95,7 +92,7 @@ if debug == 1 or ContinueKeys:
 		var_exists = False
 	else:
 		var_exists = True # signed distance field already calculated, no need to do it again
-		
+
 	nvit = []
 
 else:
@@ -108,7 +105,7 @@ if not var_exists:
 	print('Calculating signed distance fields...')
 
 	SDF, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize, gridScale)
-	
+
 	# calculate relative position of articular surfaces
 
 	proxArr = relVtcPos(congruencyMeshes[0], initialRotMat[0])
@@ -116,12 +113,6 @@ if not var_exists:
 	distMeshArr = relVtcPos(meshes[1], initialRotMat[1])
 
 # get inverse of rotation matrix for default cubic grid coordinate system
-
-gridVec = 2 * gridScale / gridSubdiv
-gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
-				     [0, gridVec, 0, 0], # y direction
-				     [0, 0, gridVec, 0], # z direction
-				     [-gridScale, -gridScale, -gridScale, 1]])) # origin
 
 mid = time.time()
 
@@ -165,7 +156,7 @@ else:
 		cmds.cutKey(jointName, option="keys") # delete all previous keyframes
 	else: 
 		minKeys = StartFrame
-		
+
 	lastKey = 0	
 
 	# set current time
@@ -177,7 +168,7 @@ else:
 if FrameInterval == None or (minKeys + FrameInterval) > numFrames:
 	keyframes = numFrames
 	keyDiff = keyframes - minKeys + 1
-	
+
 else:
 	keyframes = minKeys + FrameInterval
 	keyDiff = FrameInterval
@@ -202,13 +193,11 @@ print('Translation optimisation in progress...')
 
 jExclMat = jDag.exclusiveMatrix() # world rotation matrix of parent joint
 jExclNPMat = np.array(jExclMat).reshape(4,4) # convert into numpy 4x4 array
-
-jExclTransMat = MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
-jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
-jExclTransNPMat = np.array(jExclTransMat.asMatrix()).reshape(4,4) # convert into numpy 4x4 array
-jExclTransNPMatInv = np.linalg.inv(jExclTransNPMat) # inverse of parent rotMat (prox) as numpy 4x4 array
+jExclNPMatInv = np.linalg.inv(jExclNPMat) # inverse of parent rotMat (prox) as numpy 4x4 array
 
 # go through all possible combinations
+
+frame = 0
 
 for i in range(keyDiff):
 
@@ -228,36 +217,33 @@ for i in range(keyDiff):
 
 	# get joint inclusive transformation matrix (child)
 
-	localTransMat = MTransformationMatrix()
+	localTransMat = om.MTransformationMatrix()
 	localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order = 0)) # set rotation (om.MEulerRotation.kXYZ = 0)
-	localTransMat.setTranslation(MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
+	localTransMat.setTranslation(om.MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
+	jInclTransMat = localTransMat.asMatrix() * jExclMat
 
-	jInclTransMat = localTransMat.asMatrix() * gridSize * jExclMat
-	jInclTransMat[-1] = 1 # reset last element to 1
-	
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(jExclTransNPMat) # append parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(jExclNPMat) # append parent rotMat (prox) as numpy 4x4 array
 	rotMat.append(np.array(jInclTransMat).reshape(4,4)) # append child rotMat (dist) as numpy 4x4 array
-	rotMat.append(jExclNPMat) # append parent rotMat (prox) without scale as numpy 4x4 array
-	rotMat.append(jExclTransNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(jExclNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
 
 	# optimise the joint translations
 
-	coords, viable, results = optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thickness)
+	coords, viable, results = optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, gridSize)
 
 	# check if pose was viable
-	
+
 	if debug == 1:
 		print(results.nit, viable)
 
 		if viable:
 			nvit.append(results.nit)
-	    
+
 	if viable:
 
-		frame = cmds.currentTime(query=True)
+		frame = cmds.currentTime(query = True)
 
 		# key rotation to animate joint
 
@@ -277,18 +263,18 @@ for i in range(keyDiff):
 
 	# update progress bar
 
-	cmds.progressWindow(edit=True, progress=i+1, status='Processing frame {0} of {1} frames'.format(i+1,keyDiff))
+	cmds.progressWindow(edit = True, progress = i + 1, status = 'Processing frame {0} of {1} frames'.format(i + 1, keyDiff))
 
 # when done close progress bar
 
 end = time.time()
 
-if cmds.progressWindow(query=True, isCancelled=True):
+if cmds.progressWindow(query = True, isCancelled = True):
 	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i+1,int(frame-lastKey)))
 else:
 	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid,keyDiff,int(frame-lastKey)))
 
-cmds.progressWindow(edit=True, endProgress=True)
+cmds.progressWindow(edit = True, endProgress = True)
 
 if debug == 1 and len(nvit) > 0:
-    print(max(nvit))
+	print(max(nvit))
