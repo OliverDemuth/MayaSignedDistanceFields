@@ -44,7 +44,7 @@
 
 jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['prox_mesh', 			# specify according to meshes in the Maya scene
-	  'dist_mesh',]				
+	  'dist_mesh']				
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
 		    'dist_art_surf']	
 fittedShape = 'prox_sphere'		# specify according to meshes in the Maya scene		
