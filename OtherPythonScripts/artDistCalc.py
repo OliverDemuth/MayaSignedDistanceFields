@@ -9,7 +9,7 @@
 #	articular surface.
 #
 #	Written by Oliver Demuth
-#	Last updated 30.04.2025 - Oliver Demuth
+#	Last updated 02.12.2025 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -39,7 +39,7 @@
 jointName = 'myJoint' 				# specify according to the joint centre in the Maya scene (i.e. the name of a locator or joint; e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 mesh = 'RLP3_humerus'				# specify according to meshes in the Maya scene (i.e., distal/reference mesh; e.g., humerus)
 artSurfMesh = 'RLP3_glenoid_art_surf_mesh'	# specify according to meshes in the Maya scene (i.e., proximal articular surface mesh; e.g., glenoid articular surface)
-referenceShape = "RLP3_glenoid_sphere_mesh"	# fitted shape to proximal articular surfaces
+referenceShape = 'RLP3_glenoid_sphere_mesh'	# fitted shape to proximal articular surfaces
 gridSubdiv = 100				# integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 gridScale = 1 					# scale factor for the cubic grid dimensions
 StartFrame = None 				# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
@@ -52,11 +52,11 @@ debug = 0 					# Integer value to specify whether signed distance field calculat
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
-from maya.api.OpenMaya import MPoint, MTransformationMatrix, MSelectionList
 import numpy as np
+import scipy as sp
 import time
 
-from tricubic import tricubic
+from maya.api.OpenMaya import MPoint
 
 
 #################################################
@@ -143,8 +143,8 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 	# Input variables:
 	#	mesh = name of the mesh for which the signed distance field is calculated
 	#	rotMat = transformation matrix of parent (joint) of the mesh
-	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
-	# 	gridScale = scale factor for the cubic grid dimensions
+	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+	#	gridScale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get dag paths
@@ -155,7 +155,7 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	shape = dag.extendToShape()
 	mObj = shape.node()
-	
+
 	# get the meshs transformation matrix
 
 	meshMat = dag.inclusiveMatrix()
@@ -169,8 +169,8 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	# create 3D grid
 
-	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint=True, dtype=float)
-	
+	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint = True, dtype = float)
+
 	points = np.array([[x, y, z] for x in elements
 				     for y in elements 
 				     for z in elements])
@@ -211,48 +211,42 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	dot = np.sum(N * normDiff, axis = 1)
 
-	# get sign from dot product for distance
+	# get sign for distance from dot product
 
-	return dist * np.sign(dot)
+	sigDist = (dist * np.sign(dot)).reshape(subdivision + 1, subdivision + 1, subdivision + 1)
+
+	# convert signed distance array into cubic grid format
+
+	return sp.interpolate.RegularGridInterpolator((elements, elements, elements), sigDist, method = 'cubic', bounds_error = False) # grid will be initialised in its relative coordinate system from [-gridScale,-gridScale,-gridScale] to [gridScale,gridScale,gridScale]
 
 
 # ========== get distances between articular surface and distal mesh ==========
 
-def artDist(jointName, vtxArr, SDF, gridRotMat, gridSize, threshold):
+def artDist(jDag, vtxArr, SDF, threshold):
 
 	# Input variables:
-	#	jointName = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
+	#	jDag = MDagPath to joint object (represented by e.g., joint or locator in Maya scene)
 	#	vtxArr = 3D array of vertex transformation matrices for fast computation of relative coordinates 
-	#	SDF = signed distance field in tricubic form
-	#	gridRotMat = rotation matrix of default cubic grid
-	#	gridSize = dimension of the cubic grid
+	#	SDF = signed distance field in form of sp.interpolate.RegularGridInterpolator
 	#	threshold = target distance
 	# ======================================== #
 
 
-	# get joint inclusive transformation matrix (child)
-
-	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jInclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space
-
-	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space
-
 	# get rotation matrices
 
-	rotMatProx = np.array(jExclTransMat.asMatrix()).reshape(4,4) # parent rotMat (prox) as numpy 4x4 array
-	rotMatDist = np.array(jInclTransMat.asMatrix()).reshape(4,4) # child rotMat (dist) as numpy 4x4 array
+	rotMatProx = np.array(jDag.exclusiveMatrix()).reshape(4,4) # parent rotMat (prox) as numpy 4x4 array
+	rotMatDist = np.array(jDag.inclusiveMatrix()).reshape(4,4) # child rotMat (dist) as numpy 4x4 array
 
 	# calculate position of vertices relative to cubic grid
 
-	vtcRelArr = np.dot(vtxArr,np.dot(np.dot(rotMatProx,np.linalg.inv(rotMatDist)),gridRotMat))[:,3,0:3].tolist()
+	vtcRelArr = np.dot(vtxArr,np.dot(rotMatProx,np.linalg.inv(rotMatDist)))[:,3,0:3]
 
 	# calculate distance 
 
-	signDist = [SDF.ip(vtx) for vtx in vtcRelArr]
+	signDist = SDF(vtcRelArr)
+	signDist = signDist[~np.isnan(signDist)]
 
-	return signDist, sum(signDist)/len(signDist), sum(signDist < threshold)/len(signDist) # signed distances, average distance and overlap
+	return signDist, signDist.mean(), (signDist < threshold).mean() # signed distances, average distance and overlap
 
 
 #################################################
@@ -264,8 +258,6 @@ def artDist(jointName, vtxArr, SDF, gridRotMat, gridSize, threshold):
 
 # set time to 1 or to start frame
 
-frame = cmds.currentTime(query=True)
-
 if StartFrame == None:
 	minKeys = 1
 else: 
@@ -273,7 +265,7 @@ else:
 
 # get total number of keyed frames from 'jointName'
 
-maxKeys = cmds.keyframe(jointName, attribute='rotateX', query=True, keyframeCount=True)
+maxKeys = cmds.keyframe(jointName, attribute = 'rotateX', query = True, keyframeCount = True)
 
 if FrameInterval == None or (minKeys + FrameInterval) > maxKeys:
     keyframes = maxKeys
@@ -299,7 +291,7 @@ if debug == 1:
 	# check if distance fields have already been calculated
 
 	try:
-		sigDistArray
+		SDF
 	except NameError:
 		var_exists = False
 	else:
@@ -317,35 +309,17 @@ if not var_exists:
 	cmds.move(0,0,0, jointName, localSpace=True)
 	cmds.rotate(0,0,0,jointName)
 
-	# get joint centre position
+	# get rotation matrices of joint
 
 	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of parent of joint
-	jInclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
-
-	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
-	jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
 
 	# only need to calculate one signed distance field (dist mesh)
 
-	meshSigDist = sigDistMesh(mesh, np.array(jInclTransMat.asMatrix()).reshape(4,4), gridSubdiv, gridScale)
-	sigDistArray = meshSigDist.reshape(gridSubdiv + 1, gridSubdiv + 1, gridSubdiv + 1)
+	SDF = sigDistMesh(mesh, np.array(jDag.inclusiveMatrix()).reshape(4,4), gridSubdiv, gridScale)
 
 	# calculate relative position of articular surfaces
 
-	vtxArr = relVtcPos(artSurfMesh,np.array(jExclTransMat.asMatrix()).reshape(4,4))
-
-# initialise tricubic interpolator with signed distance data on default cubic grid
-
-SDF = tricubic(sigDistArray.tolist(), list(sigDistArray.shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [sigDistArray.shape[0], sigDistArray.shape[1], sigDistArray.shape[2]].
-
-# get inverse of rotation matrix for default cubic grid coordinate system
-
-gridVec = 2 * gridScale / gridSubdiv
-gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
-				     [0, gridVec, 0, 0], # y direction
-				     [0, 0, gridVec, 0], # z direction
-				     [-gridScale, -gridScale, -gridScale, 1]])) # origin
+	vtxArr = relVtcPos(artSurfMesh,np.array(jDag.exclusiveMatrix()).reshape(4,4))
 
 mid = time.time()
 
@@ -367,7 +341,7 @@ overlapArr = []
 
 for i in range(keyDiff):
 
-	signedDistances, avgerageDistance, overlap = artDist(jointName, vtxArr, SDF, gridRotMat, gridSize, threshold)
+	signedDistances, avgerageDistance, overlap = artDist(jDag, vtxArr, SDF, threshold)
 
 	avgDistArr.append(avgerageDistance)
 	overlapArr.append(overlap)
@@ -387,4 +361,3 @@ print('threshold: ', threshold)
 print('reference shape radius : ',meanRad(referenceShape))
 
 print('Articular distances calculated in {0:.3f} seconds!'.format((end - mid)))
-
