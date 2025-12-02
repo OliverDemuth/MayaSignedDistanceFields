@@ -30,7 +30,7 @@
 #	    For further information regarding them, please check the website(s) referenced 
 #	    above.
 #	(4) To execute this script copy and paste it into the Python Script Editor in Maya,
-#		adjust the user-defined variables below and hit run.
+#	    adjust the user-defined variables below and hit run.
 
 
 #################################################
