@@ -104,7 +104,7 @@ if not var_exists:
 
 	print('Calculating signed distance fields...')
 
-	SDF, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize, gridScale)
+	SDF, initialRotMat = sigDistField(jDag, meshes, gridSubdiv, gridSize, gridScale)
 
 	# calculate relative position of articular surfaces
 
