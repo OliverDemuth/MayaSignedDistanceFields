@@ -17,7 +17,7 @@ $$f(x_v,y_v,z_v ) \geq 0$$
 
 where $d_v$ is the calculated signed distance for vertex $v$, $n_v$ is the number of vertices of the articular surfaces, $d_t$ is the target joint proximity, $\bar{d}$ is the mean joint proximity and $x$, $y$ and $z$ are the Cartesian 3D coordinates of the sample point. 
 
-Only joint poses where the average intraarticular distance did not exceed the target joint proximity by more than 7% were deemed viable, as the joints would otherwise have been likely disarticulated. The target joint proximity was determined as half the radius of the sphere fitted to the glenoid articular surfaces (which was a close match to the measured average intra-articular distances from the CT scans, yet does not rely on articulated remains), and represents a joint overlap (sensu [Bishop et al. 2023](https://doi.org/10.1111/2041-210X.14016)) of  approximately 0.5. 
+Only joint poses where the average intraarticular distance did not exceed the target joint proximity by more than 7% were deemed viable, as the joints would otherwise likely have been disarticulated. The target joint proximity was determined as half the radius of the sphere fitted to the glenoid articular surfaces (which was a close match to the measured average intra-articular distances from the CT scans, yet does not rely on articulated remains), and represents a joint overlap (sensu [Bishop et al. 2023](https://doi.org/10.1111/2041-210X.14016)) of  approximately 0.5. 
 
 Information about how to run the ROM simulations can be found [here](https://github.com/OliverDemuth/MayaSignedDistanceFields/tree/main/ROM).
 
@@ -79,7 +79,7 @@ ligaments/
 
 ## Citation
 If you use this method, please cite this GitHub repository [![DOI](https://zenodo.org/badge/489695793.svg)](https://doi.org/10.5281/zenodo.15442127) and the following papers:
-1. Demuth OE, Hutchinson JR, La Barbera V, Warner SE, Field DJ. [Soft tissue constraints on joint mobility in the avian shoulder](https://doi.org/10.1242/jeb.250952). J Exp Biol 228(21), jeb250952
-2. Marai GE, Laidlaw DH, Demiralp C, Andrews S, Grimm CM, Crisco JJ. 2004. [Estimating Joint Contact Areas and Ligament Lengths From Bone Kinematics and Surfaces](https://doi.org/10.1109/TBME.2004.826606). IEEE Trans. Biomed. Eng. 51, 790–799.
-3. Marai GE, Crisco JJ, Laidlaw DH. 2006. [A Kinematics-Based Method For Generating Cartilage Maps and Deformations in the Multi-Articulating Wrist Joint From CT Images](https://doi.org/10.1109/IEMBS.2006.259742). In 2006 International Conference of the IEEE Engineering in Medicine and Biology Society, 2079–2082
-4. Lee ECS, Young NM, Rainbow MJ. 2023. [A comparative approach for characterizing the relationship among morphology, range-of-motion and locomotor behaviour in the primate shoulder](https://doi.org/10.1098/rspb.2023.1446). Proc. R. Soc. B Biol. Sci. 290.
+1. Demuth OE, Hutchinson JR, La Barbera V, Warner SE, Field DJ. 2025. [Soft tissue constraints on joint mobility in the avian shoulder](https://doi.org/10.1242/jeb.250952). J. Exp. Biol. 228(21), jeb250952.
+2. Marai GE, Laidlaw DH, Demiralp C, Andrews S, Grimm CM, Crisco JJ. 2004. [Estimating Joint Contact Areas and Ligament Lengths From Bone Kinematics and Surfaces](https://doi.org/10.1109/TBME.2004.826606). IEEE Trans. Biomed. Eng. 51(5), 790–799.
+3. Marai GE, Crisco JJ, Laidlaw DH. 2006. [A Kinematics-Based Method For Generating Cartilage Maps and Deformations in the Multi-Articulating Wrist Joint From CT Images](https://doi.org/10.1109/IEMBS.2006.259742). In 2006 International Conference of the IEEE Engineering in Medicine and Biology Society, 2079–2082.
+4. Lee ECS, Young NM, Rainbow MJ. 2023. [A comparative approach for characterizing the relationship among morphology, range-of-motion and locomotor behaviour in the primate shoulder](https://doi.org/10.1098/rspb.2023.1446). Proc. Biol. Sci. 290(2009), 20231446.
