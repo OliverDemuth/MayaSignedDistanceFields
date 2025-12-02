@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 01.12.2025 - Oliver Demuth
+#	Last updated 02.12.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -408,9 +408,12 @@ def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramC
 
 	proxDist = ipDist(proxVtcRelArr)
 	distDist = ipProx(distVtcRelArr)
-
-	return np.concatenate((proxDist[~np.isnan(proxDist)], # return minimal value, if any of the points are inside a mesh it will be negative
-			       distDist[~np.isnan(distDist)])).min()
+	dists = np.concatenate((proxDist[~np.isnan(proxDist)], 
+				distDist[~np.isnan(distDist)]))
+	if dists.size != 0:
+		return dists.min() # return minimal value, if any of the points are inside a mesh it will be negative
+	else:
+		return -1
 
 
 # ========== cost function for optimisation ==========
