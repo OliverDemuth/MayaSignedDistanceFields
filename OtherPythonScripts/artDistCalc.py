@@ -29,10 +29,12 @@
 #
 #	    For further information regarding them, please check the website(s) referenced 
 #	    above.
+#	(4) To execute this script copy and paste it into the Python Script Editor in Maya,
+#		adjust the user-defined variables below and hit run.
 
 
 #################################################
-# ========== user defined variables  ========== #
+# ========== user-defined variables  ========== #
 #################################################
 
 
@@ -45,8 +47,6 @@ gridScale = 1 					# scale factor for the cubic grid dimensions
 StartFrame = None 				# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None				# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 debug = 0 					# Integer value to specify whether signed distance field calculations should be skipped (0 = false, 1 = true)
-
-
 
 
 # ========== load modules ==========
