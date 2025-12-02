@@ -65,27 +65,21 @@ import scipy as sp
 
 # ========== signed distance field per joint function ==========
 
-def sigDistField(jointName, meshes, subdivision, size, scale):
+def sigDistField(jDag, meshes, subdivision, size, scale):
 
 	# Input variables:
-	#	jointName = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
+	#	jDag = MDagPath to joint object (represented by object, e.g. joint or locator, in Maya scene)
 	#	meshes = name(s) of the mesh(es) for which the signed distance field is calculated
-	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 	#	size = grid size of the cubic grid
 	#	scale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
-	# get joint centre position
-
-	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = om.MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat = om.MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
-
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(np.array(jInclTransMat.asMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
+	rotMat.append(np.array(jDag.exclusiveMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(np.array(jDag.inclusiveMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
 
 	# cycle through all meshes
 
@@ -100,7 +94,7 @@ def sigDistField(jointName, meshes, subdivision, size, scale):
 	for j,mesh in enumerate(meshes):
 		meshSigDist, elements = sigDistMesh(mesh, rotMat[j], subdivision, size * scale) # get signed distance field for each mesh
 
-		# initialise tricubic interpolator with signed distance data on default cubic grid
+		# initialise scipy.interpolate.RegularGridInterpolator with signed distance data on default cubic grid
 
 		SDFs.append(sp.interpolate.RegularGridInterpolator((elements, elements, elements), meshSigDist, method = 'cubic', bounds_error = False)) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
 	
@@ -275,7 +269,7 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, boun
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distMeshArr = 3D array of distal mesh vertex transformation matrices for fast computation of relative coordinates
-	#	SDF = list containing multiple signed distance fields as sp.interpolate.RegularGridInterpolator()
+	#	SDF = list containing multiple signed distance fields as sp.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
 	#	bounds = bounds for optimisation
@@ -335,8 +329,8 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, rotMat, thickness, bounds):
 	# Input variables:
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#	ipProx = proximal signed distance field in tricubic form
-	#	ipDist = distal signed distance field in tricubic form
+	#	ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
+	#	ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
 	#	bounds = bounds for optimisation
@@ -382,8 +376,8 @@ def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramC
 	#	params = array of X, Y and Z coordinates of distal element position
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
+	#	ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
+	#	ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing. Passed through args, not part of this constraint function
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
@@ -424,8 +418,8 @@ def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramC
 	#	params = array of X, Y and Z coordinates of distal element position
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates. Passed through args, not part of cost function
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of cost function
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
+	#	ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator. Passed through args, not part of cost function
+	#	ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
