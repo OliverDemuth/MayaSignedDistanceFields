@@ -277,14 +277,13 @@ def meanRad(mesh):
 
 # ========== check viability function ==========
 
-def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thickness, initial_guess, paramCoords, bounds):
+def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, initial_guess, paramCoords, bounds):
 
 	# Input variables:
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distMeshArr = 3D array of distal mesh vertex transformation matrices for fast computation of relative coordinates
 	#	SDF = list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist, ipConv])
-	#	gridRotMat = rotation matrix of default cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
 	#	initial_guess = initual guess condition for optimiser
@@ -294,7 +293,7 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 
 	# optimise translation for specific rotational pose
 
-	results = posOptMin(proxArr, distArr, SDF[0], SDF[1], gridRotMat, rotMat, thickness, initial_guess, paramCoords, bounds)
+	results = posOptMin(proxArr, distArr, SDF[0], SDF[1], rotMat, thickness, initial_guess, paramCoords, bounds)
 
 	# check if optimisation was successful
 
@@ -342,14 +341,13 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 
 # ========== translation optimisation ==========
 
-def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, initial_guess, paramCoords, bounds):
+def posOptMin(proxArr, distArr, ipProx, ipDist, rotMat, thickness, initial_guess, paramCoords, bounds):
 
 	# Input variables:
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	ipProx = proximal signed distance field in tricubic form
 	#	ipDist = distal signed distance field in tricubic form
-	#	gridRotMat = rotation matrix of default cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
 	#	initial_guess = initual guess condition for optimiser
@@ -359,7 +357,7 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, i
 
 	# create tuple for arguments passed to both constraints and cost functions
 
-	arguments = (proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords)
+	arguments = (proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramCoords)
 
 	# set constraints functions
 
@@ -383,7 +381,7 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, i
 
 # ========== signed distance field constraint function ==========
 
-def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords):
+def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramCoords):
 
 	# Input variables:
 	#	params = array of X, Y and Z coordinates of distal element position
@@ -392,7 +390,6 @@ def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid
 	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	gridRotMat = rotation matrix of default cubic grid coordinate system
 	#	thickness = thickness measure correlated with joint spacing. Passed through args, not part of this constraint function
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
 	# ======================================== #
@@ -423,7 +420,7 @@ def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 
 # ========== cost function for optimisation ==========
 
-def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords):
+def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramCoords):
 
 	# Input variables:
 	#	params = array of X, Y and Z coordinates of distal element position
@@ -432,7 +429,6 @@ def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of cost function
 	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
 	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	gridRotMat = rotation matrix of default cubic grid coordinate system
 	#	thickness = thickness measure correlated with joint spacing
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
 	# ======================================== #
@@ -625,7 +621,7 @@ def processMayaFiles(filePath,args):
 
 		# optimise the joint translations
 
-		coords, viable = optimisePosition(proxArr, distArr, distMeshArr, SDF[0], SDF[1], gridRotMat, rotMat, thickness, initial_guess, paramCoords, gridSize)
+		coords, viable = optimisePosition(proxArr, distArr, distMeshArr, SDF[0], SDF[1], rotMat, thickness, initial_guess, paramCoords, gridSize)
 
 		# check if pose was viable
 
