@@ -24,8 +24,8 @@
 #	(3) This script requires several modules for Python (see README files). Make sure
 #	    to have the following external modules installed for the mayapy application:
 #
-#		- 'numpy' 	NumPy:			https://numpy.org/about/
-#		- 'tricubic' 	Daniel Guterding: 	https://github.com/danielguterding/pytricubic
+#		- 'numpy' 	NumPy:		https://numpy.org/about/
+#		- 'scipy' 	SciPy: 		https://scipy.org/about/
 #
 #	    For further information regarding them, please check the website(s) referenced 
 #	    above.
