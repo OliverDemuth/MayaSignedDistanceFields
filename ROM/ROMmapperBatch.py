@@ -621,7 +621,7 @@ def processMayaFiles(filePath,args):
 
 		# optimise the joint translations
 
-		coords, viable = optimisePosition(proxArr, distArr, distMeshArr, SDF[0], SDF[1], rotMat, thickness, initial_guess, paramCoords, gridSize)
+		coords, viable = optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, initial_guess, paramCoords, gridSize)
 
 		# check if pose was viable
 
@@ -666,4 +666,3 @@ def processMayaFiles(filePath,args):
 	end = time.time()
 	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil(end - mid))).split(':'))
 	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,len(transRes)))
-
