@@ -58,7 +58,6 @@ import numpy as np
 import scipy as sp
 
 
-
 ################################################
 # ========== Maya specific functions ========= #
 ################################################
@@ -87,12 +86,13 @@ def sigDistField(jointName, meshes, subdivision, size, scale):
 	rotMat = []
 	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
 	rotMat.append(np.array(jInclTransMat.asMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
-	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
 
 	# cycle through all meshes
 
 	if len(meshes) < 2:
 		error('Too few meshes specified. Please specify at least two meshes in the mesh array.')
+	if len(meshes) > 2:
+		rotMat.append(rotMat[0]) # parent rotMat (prox) as numpy 4x4 array
 	if len(rotMat) < len(meshes):
 		error('Fewer rotation matrices than meshes supplied. Please assign corresponding rotation matrices for each mesh.')
 
