@@ -4,6 +4,9 @@
 
 # Implementation of signed distance field based simulations in Autodesk Maya
 
+## Version 1.1
+Version 1.1 removes the pytricubic dependencies throughout and streamlines the installation which now only requires [NumPy](https://numpy.org/) and [SciPy](https://scipy.org/). In addition to minor code changes this significantly improved the performance of the simulations. The ligament calculations in version 1.1 are approximately twice as fast as in version 1.0 (on average 0.679 FPS in v1.1 vs. 0.344 FPS in v1.0 for 100 random frames on an Apple M2 Pro) while the performance for the ROM simulations was improved by 5-15%.
+
 ## ROM simulation
 Automated estimation of joint range of motion via optimisation of joint translations using signed distance fields (SDFs). The scripts optimise contact-based positions across a given set of rotational poses for a set of bone meshes. This is an implementation of the [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) and [Lee et al. 2023](https://doi.org/10.1098/rspb.2023.1446) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes which are then used to calculate intersections between the meshes and the distance between the bones. The (mobile) joint centre position is estimated, and the distal bone mesh is moved into position for a set of prescribed joint orientations. Only feasible joint position are be keyed/exported. The resulting set of frames represent viable joint positions and orientations.
 
