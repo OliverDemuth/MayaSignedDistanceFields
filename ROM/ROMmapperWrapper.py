@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 24.04.2025 - Oliver Demuth
+#	Last updated 02.12.2025 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -42,20 +42,19 @@
 
 # ========== set variables ========== 
 
-jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['prox_mesh', 			# specify according to meshes in the Maya scene
-	  'dist_mesh',
-	  'conv_hull']				
+	  'dist_mesh']				
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
 		    'dist_art_surf']	
 fittedShape = 'prox_sphere'		# specify according to meshes in the Maya scene		
 xBounds = [-180,180]			# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
 yBounds = [-90,90]			# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
 zBounds = [-180,180]			# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
-interval = 5				# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
-gridSubdiv = 100			# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+interval = 5				# sampling interval, see Manafzadeh & Padian, 2018 (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+gridSubdiv = 100			# integer value for the subdivision of the cube (i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 gridScale = 1				# float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-cores = 8				# integer value to specify number of CPU cores to be assigned
+cores = 8				# integer value to specify maximal number of CPU cores to be assigned
 
 # ========== set directories ========== 
 
@@ -88,8 +87,6 @@ import functools
 import os
 import time
 
-from tricubic import tricubic
-from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
 from math import sqrt, floor
 from datetime import timedelta
 from multiprocessing import cpu_count, Process, Queue

@@ -4,6 +4,9 @@
 
 # Implementation of signed distance field based simulations in Autodesk Maya
 
+## Version 1.1
+Version 1.1 removes the pytricubic dependencies throughout and streamlines the installation which now only requires [NumPy](https://numpy.org/) and [SciPy](https://scipy.org/). In addition to minor code changes this significantly improved the performance of the simulations. The ligament calculations in version 1.1 are approximately twice as fast as in version 1.0 (on average 0.679 FPS in v1.1 vs. 0.344 FPS in v1.0 for 100 random frames on an Apple M2 Pro) while the performance for the ROM simulations was improved by 5-15%.
+
 ## ROM simulation
 Automated estimation of joint range of motion via optimisation of joint translations using signed distance fields (SDFs). The scripts optimise contact-based positions across a given set of rotational poses for a set of bone meshes. This is an implementation of the [Marai et al., 2006](https://doi.org/10.1109/IEMBS.2006.259742) and [Lee et al. 2023](https://doi.org/10.1098/rspb.2023.1446) approach for Autodesk Maya. It creates SDFs for the proximal and distal bone meshes which are then used to calculate intersections between the meshes and the distance between the bones. The (mobile) joint centre position is estimated, and the distal bone mesh is moved into position for a set of prescribed joint orientations. Only feasible joint position are be keyed/exported. The resulting set of frames represent viable joint positions and orientations.
 
@@ -17,7 +20,7 @@ $$f(x_v,y_v,z_v ) \geq 0$$
 
 where $d_v$ is the calculated signed distance for vertex $v$, $n_v$ is the number of vertices of the articular surfaces, $d_t$ is the target joint proximity, $\bar{d}$ is the mean joint proximity and $x$, $y$ and $z$ are the Cartesian 3D coordinates of the sample point. 
 
-Only joint poses where the average intraarticular distance did not exceed the target joint proximity by more than 7% were deemed viable, as the joints would otherwise have been likely disarticulated. The target joint proximity was determined as half the radius of the sphere fitted to the glenoid articular surfaces (which was a close match to the measured average intra-articular distances from the CT scans, yet does not rely on articulated remains), and represents a joint overlap (sensu [Bishop et al. 2023](https://doi.org/10.1111/2041-210X.14016)) of  approximately 0.5. 
+Only joint poses where the average intraarticular distance did not exceed the target joint proximity by more than 7% were deemed viable, as the joints would otherwise likely have been disarticulated. The target joint proximity was determined as half the radius of the sphere fitted to the glenoid articular surfaces (which was a close match to the measured average intra-articular distances from the CT scans, yet does not rely on articulated remains), and represents a joint overlap (sensu [Bishop et al. 2023](https://doi.org/10.1111/2041-210X.14016)) of  approximately 0.5. 
 
 Information about how to run the ROM simulations can be found [here](https://github.com/OliverDemuth/MayaSignedDistanceFields/tree/main/ROM).
 
@@ -46,25 +49,20 @@ Information about how to run the ligament simulations can be found [here](https:
 
 [NumPy](https://numpy.org/) (1.24.4)  
 [SciPy](https://scipy.org/) (1.15.0)   
-[pytricubic](https://github.com/danielguterding/pytricubic) (1.0.4)  
 
 For **Windows** in the command prompt execute the following 
 ```
 cd C:\Program Files\Autodesk\Maya<VersionNumber>\bin
 mayapy -m pip install numpy
 mayapy -m pip install scipy
-mayapy -m pip install tricubic
 ```
 For **macOS** in the terminal execute the following
 ```
 cd /Applications/Autodesk/maya<VersionNumber>/Maya.app/Contents/bin
 sudo ./mayapy -m pip install numpy
 sudo ./mayapy -m pip install scipy
-sudo ./mayapy -m pip install tricubic
 ```
 For more information about managing Python packages with mayapy and pip see [here](https://help.autodesk.com/view/MAYAUL/2025/ENU/?guid=GUID-72A245EC-CDB4-46AB-BEE0-4BBBF9791627).
-
-**Note**, installing *pytricubic* requires *CMake*. For more information see [here](https://github.com/danielguterding/pytricubic).
 
 #### Download the following folders/Python scripts from this repository and save them in a folder on your PC/Mac
 ```
@@ -84,7 +82,7 @@ ligaments/
 
 ## Citation
 If you use this method, please cite this GitHub repository [![DOI](https://zenodo.org/badge/489695793.svg)](https://doi.org/10.5281/zenodo.15442127) and the following papers:
-1. Demuth OE, Hutchinson JR, La Barbera V, Warner SE, Field DJ. [Soft tissue constraints on joint mobility in the avian shoulder](https://doi.org/10.1101/2025.05.16.654461). bioRxiv. 2025.05.16.654461.
-2. Marai GE, Laidlaw DH, Demiralp C, Andrews S, Grimm CM, Crisco JJ. 2004. [Estimating Joint Contact Areas and Ligament Lengths From Bone Kinematics and Surfaces](https://doi.org/10.1109/TBME.2004.826606). IEEE Trans. Biomed. Eng. 51, 790–799.
-3. Marai GE, Crisco JJ, Laidlaw DH. 2006. [A Kinematics-Based Method For Generating Cartilage Maps and Deformations in the Multi-Articulating Wrist Joint From CT Images](https://doi.org/10.1109/IEMBS.2006.259742). In 2006 International Conference of the IEEE Engineering in Medicine and Biology Society, 2079–2082
-4. Lee ECS, Young NM, Rainbow MJ. 2023. [A comparative approach for characterizing the relationship among morphology, range-of-motion and locomotor behaviour in the primate shoulder](https://doi.org/10.1098/rspb.2023.1446). Proc. R. Soc. B Biol. Sci. 290.
+1. Demuth OE, Hutchinson JR, La Barbera V, Warner SE, Field DJ. 2025. [Soft tissue constraints on joint mobility in the avian shoulder](https://doi.org/10.1242/jeb.250952). J. Exp. Biol. 228(21), jeb250952.
+2. Marai GE, Laidlaw DH, Demiralp C, Andrews S, Grimm CM, Crisco JJ. 2004. [Estimating Joint Contact Areas and Ligament Lengths From Bone Kinematics and Surfaces](https://doi.org/10.1109/TBME.2004.826606). IEEE Trans. Biomed. Eng. 51(5), 790–799.
+3. Marai GE, Crisco JJ, Laidlaw DH. 2006. [A Kinematics-Based Method For Generating Cartilage Maps and Deformations in the Multi-Articulating Wrist Joint From CT Images](https://doi.org/10.1109/IEMBS.2006.259742). In 2006 International Conference of the IEEE Engineering in Medicine and Biology Society, 2079–2082.
+4. Lee ECS, Young NM, Rainbow MJ. 2023. [A comparative approach for characterizing the relationship among morphology, range-of-motion and locomotor behaviour in the primate shoulder](https://doi.org/10.1098/rspb.2023.1446). Proc. Biol. Sci. 290(2009), 20231446.

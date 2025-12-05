@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 15.10.2025 - Oliver Demuth
+#	Last updated 02.12.2025 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -16,6 +16,9 @@
 #			string	meshes:			Names of the two bone meshes, i.e., several individual meshes representing the bones (e.g., in the form of ['prox_mesh','dist_mesh'])
 #			string	congruencyMeshes:	Names of the meshes to check articular congruency, i.e., several individual meshes (e.g., in the form of ['prox_art_surf','dist_art_surf'])
 #			string	fittedShape:		Name of the shape fitted to the proximal articular surface (e.g., in the form 'prox_fitted_sphere') used for proximity estimation
+#			float 	xBounds:		Float array of bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
+#			float 	yBounds:		Float array of bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
+#			float 	zBounds:		Float array of bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
 #			int	gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 #			float	gridSize:		Float value indicating the size of the cubic grid, i.e., the length of a side (e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
 #			float	gridScale:		Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
@@ -40,10 +43,9 @@
 #	(3) This script requires several modules for Python, see README file. Make sure to
 #	    have the following external modules installed for the mayapy application:
 #
-#		- 'numpy' 	NumPy:			https://numpy.org/about/
-#		- 'scipy'	SciPy:			https://scipy.org/about/
-#		- 'tricubic' 	Daniel Guterding: 	https://github.com/danielguterding/pytricubic
-#				
+#		- 'numpy' 	NumPy:		https://numpy.org/about/
+#		- 'scipy'	SciPy:		https://scipy.org/about/
+#
 #	    For further information regarding them, please check the website(s) referenced 
 #	    above.
 
@@ -59,8 +61,7 @@ import functools
 import os
 import time
 
-from tricubic import tricubic
-from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
+from maya.api.OpenMaya import MPoint
 from math import ceil
 from datetime import timedelta
 
@@ -72,49 +73,39 @@ from datetime import timedelta
 
 # ========== signed distance field per joint function ==========
 
-def sigDistField(jointName, meshes, subdivision, size, scale):
+def sigDistField(jDag, meshes, subdivision, size, scale):
 
 	# Input variables:
-	#	jointName = name of joint centre (represented by object, e.g. joint or locator, in Maya scene)
+	#	jDag = MDagPath to joint object (represented by e.g., joint or locator in Maya scene)
 	#	meshes = name(s) of the mesh(es) for which the signed distance field is calculated
 	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
 	#	size = grid size of the cubic grid
 	#	scale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
-	# get joint centre position
-
-	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
-
-	# normalize matrices by size
-
-	jInclTransMat.setScale([size,size,size],4) # set scale in world space (om.MSpace.kWorld = 4)
-	jExclTransMat.setScale([size,size,size],4) # set scale in world space (om.MSpace.kWorld = 4)
-
 	# get rotation matrices
 
 	rotMat = []
-	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(np.array(jInclTransMat.asMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
-	rotMat.append(np.array(jExclTransMat.asMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(np.array(jDag.exclusiveMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
+	rotMat.append(np.array(jDag.inclusiveMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
 
 	# cycle through all meshes
 
 	if len(meshes) < 2:
 		error('Too few meshes specified. Please specify at least two meshes in the mesh array.')
+	if len(meshes) > 2:
+		rotMat.append(rotMat[0]) # parent rotMat (prox) as numpy 4x4 array
 	if len(rotMat) < len(meshes):
 		error('Fewer rotation matrices than meshes supplied. Please assign a corresponding rotation matrices to each mesh.')
 
 	SDFs = []
 	for j,mesh in enumerate(meshes):
-		meshSigDist = sigDistMesh(mesh, rotMat[j], subdivision, scale) # get signed distance field for each mesh
+		meshSigDist, elements = sigDistMesh(mesh, rotMat[j], subdivision, size * scale) # get signed distance field for each mesh
 
-		# initialise tricubic interpolator with signed distance data on default cubic grid
+		# initialise scipy.interpolate.RegularGridInterpolator with signed distance data on default cubic grid
 
-		SDFs.append(tricubic(meshSigDist.tolist(), list(meshSigDist.shape))) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-	
+		SDFs.append(sp.interpolate.RegularGridInterpolator((elements, elements, elements), meshSigDist, method = 'cubic', bounds_error = False)) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
+
 	return SDFs, rotMat
 
 
@@ -137,7 +128,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	shape = dag.extendToShape()
 	mObj = shape.node()
-	
+
 	# get the meshs transformation matrix
 
 	meshMat = dag.inclusiveMatrix()
@@ -151,8 +142,8 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# create 3D grid
 
-	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint=True, dtype=float)
-	
+	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint = True, dtype = float)
+
 	points = np.array([[x, y, z] for x in elements
 				     for y in elements 
 				     for z in elements])
@@ -198,7 +189,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	sigDist = dist * np.sign(dot)
 
-	return sigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1) # convert signed distance array into cubic grid format
+	return sigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1), elements # convert signed distance array into cubic grid format
 
 
 # ========== get vertices position in reference frame ==========
@@ -233,7 +224,7 @@ def dagObjFromName(name):
 	# Input variables:
 	#	name = string representing object name
 	# ======================================== #
-	
+
 	sel = om.MSelectionList()
 	sel.add(name)
 
@@ -280,33 +271,33 @@ def meanRad(mesh):
 
 # ========== check viability function ==========
 
-def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thickness, initial_guess, paramCoords):
+def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, initial_guess, paramCoords, bounds):
 
 	# Input variables:
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distMeshArr = 3D array of distal mesh vertex transformation matrices for fast computation of relative coordinates
-	#	SDF = list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist, ipConv])
-	#	gridRotMat = rotation matrix of default cubic grid
+	#	SDF = list containing multiple signed distance fields in form of scipy.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
 	#	initial_guess = initual guess condition for optimiser
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
+	#	bounds = bounds for optimisation
 	# ======================================== #
 
 	# optimise translation for specific rotational pose
 
-	results = posOptMin(proxArr, distArr, SDF[0], SDF[1], gridRotMat, rotMat, thickness, initial_guess, paramCoords)
+	results = posOptMin(proxArr, distArr, SDF[0], SDF[1], rotMat, thickness, initial_guess, paramCoords, bounds)
 
 	# check if optimisation was successful
 
 	if not results.success: 
 		return [], False # empty list, viable
 
-	diff = MVector(results.x).length() # get offset from joint centre (~35% faster than np.linalg.norm())
+	diff = np.linalg.norm(results.x) # get offset from joint centre. Negligible slower than MVector(results.x).length() but software package agnostic
 
 	# check for disarticulation 
-					  
+
 	if diff > (1.1 * thickness * 2): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape)
 		return [], False # empty list, viable
 
@@ -317,25 +308,26 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 	# get transformation matrix
 
 	transMat = rotMat[1] # transformation matrix
-	transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
+	transMat[3,0:3] = np.dot(paramCoords,rotMat[0])[3,0:3] # append result world space coordinates to transformation matrix
 	transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
 
 	# calculate position of vertices relative to cubic grid
 
-	artRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
-	meshRelArr = np.dot(distMeshArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist() # both the convex hull and the proximal signed distance fields are in the parent coordinate system
-	
-	avgdist = sum([SDF[1].ip(vtx) for vtx in artRelArr]) / len(artRelArr) # get average interarticular distance 
-	signDist = [SDF[0].ip(vtx) for vtx in meshRelArr] # make sure that bone meshes do not intersect
+	artRelArr = np.dot(proxArr,np.dot(rotMat[0],transMatInv))[:,3,0:3]
+	meshRelArr = np.dot(distMeshArr,np.dot(transMat,rotMat[2]))[:,3,0:3]
+
+	avgdist = SDF[1](artRelArr)
+	avgdist = avgdist[~np.isnan(avgdist)].mean() # get mean interarticular distance 
+	signDist = SDF[0](meshRelArr) # make sure that bone meshes do not intersect
 
 	# check if convex hull signed distance field is provided (i.e., body shape, e.g., rib cage)
-	
+
 	if len(SDF) > 2:
-		signDist.extend([SDF[2].ip(vtx) for vtx in meshRelArr]) # make sure that distal meshes does not intersect with convex hull (i.e., rib cage)
+		signDist = np.concatenate((signDist,SDF[2](meshRelArr))) # make sure that distal meshes does not intersect with convex hull (i.e., rib cage)
 
 	# if disarticulated or any points penetrate meshes the position becomes inviable
 
-	if avgdist < (1.07 * thickness) and all(dist > 0 for dist in signDist): # set target thickness limit to 7% based on experimental data
+	if avgdist < (1.07 * thickness) and signDist[~np.isnan(signDist)].min() > 0: # set target thickness limit to 7% based on experimental data
 		return results.x.tolist(), True # coords list, viable
 	else:
 		return [], False # empty list, viable
@@ -343,23 +335,23 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, gridRotMat, rotMat, thi
 
 # ========== translation optimisation ==========
 
-def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, initial_guess, paramCoords):
+def posOptMin(proxArr, distArr, ipProx, ipDist, rotMat, thickness, initial_guess, paramCoords, bounds):
 
 	# Input variables:
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#	ipProx = proximal signed distance field in tricubic form
-	#	ipDist = distal signed distance field in tricubic form
-	#	gridRotMat = rotation matrix of default cubic grid
+	#	ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
+	#	ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	thickness = thickness measure correlated with joint spacing
 	#	initial_guess = initual guess condition for optimiser
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
+	#	bounds = bounds for optimisation
 	# ======================================== #
 
 	# create tuple for arguments passed to both constraints and cost functions
 
-	arguments = (proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords)
+	arguments = (proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramCoords)
 
 	# set constraints functions
 
@@ -369,34 +361,29 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, gridRotMat, rotMat, thickness, i
 
 	# set bounds
 
-	boundsList = [(-5 * thickness, 5 * thickness)] * (len(initial_guess)) # set x, y and z coordinate boundaries; based on 2.5x fitted sphere radius and thus scale/Maya units independent
+	boundsList = [(-bounds, bounds)] * (len(initial_guess)) # set x, y and z coordinate boundaries based on SDF grid size
 	bnds = tuple(boundsList)
 
 	# set options
 
 	options = {"maxiter": 50} # if it doesn't solve within 25 iterations it usually won't solve. Any more than 50 will just increase computational time without much benefit
 
-	# optimization using SLSQP
+	# optimization using SLSQP: res.X = joint centre point coordinates, res.fun = mean articular distance - thickness squared + variance
 
-	res = sp.optimize.minimize(cost_fun, initial_guess, args = arguments, bounds = bnds, method = 'SLSQP', constraints = cons, options = options)
-
-	# get results: res.x = joint centre point coordinates, res.fun = mean articular distance - thickness squared + variance
-
-	return res
+	return sp.optimize.minimize(cost_fun, initial_guess, args = arguments, bounds = bnds, method = 'SLSQP', constraints = cons, options = options)
 
 
 # ========== signed distance field constraint function ==========
 
-def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords):
+def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramCoords):
 
 	# Input variables:
 	#	params = array of X, Y and Z coordinates of distal element position
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
+	#	ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
+	#	ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	gridRotMat = rotation matrix of default cubic grid coordinate system
 	#	thickness = thickness measure correlated with joint spacing. Passed through args, not part of this constraint function
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
 	# ======================================== #
@@ -408,34 +395,37 @@ def cons_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 	# get transformation matrix
 
 	transMat = rotMat[1] # transformation matrix
-	transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
+	transMat[3,0:3] = np.dot(paramCoords,rotMat[0])[3,0:3] # append result world space coordinates to transformation matrix
 	transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
 
-	# calculate position of vertices relative to cubic grid
+	# calculate position of vertices relative to SDFs
 
-	proxVtcRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
-	distVtcRelArr = np.dot(distArr,np.dot(np.dot(transMat,rotMat[3]),gridRotMat))[:,3,0:3].tolist()
+	proxVtcRelArr = np.dot(proxArr,np.dot(rotMat[0],transMatInv))[:,3,0:3]
+	distVtcRelArr = np.dot(distArr,np.dot(transMat,rotMat[2]))[:,3,0:3]
 
 	# go through each proximal and distal articular surface point and check if any of them intersect with a mesh (i.e., signDist < 0)
 
-	signDist = [ipDist.ip(vtx) for vtx in proxVtcRelArr], # proximal signed distance
-	signDist.extend([ipProx.ip(vtx) for vtx in distVtcRelArr]) # distal signed distance
-
-	return min(signDist) # return minimal value, if any of the points are inside a mesh it will be negative
+	proxDist = ipDist(proxVtcRelArr)
+	distDist = ipProx(distVtcRelArr)
+	dists = np.concatenate((proxDist[~np.isnan(proxDist)], 
+				distDist[~np.isnan(distDist)]))
+	if dists.size != 0:
+		return dists.min() # return minimal value, if any of the points are inside a mesh it will be negative
+	else:
+		return -1
 
 
 # ========== cost function for optimisation ==========
 
-def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thickness, paramCoords):
+def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, thickness, paramCoords):
 
 	# Input variables:
 	#	params = array of X, Y and Z coordinates of distal element position
 	#	proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
 	#	distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates. Passed through args, not part of this cost function
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of cost function
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
+	#	ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator. Passed through args, not part of cost function
+	#	ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	gridRotMat = rotation matrix of default cubic grid coordinate system
 	#	thickness = thickness measure correlated with joint spacing
 	#	paramCoords = 4x4 identity matrix for matrix multiplications
 	# ======================================== #
@@ -447,23 +437,22 @@ def cost_fun(params, proxArr, distArr, ipProx, ipDist, rotMat, gridRotMat, thick
 	# get transformation matrix
 
 	transMat = rotMat[1] # transformation matrix
-	transMat[3,0:3] = np.dot(paramCoords,rotMat[2])[3,0:3] # append result world space coordinates to transformation matrix
+	transMat[3,0:3] = np.dot(paramCoords,rotMat[0])[3,0:3] # append result world space coordinates to transformation matrix
 	transMatInv = np.linalg.inv(transMat) # get inverse of transformation matrix
 
 	# calculate position of vertices relative to cubic grid
 
-	vtcRelArr = np.dot(proxArr,np.dot(np.dot(rotMat[0],transMatInv),gridRotMat))[:,3,0:3].tolist()
+	vtcRelArr = np.dot(proxArr,np.dot(rotMat[0],transMatInv))[:,3,0:3]
 
 	# calculate mean distance 
 
-	signDist = [ipDist.ip(vtx) for vtx in vtcRelArr]
-	meanDist = sum(signDist)/len(signDist)
+	signDist = ipDist(vtcRelArr)
+	signDist = signDist[~np.isnan(signDist)] # remove any nan that may have been introduced by extrapolation from SDF
+	meanDist = signDist.mean() 
 
-	# calculate variance
+	# calculate variance (second objective term)
 
-	var = sum([(dist - meanDist) ** 2 for dist in signDist]) / len(signDist)
-
-	return (meanDist - thickness) ** 2 + var # minimising variance enforces largest possible joint concruency
+	return (meanDist - thickness) ** 2 + ((signDist - meanDist) ** 2).mean() # minimising variance enforces largest possible overlap
 
 
 ################################################
@@ -489,7 +478,7 @@ def MayaInstance(function):
 
 		# initialise Maya
 
-		maya.standalone.initialize(name='python')
+		maya.standalone.initialize(name = 'python')
 
 		# get one of remaining elements of the queue
 
@@ -511,7 +500,7 @@ def processMayaFiles(filePath,args):
 
 	# supress error messages
 
-	cmds.scriptEditorInfo(sw=True,se=True)
+	cmds.scriptEditorInfo(sw = True, se = True)
 
 	# get file name 
 
@@ -521,7 +510,7 @@ def processMayaFiles(filePath,args):
 
 	# open Maya scene and initialise calculations 
 
-	cmds.file(filePath, open=True, force=True)
+	cmds.file(filePath, open = True, force = True)
 
 	# extract arguments	
 
@@ -547,20 +536,11 @@ def processMayaFiles(filePath,args):
 	thickness = sphereRad/2
 	gridSize = 8 * sphereRad
 
-	sigDistFieldArray, initialRotMat = sigDistField(jointName, meshes, gridSubdiv, gridSize, gridScale)
+	# get dag path for joint
 
-	# initialise tricubic interpolator with signed distance data on default cubic grid
+	jDag = dagObjFromName(jointName)[1]
 
-	ipProx = tricubic(sigDistFieldArray[0].tolist(), list(sigDistFieldArray[0].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-	ipDist = tricubic(sigDistFieldArray[1].tolist(), list(sigDistFieldArray[1].shape)) # grid will be initialised in its relative coordinate system from [0,0,0] to [gridSubdiv+1, gridSubdiv+1, gridSubdiv+1].
-
-	# get inverse of rotation matrix for default cubic grid coordinate system
-
-	gridVec = 2 * gridScale / gridSubdiv
-	gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
-					     [0, gridVec, 0, 0], # y direction
-					     [0, 0, gridVec, 0], # z direction
-					     [-gridScale, -gridScale, -gridScale, 1]])) # origin
+	SDF, initialRotMat = sigDistField(jDag, meshes, gridSubdiv, gridSize, gridScale)
 
 	mid = time.time()
 
@@ -569,12 +549,12 @@ def processMayaFiles(filePath,args):
 
 	# ==== initialise variables and precalculations ====
 
-	
+
 	# calculate relative position of articular surfaces
 
 	proxArr = relVtcPos(congruencyMeshes[0], initialRotMat[0])
 	distArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
-	proxMeshArr = relVtcPos(meshes[0], initialRotMat[0])
+	distMeshArr = relVtcPos(meshes[1], initialRotMat[1])
 
 	# create 3D grid for rotations
 
@@ -592,19 +572,11 @@ def processMayaFiles(filePath,args):
 
 	transRes =[] 
 
-	# get dag path for joint
-
-	jDag = dagObjFromName(jointName)[1]
-
 	# get joint exclusive transformation matrix (parent)
 
 	jExclMat = jDag.exclusiveMatrix() # world rotation matrix of parent joint
 	jExclNPMat = np.array(jExclMat).reshape(4,4) # convert into numpy 4x4 array
-
-	jExclTransMat = MTransformationMatrix(jExclMat) # world transformation matrix of parent joint
-	jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
-	jExclTransNPMat = np.array(jExclTransMat.asMatrix()).reshape(4,4) # convert into numpy 4x4 array
-	jExclTransNPMatInv = np.linalg.inv(jExclTransNPMat) # inverse of parent rotMat (prox) as numpy 4x4 array
+	jExclNPMatInv = np.linalg.inv(jExclNPMat) # inverse of parent rotMat (prox) as numpy 4x4 array
 
 	# define initial guess condition
 
@@ -632,24 +604,21 @@ def processMayaFiles(filePath,args):
 
 		# get joint inclusive transformation matrix (child)
 
-		localTransMat = MTransformationMatrix()
+		localTransMat = om.MTransformationMatrix()
 		localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order = 0)) # set rotation (om.MEulerRotation.kXYZ = 0)
-		localTransMat.setTranslation(MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
-
-		jInclTransMat = localTransMat.asMatrix() * gridSize * jExclMat
-		jInclTransMat[-1] = 1 # reset last element to 1
+		localTransMat.setTranslation(om.MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
+		jInclTransMat = localTransMat.asMatrix() * jExclMat
 
 		# get rotation matrices
 
 		rotMat = []
-		rotMat.append(jExclTransNPMat) # append parent rotMat (prox) as numpy 4x4 array
+		rotMat.append(jExclNPMat) # append parent rotMat (prox) as numpy 4x4 array
 		rotMat.append(np.array(jInclTransMat).reshape(4,4)) # append child rotMat (dist) as numpy 4x4 array
-		rotMat.append(jExclNPMat) # append parent rotMat (prox) without scale as numpy 4x4 array
-		rotMat.append(jExclTransNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
+		rotMat.append(jExclNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
 
 		# optimise the joint translations
 
-		coords, viable = optimisePosition(proxArr, distArr, proxMeshArr, ipProx, ipDist, gridRotMat, rotMat, thickness, initial_guess, paramCoords)
+		coords, viable = optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, initial_guess, paramCoords, gridSize)
 
 		# check if pose was viable
 
@@ -657,7 +626,7 @@ def processMayaFiles(filePath,args):
 			transRes.append(coords + rotation) # combine both lists and append to results array [Tx, Ty, Tz, Rx, Ry, Rz]
 
 		# update progress
-		
+
 		percent = ((1000 * (frame + 1)) // frames) / 10
 
 		if updateSwitch:
@@ -694,4 +663,3 @@ def processMayaFiles(filePath,args):
 	end = time.time()
 	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil(end - mid))).split(':'))
 	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,len(transRes)))
-

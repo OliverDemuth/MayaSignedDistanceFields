@@ -5,7 +5,7 @@
 #	be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #	Written by Oliver Demuth
-#	Last updated 15.05.2025 - Oliver Demuth
+#	Last updated 05.12.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -53,9 +53,7 @@ import scipy as sp
 import maya.api.OpenMaya as om
 import time
 
-from maya.api.OpenMaya import MPoint, MVector, MTransformationMatrix
 from math import sqrt
-from tricubic import tricubic
 
 # ========================================
 
@@ -106,18 +104,10 @@ if not var_exists:
 	print('Calculating signed distance fields...')
 	
 	cmds.currentTime(0)
-	cmds.move(0,0,0, jointName, localSpace=True)
+	cmds.move(0,0,0, jointName, localSpace = True)
 	cmds.rotate(0,0,0,jointName)
 	
-	SDF, LigAttributes, gridSize = sigDistField(jointName, meshes, gridSubdiv, gridScale)
-
-# get inverse of rotation matrix for default cubic grid coordinate system
-
-gridVec = 2 * gridScale / gridSubdiv
-gridRotMat = np.linalg.inv(np.array([[gridVec, 0, 0, 0], # x direction
-				     [0, gridVec, 0, 0], # y direction
-				     [0, 0, gridVec, 0], # z direction
-				     [-gridScale, -gridScale, -gridScale, 1]])) # origin
+	SDFs, LigAttributes, ligDags, jDag, bounds = sigDistField(jointName, meshes, gridSubdiv, gridScale)
 
 mid = time.time()
 
@@ -167,7 +157,7 @@ if KeyPathPoints:
 
 # define constant x coords
 
-x = np.linspace(0.0, 1.0, num = ligSubdiv + 1, endpoint=True)
+x = np.linspace(0.0, 1.0, num = ligSubdiv + 1, endpoint = True)
 
 # go through each frame and key ligament lengths into attributes
 
@@ -180,33 +170,23 @@ for i in range(keyDiff):
 
 	# check if progress is interupted
 
-	if cmds.progressWindow(query=True, isCancelled=True):
+	if cmds.progressWindow(query = True, isCancelled = True):
 		break
 
 	# get joint centre position
 
-	jPos = getWSPos(jointName)
-	jDag = dagObjFromName(jointName)[1]
-	jInclTransMat = MTransformationMatrix(jDag.inclusiveMatrix()) # world transformation matrix of joint
-	jExclTransMat = MTransformationMatrix(jDag.exclusiveMatrix()) # world transformation matrix of parent of joint
-
-	# normalize matrices by gridSize
-
-	jInclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
-	jExclTransMat.setScale([gridSize,gridSize,gridSize],4) # set scale in world space (om.MSpace.kWorld = 4)
+	jInclMat = jDag.inclusiveMatrix()
+	jPos = om.MTransformationMatrix(jInclMat).translation(4)
 
 	# get rotation matrices
 
-	jExclMatInv = np.linalg.inv(np.array(jExclTransMat.asMatrix()).reshape(4,4))
-	jInclMatInv = np.linalg.inv(np.array(jInclTransMat.asMatrix()).reshape(4,4))
-
 	rotMat = []
-	rotMat.append(np.dot(jExclMatInv,gridRotMat)) # inverse of parent rotMat (prox)
-	rotMat.append(np.dot(jInclMatInv,gridRotMat)) # inverse of child rotMat (dist)
+	rotMat.append(np.linalg.inv(np.array(jDag.exclusiveMatrix()).reshape(4,4))) # inverse of parent rotMat (prox)
+	rotMat.append(np.linalg.inv(np.array(jInclMat).reshape(4,4))) # inverse of child rotMat (dist)
 
 	# calculate the length of each ligament 
 
-	pathLengths,ligPoints,results = ligCalc(x, jPos, SDF[0], SDF[1], rotMat, LigAttributes, KeyPathPoints)
+	pathLengths, ligPoints, results = ligCalc(x, jPos, SDFs[0], SDFs[1], rotMat, ligDags, KeyPathPoints, bounds)
 
 	# key the attributes on the animated joint
 
@@ -215,13 +195,13 @@ for i in range(keyDiff):
 		cmds.setKeyframe(jointName, at = ligament, v = pathLengths[index])
 		
 		if debug == 1 and results[index].status != 0: # optimisation not successful, print info why not
-		    print(ligament, results[index])
+			print(ligament, results[index])
 
 		# check if ligament points are to be keyed
 
 		if KeyPathPoints:
 
-			for k in range(len(ligPoints[index])):
+			for k, ligpoint in enumerate(ligPoints[index]):
 
 				# get locator name
 
@@ -229,9 +209,9 @@ for i in range(keyDiff):
 
 				# key ligament point positions to locator
 
-				cmds.setKeyframe(loc, at = 'translateX', v = ligPoints[index][k][0])
-				cmds.setKeyframe(loc, at = 'translateY', v = ligPoints[index][k][1])
-				cmds.setKeyframe(loc, at = 'translateZ', v = ligPoints[index][k][2])
+				cmds.setKeyframe(loc, at = 'translateX', v = ligpoint[0])
+				cmds.setKeyframe(loc, at = 'translateY', v = ligpoint[1])
+				cmds.setKeyframe(loc, at = 'translateZ', v = ligpoint[2])
 
 	# update progress bar and time
 
