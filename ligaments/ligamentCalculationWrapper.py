@@ -9,7 +9,7 @@
 #	meshes for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 14.04.2025 - Oliver Demuth
+#	Last updated 05.12.2025 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -88,11 +88,8 @@ import numpy as np
 import scipy as sp
 import functools
 import os
-import time
 
-from tricubic import tricubic
-from maya.api.OpenMaya import MVector, MPoint, MTransformationMatrix
-from math import sqrt, floor
+from math import floor
 from multiprocessing import cpu_count, Process, Queue
 from ligamentCalculationBatch import * # source the ligament functions
 
@@ -144,5 +141,4 @@ if __name__ == "__main__":
 
 	for process in processes:
 		process.join()
-
 
