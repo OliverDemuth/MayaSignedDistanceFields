@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 01.12.2025 - Oliver Demuth
+#	Last updated 28.01.2026 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -27,22 +27,22 @@
 #################################################
 
 
-jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-meshes = ['prox_mesh', 			# specify according to meshes in the Maya scene
-	  'dist_mesh']
+jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+meshes = ['prox_mesh', 					# specify according to meshes in the Maya scene
+		  'dist_mesh']
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
-		    'dist_art_surf']
-fittedShape = 'prox_sphere'		# specify according to meshes in the Maya scene		
-xBounds = [-180,180]			# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
-yBounds = [-90,90]			# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
-zBounds = [-180,180]			# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
-gridSubdiv = 100			# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-gridScale = 1				# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-interval = 5				# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
-StartFrame = None 			# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
-FrameInterval = None			# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-ContinueKeys = False			# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
-debug = 0 				# Debug mode to check if signed distance fields have already been calculated
+		    		'dist_art_surf']
+fittedShape = 'prox_sphere'				# specify according to meshes in the Maya scene		
+xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
+yBounds = [-90,90]						# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
+zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
+gridSubdiv = 100						# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridScale = 1							# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
+FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+ContinueKeys = False					# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
+debug = 0 								# Debug mode to check if signed distance fields have already been calculated
 
 
 #################################################
@@ -57,7 +57,6 @@ import maya.cmds as cmds
 import numpy as np
 import scipy as sp
 import time
-import random
 
 from math import ceil
 
@@ -112,24 +111,21 @@ if not var_exists:
 	distArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
 	distMeshArr = relVtcPos(meshes[1], initialRotMat[1])
 
-# get inverse of rotation matrix for default cubic grid coordinate system
-
-mid = time.time()
-
-if not var_exists:
+	mid = time.time()
 	print('Signed distance fields calculated in {0:.3f} seconds!'.format(mid - start))
+
 else:
+	mid = time.time()
 	print('Signed distance fields succesfully loaded in {0:.3f} seconds!'.format(mid - start))
 
 # create 3D grid for rotations
 
-xRots = np.arange(xBounds[0], ceil(xBounds[1]+interval/2), interval, dtype = int)
-yRots = np.arange(yBounds[0], ceil(yBounds[1]+interval/2), interval, dtype = int)
-zRots = np.arange(zBounds[0], ceil(zBounds[1]+interval/2), interval, dtype = int)
+xRots = np.arange(xBounds[0], ceil(xBounds[1]+interval/2), interval, dtype = float)
+yRots = np.arange(yBounds[0], ceil(yBounds[1]+interval/2), interval, dtype = float)
+zRots = np.arange(zBounds[0], ceil(zBounds[1]+interval/2), interval, dtype = float)
 
-rotations = [[x, y, z] for x in xRots  # length along x
-		       for y in yRots  # length along y
-		       for z in zRots] # length along z
+rotX, rotY, rotZ = np.meshgrid(xRots, yRots, zRots, indexing='ij')
+rotations = np.vstack((rotX.ravel(), rotY.ravel(), rotZ.ravel())).T 
 
 numFrames = len(rotations)
 
@@ -177,7 +173,8 @@ if keyDiff <= 0:
 	keyDiff = 1
 
 if debug == 1 and FrameInterval != None: # randomly assign rotations for testing
-	rotations = random.sample(rotations, FrameInterval)
+	rng = np.random.default_rng(seed = 42)
+	rotations = rotations[rng.integers(0,rotations.shape[0],FrameInterval)]
 
 # define progress bar
 
@@ -191,13 +188,18 @@ print('Translation optimisation in progress...')
 
 # get joint exclusive transformation matrix (parent)
 
-jExclMat = jDag.exclusiveMatrix() # world rotation matrix of parent joint
-jExclNPMat = np.array(jExclMat).reshape(4,4) # convert into numpy 4x4 array
-jExclNPMatInv = np.linalg.inv(jExclNPMat) # inverse of parent rotMat (prox) as numpy 4x4 array
+jExclNPMat = np.array(jDag.exclusiveMatrix()).reshape(4,4) # world rotation matrix of parent joint as numpy 4x4 array
+jExclNPMatInv = np.linalg.solve(jExclNPMat, np.eye(4)) # inverse of parent rotMat (prox) as numpy 4x4 array
 
-# go through all possible combinations
+# define initial guess condition
+
+initial_guess = np.zeros(3)
+
+# ==== optimise translations ====
 
 frame = 0
+
+# go through all possible combinations
 
 for i in range(keyDiff):
 
@@ -213,33 +215,25 @@ for i in range(keyDiff):
 
 	# extract rotation
 
-	rotation = [float(rotations[j][0]),float(rotations[j][1]),float(rotations[j][2])]
+	rotation = rotations[j,:]
 
 	# get joint inclusive transformation matrix (child)
 
-	localTransMat = om.MTransformationMatrix()
-	localTransMat.setRotation(om.MEulerRotation(np.deg2rad(rotation), order = 0)) # set rotation (om.MEulerRotation.kXYZ = 0)
-	localTransMat.setTranslation(om.MVector([0,0,0]),2) # reset translation (om.MSpace.kObject = 2)
-	jInclTransMat = localTransMat.asMatrix() * jExclMat
+	transMat = np.eye(4)
+	transMat[0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotation, degrees = True).as_matrix()[::-1,::-1] # inverse matrix directions to be consistent with previous approach (i.e., converting SciPy’s (x,y,z) basis into Maya’s (z,y,x) basis)
 
 	# get rotation matrices
 
 	rotMat = []
 	rotMat.append(jExclNPMat) # append parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(np.array(jInclTransMat).reshape(4,4)) # append child rotMat (dist) as numpy 4x4 array
+	rotMat.append(transMat @ jExclNPMat) # append child rotMat (dist) as numpy 4x4 array
 	rotMat.append(jExclNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
 
 	# optimise the joint translations
 
-	coords, viable, results = optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, gridSize)
+	coords, viable = optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, initial_guess, gridSize)
 
 	# check if pose was viable
-
-	if debug == 1:
-		print(results.nit, viable)
-
-		if viable:
-			nvit.append(results.nit)
 
 	if viable:
 
@@ -275,6 +269,3 @@ else:
 	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid,keyDiff,int(frame-lastKey)))
 
 cmds.progressWindow(edit = True, endProgress = True)
-
-if debug == 1 and len(nvit) > 0:
-	print(max(nvit))
