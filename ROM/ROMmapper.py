@@ -337,8 +337,8 @@ class ROMeval:
 		
 		# store contiguous arrays and callables
 
-		self.proxArr = np.ascontiguousarray(proxArr, dtype = dtype) # shape (N,4,4)
-		self.distArr = np.ascontiguousarray(distArr, dtype = dtype) # shape (M,4,4)
+		self.proxArr = np.ascontiguousarray(proxArr, dtype = dtype) # shape (N,4)
+		self.distArr = np.ascontiguousarray(distArr, dtype = dtype) # shape (M,4)
 		self.w = np.ascontiguousarray(w, dtype = dtype) # shape (5,1)
 
 		self._proxDist = None
@@ -378,7 +378,7 @@ class ROMeval:
 
 		# extract coordinates from params and transform them into transformation matrix coords
 
-		transMat = self.rotMat[1] # transformation matrix
+		transMat = self.rotMat[1].copy() # transformation matrix
 		transMat[3,:] = self._paramCoords @ self.rotMat[0] # append result world space coordinates to transformation matrix
 
 		# go through each proximal articular surface point and check if any of them intersect with distal mesh (i.e., signDist < 0)
@@ -404,7 +404,7 @@ class ROMeval:
 		# calculate mean distances and variance 
 
 		proxDist = self._proxDist
-		meanDist = proxDist.mean() 
+		proxMeanDist = proxDist.mean() 
 		proxVar = proxDist - proxMeanDist
 
 		distDist = self._distDist # distal art surf in proximal SDF
