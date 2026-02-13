@@ -84,7 +84,7 @@ jDag = dagObjFromName(jointName)[1]
 
 meanRad, dims = meanRad(fittedShape)
 
-if thickness is None
+if thickness is None:
 	thickness = meanRad / 2
 
 gridSize = 16 * thickness
