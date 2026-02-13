@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 28.01.2026 - Oliver Demuth
+#	Last updated 13.02.2026 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -31,14 +31,23 @@ jointName = 'myJoint' 					# specify according to the joint centre in the Maya s
 meshes = ['prox_mesh', 					# specify according to meshes in the Maya scene
 		  'dist_mesh']
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
-		    		'dist_art_surf']
+					'dist_art_surf']
 fittedShape = 'prox_sphere'				# specify according to meshes in the Maya scene		
 xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
 yBounds = [-90,90]						# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
 zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
 gridSubdiv = 100						# integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-gridScale = 1							# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+gridScale = 1							# float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+weights = [1.0,							# weight for first cost term (proximal joint spacing; prox_art_surf in ipDist)
+		   0.0,							# weight for second cost term (distal joint spacing; dist_art_surf in ipProx)
+		   1.0,							# weight for third cost term (proximal joint congruency)
+		   0.0,							# weight for fourth cost term (distal joint congruency)
+		   0.0]							# weight for fifth cost term (joint offset)
+tolerance = 0.07						# tolerance for joint proximity (i.e, set target thickness tolerance; e.g., 0.07 based on experimental data)
+scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
+cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
+thickness = None						# Float value indicating the thickness value which correlates with the joint spacing. If set to None it will automatically be determined based on the fitted shape radius.
 StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 ContinueKeys = False					# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
@@ -73,9 +82,12 @@ jDag = dagObjFromName(jointName)[1]
 
 # get gridsize from glenoid sphere radius
 
-sphereRad = meanRad(fittedShape)
-thickness = sphereRad/2
-gridSize = 8 * sphereRad
+meanRad, dims = meanRad(fittedShape)
+
+if thickness is None
+	thickness = meanRad / 2
+
+gridSize = 16 * thickness
 
 # initialise signed distance fields
 
@@ -91,8 +103,6 @@ if debug == 1 or ContinueKeys:
 		var_exists = False
 	else:
 		var_exists = True # signed distance field already calculated, no need to do it again
-
-	nvit = []
 
 else:
 	var_exists = False
@@ -118,11 +128,35 @@ else:
 	mid = time.time()
 	print('Signed distance fields succesfully loaded in {0:.3f} seconds!'.format(mid - start))
 
+
+# ==== initialise variables and precalculations ====
+
+
+# get dimensions of target object
+
+dimComp = np.isclose(dims[:,None], dims[None,:]).sum(axis = 1)
+
+# determine fitted shape
+
+shapeCheck = dimComp.max() == 3 # if true is sphere (i.e., X, Y, Z axis dimensions are identical), otherwise is cylinder 
+
+# set bounds
+
+if shapeCheck: # sphere
+
+	bound = np.clip(dims, 0, gridSize)[0] # clamp dims to gridSize
+	bounds = tuple([(-bound, bound)] * 3) # bounds for translations (X,Y,Z)
+
+else: # cylinder or elipsoid
+
+	bound = np.clip(dims * 0.75, 0, gridSize) # 1.5 times the dimensions in each axis (X,Y,Z)
+	bounds = tuple((-b, b) for b in bound)
+
 # create 3D grid for rotations
 
-xRots = np.arange(xBounds[0], ceil(xBounds[1]+interval/2), interval, dtype = float)
-yRots = np.arange(yBounds[0], ceil(yBounds[1]+interval/2), interval, dtype = float)
-zRots = np.arange(zBounds[0], ceil(zBounds[1]+interval/2), interval, dtype = float)
+xRots = np.arange(xBounds[0], ceil(xBounds[1] + interval / 2), interval, dtype = float)
+yRots = np.arange(yBounds[0], ceil(yBounds[1] + interval / 2), interval, dtype = float)
+zRots = np.arange(zBounds[0], ceil(zBounds[1] + interval / 2), interval, dtype = float)
 
 rotX, rotY, rotZ = np.meshgrid(xRots, yRots, zRots, indexing='ij')
 rotations = np.vstack((rotX.ravel(), rotY.ravel(), rotZ.ravel())).T 
@@ -132,11 +166,11 @@ numFrames = len(rotations)
 # set time to 1 or to start frame
 
 if ContinueKeys:
-	lastKey = cmds.keyframe(jointName, attribute='rotateX', query=True, index=(1, cmds.keyframe(jointName, attribute='rotateX', query=True, keyframeCount=True)))[-1]
+	lastKey = cmds.keyframe(jointName, attribute = 'rotateX', query = True, index = (1, cmds.keyframe(jointName, attribute = 'rotateX', query = True, keyframeCount = True)))[-1]
 
-	xRot = round(cmds.keyframe(jointName, attribute='rotateX', query=True, eval=True, time=(lastKey,lastKey))[0],6)
-	yRot = round(cmds.keyframe(jointName, attribute='rotateY', query=True, eval=True, time=(lastKey,lastKey))[0],6)
-	zRot = round(cmds.keyframe(jointName, attribute='rotateZ', query=True, eval=True, time=(lastKey,lastKey))[0],6)
+	xRot = round(cmds.keyframe(jointName, attribute = 'rotateX', query = True, eval = True, time = (lastKey,lastKey))[0],6)
+	yRot = round(cmds.keyframe(jointName, attribute = 'rotateY', query = True, eval = True, time = (lastKey,lastKey))[0],6)
+	zRot = round(cmds.keyframe(jointName, attribute = 'rotateZ', query = True, eval = True, time = (lastKey,lastKey))[0],6)
 
 	rotIdx = rotations.index([xRot,yRot,zRot]) # get index of last keyed frame
 
@@ -147,9 +181,9 @@ if ContinueKeys:
 	cmds.currentTime(lastKey + 1)
 
 else:
-	if StartFrame == None:
+	if StartFrame is None:
 		minKeys = 1 # get index of next frame to be keyed
-		cmds.cutKey(jointName, option="keys") # delete all previous keyframes
+		cmds.cutKey(jointName, option = 'keys') # delete all previous keyframes
 	else: 
 		minKeys = StartFrame
 
@@ -161,30 +195,32 @@ else:
 
 # get total number of frames to be keyed
 
-if FrameInterval == None or (minKeys + FrameInterval) > numFrames:
+if FrameInterval is None or minKeys + FrameInterval > numFrames:
 	keyframes = numFrames
 	keyDiff = keyframes - minKeys + 1
-
 else:
 	keyframes = minKeys + FrameInterval
 	keyDiff = FrameInterval
 
-if keyDiff <= 0:
-	keyDiff = 1
+keyDiff = max(1, keyDiff)
 
-if debug == 1 and FrameInterval != None: # randomly assign rotations for testing
+if debug == 1 and FrameInterval is not None: # randomly assign rotations for testing
 	rng = np.random.default_rng(seed = 42)
 	rotations = rotations[rng.integers(0,rotations.shape[0],FrameInterval)]
 
 # define progress bar
 
 cmds.progressWindow(title = 'Translation optimisation in progress...',
-		    progress = 1,
-		    status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
-		    isInterruptable = True,
-		    max = keyDiff)
+				    progress = 1,
+		    		status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
+		    		isInterruptable = True,
+		    		max = keyDiff)
 
 print('Translation optimisation in progress...')
+
+# get joint exclusive transformation matrix (parent)
+
+jDag = dagObjFromName(jointName)[1]
 
 # get joint exclusive transformation matrix (parent)
 
@@ -193,11 +229,25 @@ jExclNPMatInv = np.linalg.solve(jExclNPMat, np.eye(4)) # inverse of parent rotMa
 
 # define initial guess condition
 
-initial_guess = np.zeros(3)
+if shapeCheck: # sphere
+
+	initial_guess = np.zeros(3)
+
+else: # cylinder or ellipsoid
+		
+	initial_guess = (np.array((1.1 * meanRad, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
+
+	# clip initial guess to cylinder bounds
+
+	bnds = np.array(bounds)
+	initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
+
 
 # ==== optimise translations ====
 
+
 frame = 0
+tol = 1 + tolerance
 
 # go through all possible combinations
 
@@ -210,8 +260,8 @@ for i in range(keyDiff):
 
 	# check if progress is interupted
 
-	if cmds.progressWindow(query=True, isCancelled=True):
-			break
+	if cmds.progressWindow(query = True, isCancelled = True):
+		break
 
 	# extract rotation
 
@@ -231,7 +281,19 @@ for i in range(keyDiff):
 
 	# optimise the joint translations
 
-	coords, viable = optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, initial_guess, gridSize)
+	coords, viable = optimisePosition(proxArr, 		# 2D array of proximal articular surface vertex coordinates for fast computation of relative coordinates 
+									  distArr, 		# 2D array of distal articular surface vertex coordinates for fast computation of relative coordinates 
+									  distMeshArr,  # 2D array of distal mesh vertex coordinates for fast computation of relative coordinates
+									  SDF, 			# list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist])
+									  rotMat, 		# array with the transformation matrices of the joint and its parent
+									  thickness, 	# thickness measure correlated with joint spacing
+									  weights, 		# weights for the individual cost function terms
+									  initial_guess,# initual guess condition for optimiser 
+									  bounds, 		# bounds for optimisation
+									  scaleFactor, 	# scale factor to roughly check if joint is disarticulated
+									  maxIter, 		# maximum number of iterations
+									  tol, 			# tolerance for joint proximity
+									  cutOff)		# cut off value for signed distance fields
 
 	# check if pose was viable
 
@@ -264,8 +326,8 @@ for i in range(keyDiff):
 end = time.time()
 
 if cmds.progressWindow(query = True, isCancelled = True):
-	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i+1,int(frame-lastKey)))
+	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid, i + 1, int(frame - lastKey)))
 else:
-	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid,keyDiff,int(frame-lastKey)))
+	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid, keyDiff, int(frame - lastKey)))
 
 cmds.progressWindow(edit = True, endProgress = True)
