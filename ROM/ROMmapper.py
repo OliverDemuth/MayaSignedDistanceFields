@@ -4,10 +4,10 @@
 #	a set of bone meshes. It is an implementation of the Marai et al., 2006 and Lee
 #	et al. 2023 approach for Autodesk Maya. It creates signed distance fields for the
 #	proximal and distal bone meshes which are then used to caculate intersections
-#	between the meshes and the distance between them. 
+#	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 28.01.2026 - Oliver Demuth
+#	Last updated 13.02.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -16,18 +16,22 @@
 #			string	meshes:				Names of the two bone meshes and optional convex hull (i.e., several individual meshes representing the bones and rib cage; e.g., in the form of ['prox_mesh','dist_mesh', 'conv_hull'])
 #			string	congruencyMeshes:	Names of the meshes to check articular congruency (i.e., several individual meshes; e.g., in the form of ['prox_art_surf','dist_art_surf'])
 #			string	fittedShape:		Name of the shape fitted to the proximal articular surface (e.g., in the form 'prox_fitted_sphere') used for proximity estimation
-#			float 	xBounds:			Float array of bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
-#			float 	yBounds:			Float array of bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
-#			float 	zBounds:			Float array of bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
-#			int	gridSubdiv:				Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			float	xBounds:			Float array of bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
+#			float	yBounds:			Float array of bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
+#			float	zBounds:			Float array of bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
+#			int		interval:			Integer value for the sampling interval between bounds (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90; see Manafzadeh & Padian, 2018)
+#			int		gridSubdiv:			Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 #			float	gridSize:			Float value indicating the size of the cubic grid (i.e., the length of a side; e.g., 10 will result ing a cubic grid with the dimensions 10 x 10 x 10)
 #			float	gridScale:			Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 #			float	thickness:			Float value indicating the thickness value which correlates with the joint spacing
+#			float	weights:			Float array of weights for the cost function in the form of [w1, w2, w3, w4, w5]
+#			float	tolerance: 			Float value for the joint proximity tolerance
+#			float	scaleFactor:		Float value for the joint offset to determine joint disarticulation
+#			float	cutOff:				Float value for the final SDF interpolation (default is 0.0)
 #
 #		RETURN params:
-#			array 	coords:				Return value is a an array of 3D coordinates of the distal bone relative to the proximal one
+#			float 	coords:				Return value is a float array of 3D coordinates (X, Y, Z) of the distal bone (ACS) relative to the proximal one 
 #			boolean	viable:				Return value is a boolean whether the rotational poses are viable or inviable (i.e, intersection or disarticulation of the bone meshes)
-#			object 	results: 			Return value is an object of the scipy.optimize.OptimizeResult class. It represents the output of the scipy.optimize.minimize() function
 #
 #
 #	IMPORTANT notes:
@@ -103,7 +107,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 	# Input variables:
 	#	mesh = name of the mesh for which the signed distance field is calculated
 	#	rotMat = transformation matrix of parent (joint) of the mesh
-	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
+	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 	#	scale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
@@ -221,24 +225,18 @@ def meanRad(mesh):
 	dag = dagObjFromName(mesh)[1]
 	shape = dag.extendToShape()
 
-	transMat = np.array(dag.inclusiveMatrix()).reshape(4,4)
-
 	# get mesh object
 
 	fnMesh = om.MFnMesh(shape)
-
-	fnMeshMat = np.eye(4)
-	fnMeshMat[3,:] = np.array(fnMesh.boundingBox.center)
-
-	centerPos = (fnMeshMat @ transMat)[3,:]
-
-	# get world position of all vertices (om.MSpace.kWorld = 4)
-
 	vertices = np.array(fnMesh.getPoints(4))
+
+	# get bounding box dimensions
+
+	dims = np.array([fnMesh.boundingBox.width, fnMesh.boundingBox.height, fnMesh.boundingBox.depth])
 
 	# substract center position from vertices and return mean distance
 
-	return np.linalg.norm((vertices - centerPos), axis = 1).mean() 
+	return np.linalg.norm((vertices - vertices.mean(axis = 0)), axis = 1).mean(), dims
 
 
 ################################################
@@ -248,7 +246,7 @@ def meanRad(mesh):
 
 # ========== check viability function ==========
 
-def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, initial_guess, bounds):
+def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, weights, initial_guess, bounds, scaleFactor, maxIter, tol, cutOff):
 
 	# Input variables:
 	#   proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
@@ -257,13 +255,31 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, init
 	#   SDF = list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist, ipConv])
 	#   rotMat = array with the transformation matrices of the joint and its parent
 	#   thickness = thickness measure correlated with joint spacing
+	#   weights = weights for the individual cost function terms
 	#   initial_guess = initual guess condition for optimiser
 	#   bounds = bounds for optimisation
+	#   threshold = scale factor to roughly check if joint is disarticulated
+	#   maxIter = maximum number of iterations
+	#   tol = tolerance for joint proximity
+	#   cutOff = cut off value for signDist 
 	# ======================================== #
-	
-	# optimise translation for specific rotational pose
 
-	results = posOptMin(proxArr, distArr, SDF[0], SDF[1], rotMat, thickness, initial_guess, bounds)
+	# initialise evaluator for translation optimisation
+
+	e = ROMeval(proxArr, distArr, SDF[0], SDF[1], rotMat, thickness, weights)
+
+	# set constraints functions
+
+	cons = ({'type': 'ineq',    # set type to inequality, which means that it is to be non-negative
+			 'fun': e.constraint})  # set constraint function from evaluator
+
+	# set options
+
+	options = {"maxiter": maxIter} # if it doesn't solve within 25 iterations it usually won't solve. Any more than 50 will just increase computational time without much benefit
+	
+	# optimise translation for specific rotational pose using SLSQP: results.X = joint centre point coordinates
+
+	results = sp.optimize.minimize(e.cost, initial_guess, bounds = bounds, method = 'SLSQP', constraints = cons, options = options)
 
 	# check if optimisation was successful
 
@@ -274,7 +290,7 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, init
 	
 	# check for disarticulation 
 	
-	if diff > (2.2 * thickness): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape; thickness = 0.5 * radius)
+	if diff > (scaleFactor * thickness): # first crudely (if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
 		return [], False # empty list, viable
 
 	# get transformation matrix
@@ -294,48 +310,10 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, init
 	
 	# if disarticulated or any points impinge meshes the position becomes inviable
 
-	if avgdist < (1.07 * thickness) and signDist[signDist != -1].min() > 0: # remove outliers that are beyond cubic grid and set target thickness limit to 7% based on experimental data
+	if avgdist < (tol * thickness) and signDist[signDist != -1].min() > cutOff: # remove outliers that are beyond cubic grid and set target thickness limit to tolerance (i.e., 1.07 based on experimental data)
 		return results.x, True # coords, viable
 	else:
 		return [], False # empty list, viable
-
-
-# ========== translation optimisation ==========
-
-def posOptMin(proxArr, distArr, ipProx, ipDist, rotMat, thickness, initial_guess, bounds):
-
-	# Input variables:
-	#   proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#   distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#   ipProx = proximal signed distance field in tricubic form
-	#   ipDist = distal signed distance field in tricubic form
-	#   rotMat = array with the transformation matrices of the joint and its parent
-	#   thickness = thickness measure correlated with joint spacing
-	#   initial_guess = initual guess condition for optimiser
-	#   bounds = bounds for optimisation
-	# ======================================== #
-
-	# initialise shared evaluator
-
-	e = ROMeval(proxArr, distArr, ipProx, ipDist, rotMat, thickness)
-
-	# set constraints functions
-
-	cons = ({'type': 'ineq',    # set type to inequality, which means that it is to be non-negative
-		 'fun': e.constraint})  # set constraint function from evaluator
-
-	# set bounds
-
-	boundsList = [(-bounds, bounds)] * (len(initial_guess)) # set x, y and z coordinate boundaries based on SDF grid size
-	bnds = tuple(boundsList)
-
-	# set options
-
-	options = {"maxiter": 50} # if it doesn't solve within 25 iterations it usually won't solve. Any more than 50 will just increase computational time without much benefit
-
-	# optimization using SLSQP: res.X = joint centre point coordinates, res.fun = mean articular distance - thickness squared + variance
-
-	return sp.optimize.minimize(e.cost, initial_guess, bounds = bnds, method = 'SLSQP', constraints = cons, options = options)
 
 
 
@@ -345,25 +323,27 @@ def posOptMin(proxArr, distArr, ipProx, ipDist, rotMat, thickness, initial_guess
 
 
 class ROMeval:
-	def __init__(self, proxArr, distArr, ipProx, ipDist, rotMat, thickness, dtype = np.float64):
+	def __init__(self, proxArr, distArr, ipProx, ipDist, rotMat, thickness, w, dtype = np.float64):
 
 		# Input variables:
-			#   proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
-			#   distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
-			#   ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
-			#   ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
-			#   rotMat = array with the transformation matrices of the joint and its parent
-			#   thickness = thickness measure correlated with joint spacing. Passed through args, not part of this constraint function
-			# ======================================== #
+		#   proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
+		#   distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
+		#   ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
+		#   ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
+		#   rotMat = array with the transformation matrices of the joint and its parent
+		#   thickness = thickness measure correlated with joint spacing. Passed through args, not part of this constraint function
+		#   w = weights for the individual cost function terms
+		# ======================================== #
 		
 		# store contiguous arrays and callables
 
 		self.proxArr = np.ascontiguousarray(proxArr, dtype = dtype) # shape (N,4,4)
 		self.distArr = np.ascontiguousarray(distArr, dtype = dtype) # shape (M,4,4)
+		self.w = np.ascontiguousarray(w, dtype = dtype) # shape (5,1)
+
 		self._proxDist = None
 		self._distDist = None
-		self._transMat = np.empty((4, 4), dtype = dtype)
-		self.paramCoords = np.ones(4)
+		self._paramCoords = np.ones(4)
 
 		# store signed distance fields
 
@@ -386,23 +366,25 @@ class ROMeval:
 
 		# Input variables:
 		#	params = array of optimised X, Y and Z coordinates of distal element position
+		# ======================================== #
 
 		# check cached values
 
-		if self._last_params is not None and all(params == self._last_params): return
+		if self._last_params is not None and all(params == self._last_params): return # params have not changed, no need to recalculate expensive SDF interpolation
 
 		# params are not the same as cached values
 
-		self.paramCoords[0:3] = params # add trailing one to params for matrix multiplications
+		self._paramCoords[0:3] = params # add trailing one to params for matrix multiplications
 
 		# extract coordinates from params and transform them into transformation matrix coords
 
-		self._transMat[:] = self.rotMat[1] # transformation matrix
-		self._transMat[3,:] = self.paramCoords @ self.rotMat[0] # append result world space coordinates to transformation matrix
+		transMat = self.rotMat[1] # transformation matrix
+		transMat[3,:] = self._paramCoords @ self.rotMat[0] # append result world space coordinates to transformation matrix
 
 		# go through each proximal articular surface point and check if any of them intersect with distal mesh (i.e., signDist < 0)
 
-		self._proxDist = self.ipDist((self.proxArr @ np.linalg.solve(self._transMat.T, self.rotMat[0].T).T)[:,0:3]) # calculate signed distances for the proximal articular surface
+		self._proxDist = self.ipDist((self.proxArr @ np.linalg.solve(transMat.T, self.rotMat[0].T).T)[:,0:3]) # calculate signed distances for the proximal articular surface
+		self._distDist = self.ipProx((self.distArr @ (transMat @ self.rotMat[2]))[:,0:3])
 
 		# update cache
 
@@ -413,39 +395,47 @@ class ROMeval:
 
 	def cost(self, params):
 
-		# Cost function: squared deviation from thickness plus variance of proxDist.
-		#
 		# Input variables:
 		#   params = array of optimised X, Y and Z coordinates of distal element position
+		# ======================================== #
 
 		self._evaluate(params) # evaluate cached values and update if necessary
 
-		# calculate mean distance 
+		# calculate mean distances and variance 
 
 		proxDist = self._proxDist
 		meanDist = proxDist.mean() 
-		var = proxDist - meanDist
+		proxVar = proxDist - proxMeanDist
 
-		# calculate cost (squared deviation from thickness; first objective term) and variance (second objective term)
+		distDist = self._distDist # distal art surf in proximal SDF
+		distMeanDist = distDist.mean()
+		distVar = distDist - distMeanDist
 
-		return (meanDist - self.thickness) ** 2 + np.dot(var,var) / var.size # minimising variance enforces largest possible overlap
+		# calculate cost terms
+
+		terms = np.array([(proxMeanDist - self.thickness) ** 2,     # proximal joint spacing (prox art surf in ipDist)
+						  (distMeanDist - self.thickness) ** 2,     # distal joint spacing (dist art surf in ipProx)
+						  np.dot(proxVar, proxVar) / proxVar.size,  # proximal joint congruency
+						  np.dot(distVar, distVar) / distVar.size,  # distal joint congruency
+						  np.linalg.norm(params)])                  # joint offset 
+
+		# apply weights to cost terms and sum
+
+		return np.dot(self.w, terms)
 
 
 	# ========== signed distance field constraint function ==========
 
 	def constraint(self, params):
 
-		# Constraint function: minimal signed distance across both surfaces (negative = intersection).
-		#
 		# Input variables:
 		#   params = array of optimised X, Y and Z coordinates of distal element position
+		# ======================================== #
 
 		self._evaluate(params) # evaluate cached values and update if necessary
 
 		# go through each distal articular surface point and check if any of them intersect with proximal mesh (i.e., signDist < 0)
 
-		distDist = self.ipProx((self.distArr @ (self._transMat @ self.rotMat[2]))[:,0:3]) # calculate signed distances for the distal articular surface
-
-		return min(self._proxDist.min(), distDist.min())  # return minimal value, if any of the points are inside a mesh it will be negative
+		return min(self._proxDist.min(), self._distDist.min()) # return minimal value, if any of the points are inside a mesh (intersection) it will be negative
 
 
