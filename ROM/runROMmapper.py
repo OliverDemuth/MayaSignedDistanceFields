@@ -168,12 +168,18 @@ numFrames = len(rotations)
 if ContinueKeys:
 	lastKey = cmds.keyframe(jointName, attribute = 'rotateX', query = True, index = (1, cmds.keyframe(jointName, attribute = 'rotateX', query = True, keyframeCount = True)))[-1]
 
-	xRot = round(cmds.keyframe(jointName, attribute = 'rotateX', query = True, eval = True, time = (lastKey,lastKey))[0],6)
-	yRot = round(cmds.keyframe(jointName, attribute = 'rotateY', query = True, eval = True, time = (lastKey,lastKey))[0],6)
-	zRot = round(cmds.keyframe(jointName, attribute = 'rotateZ', query = True, eval = True, time = (lastKey,lastKey))[0],6)
+	xRot = cmds.keyframe(jointName, attribute = 'rotateX', query = True, eval = True, time = (lastKey,lastKey))[0]
+	yRot = cmds.keyframe(jointName, attribute = 'rotateY', query = True, eval = True, time = (lastKey,lastKey))[0]
+	zRot = cmds.keyframe(jointName, attribute = 'rotateZ', query = True, eval = True, time = (lastKey,lastKey))[0]
 
-	rotIdx = rotations.index([xRot,yRot,zRot]) # get index of last keyed frame
+	matches = np.all(np.isclose(rotations, np.array([xRot,yRot,zRot])), axis=1)
 
+	idxs = np.flatnonzero(matches)
+
+	if idxs.size == 0: 
+		error("Last keyed rotation not found in rotation grid.") 
+
+	rotIdx = idxs[0] # get index of last keyed frame
 	minKeys = rotIdx + 2 # get index of next frame to be keyed
 
 	# set current time
@@ -229,18 +235,7 @@ jExclNPMatInv = np.linalg.solve(jExclNPMat, np.eye(4)) # inverse of parent rotMa
 
 # define initial guess condition
 
-if shapeCheck: # sphere
-
-	initial_guess = np.zeros(3)
-
-else: # cylinder or ellipsoid
-		
-	initial_guess = (np.array((1.1 * meanRad, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
-
-	# clip initial guess to cylinder bounds
-
-	bnds = np.array(bounds)
-	initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
+initial_guess = np.zeros(3)
 
 
 # ==== optimise translations ====
@@ -272,6 +267,17 @@ for i in range(keyDiff):
 	transMat = np.eye(4)
 	transMat[0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotation, degrees = True).as_matrix()[::-1,::-1] # inverse matrix directions to be consistent with previous approach (i.e., converting SciPy’s (x,y,z) basis into Maya’s (z,y,x) basis)
 
+	# define initial guess condition
+
+	if not shapeCheck: # cylinder or ellipsoid
+			
+		initial_guess = (np.array((1.1 * meanRad, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
+
+		# clip initial guess to cylinder bounds
+
+		bnds = np.array(bounds)
+		initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
+		
 	# get rotation matrices
 
 	rotMat = []
