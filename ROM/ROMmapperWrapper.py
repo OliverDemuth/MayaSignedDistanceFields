@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 02.12.2025 - Oliver Demuth
+#	Last updated 13.02.2026 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -42,27 +42,37 @@
 
 # ========== set variables ========== 
 
-jointName = 'myJoint' 			# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-meshes = ['prox_mesh', 			# specify according to meshes in the Maya scene
+jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+meshes = ['prox_mesh', 					# specify according to meshes in the Maya scene
 	  'dist_mesh']				
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
-		    'dist_art_surf']	
-fittedShape = 'prox_sphere'		# specify according to meshes in the Maya scene		
-xBounds = [-180,180]			# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
-yBounds = [-90,90]			# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
-zBounds = [-180,180]			# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
-interval = 5				# sampling interval, see Manafzadeh & Padian, 2018 (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
-gridSubdiv = 100			# integer value for the subdivision of the cube (i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-gridScale = 1				# float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-cores = 8				# integer value to specify maximal number of CPU cores to be assigned
+		    		'dist_art_surf']	
+fittedShape = 'prox_sphere'				# specify according to meshes in the Maya scene		
+xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
+yBounds = [-90,90]						# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
+zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
+interval = 5							# sampling interval, see Manafzadeh & Padian, 2018 (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+gridSubdiv = 100						# integer value for the subdivision of the cube (i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridScale = 1							# float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
+weights = [1.0,							# weight for first cost term (proximal joint spacing; prox_art_surf in ipDist)
+		   0.0,							# weight for second cost term (distal joint spacing; dist_art_surf in ipProx)
+		   1.0,							# weight for third cost term (proximal joint congruency)
+		   0.0,							# weight for fourth cost term (distal joint congruency)
+		   0.0]							# weight for fifth cost term (joint offset)
+tolerance = 0.07						# tolerance for joint proximity (i.e, set target thickness tolerance; e.g., 0.07 based on experimental data)
+scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
+cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
+thickness = None						# Float value indicating the thickness value which correlates with the joint spacing. If set to None it will automatically be determined based on the fitted shape radius.
+cores = 8								# integer value to specify maximal number of CPU cores to be assigned
 
 # ========== set directories ========== 
 
 # make sure you have set directories as follows:
-# 	project folder directory: 	"path/to/project folder"		Project folder with the following subfolders: 'python', 'maya files' and 'results'
-#	python scripts directory:	"path/to/project folder/python"		Ligament calculation python scripts go in here
-#	Maya files directory:		"path/to/project folder/maya files"	Maya scenes (.mb) to be processed go in here
-#	output/results directory:	"path/to/project folder/results"	CSV files will be saved here
+# 	project folder directory: 	"path/to/project folder"				Project folder with the following subfolders: 'python', 'maya files' and 'results'
+#	python scripts directory:	"path/to/project folder/python"			All Python scripts go in here (ROMmapper.py, ROMmapperBatch.py, ROMmapperWrapper.py)
+#	Maya files directory:		"path/to/project folder/maya files"		Maya scenes (.mb) to be processed go in here
+#	output/results directory:	"path/to/project folder/results"		CSV files will be saved here
 # ======================================== #
 
 path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\ROM\\python' # add your file path. Make sure 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
@@ -90,7 +100,8 @@ import time
 from math import sqrt, floor
 from datetime import timedelta
 from multiprocessing import cpu_count, Process, Queue
-from ROMmapperBatch import * # source the ligament functions
+from ROMmapperBatch import * # source the batch functions
+from ROMmapper import * # source the ROM functions
 
 # ========== append path to python files ========== 
 
@@ -129,7 +140,7 @@ if __name__ == "__main__":
 
 	# create tuple for arguments passed to ligament calculation functions
 
-	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, [xBounds,yBounds,zBounds], interval, outDir)
+	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, [xBounds,yBounds,zBounds], interval, weights, tolerance, scaleFactor, cutOff, thickness, outDir)
 
 	# initialise multiprocessing
 
