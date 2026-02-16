@@ -7,7 +7,7 @@
 #	between the meshes and the distance between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 02.12.2025 - Oliver Demuth
+#	Last updated 16.02.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -195,18 +195,7 @@ def processMayaFiles(filePath,args):
 
 	# define initial guess condition
 
-	if shapeCheck: # sphere
-
-		initial_guess = np.zeros(3)
-
-	else: # cylinder or ellipsoid
-			
-		initial_guess = (np.array((1.1 * meanRad, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
-
-		# clip initial guess to cylinder bounds
-
-		bnds = np.array(bounds)
-		initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
+	initial_guess = np.zeros(3)
 
 
 	# ==== optimise translations ====
@@ -228,6 +217,17 @@ def processMayaFiles(filePath,args):
 
 		transMat = np.eye(4)
 		transMat[0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotation, degrees = True).as_matrix()[::-1,::-1] # inverse matrix directions to be consistent with previous approach (i.e., converting SciPy’s (x,y,z) basis into Maya’s (z,y,x) basis)
+
+		# update initial guess condition
+
+		if not shapeCheck: # cylinder or ellipsoid
+
+			initial_guess = (np.array((1.1 * meanRad, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
+
+			# clip initial guess to cylinder bounds
+
+			bnds = np.array(bounds)
+			initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
 
 		# get rotation matrices
 
