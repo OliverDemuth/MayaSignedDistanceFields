@@ -249,8 +249,8 @@ def meanRad(mesh):
 def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, weights, initial_guess, bounds, scaleFactor, maxIter, tol, cutOff):
 
 	# Input variables:
-	#   proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
-	#   distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
+	#   proxArr = 2D array of proximal articular surface homogeneous vertex coordinates (Nx4) for fast computation of relative coordinates 
+	#   distArr = 2D array of distal articular surface homogeneous vertex coordinates (Mx4) for fast computation of relative coordinates 
 	#   distMeshArr = 3D array of distal mesh vertex transformation matrices for fast computation of relative coordinates
 	#   SDF = list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist, ipConv])
 	#   rotMat = array with the transformation matrices of the joint and its parent
@@ -326,8 +326,8 @@ class ROMeval:
 	def __init__(self, proxArr, distArr, ipProx, ipDist, rotMat, thickness, w, dtype = np.float64):
 
 		# Input variables:
-		#   proxArr = 3D array of proximal articular surface vertex transformation matrices for fast computation of relative coordinates 
-		#   distArr = 3D array of distal articular surface vertex transformation matrices for fast computation of relative coordinates 
+		#   proxArr = 2D array of proximal articular surface homogeneous vertex coordinates (Nx4) for fast computation of relative coordinates 
+		#   distArr = 2D array of distal articular surface homogeneous vertex coordinates (Mx4) for fast computation of relative coordinates 
 		#   ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 		#   ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
 		#   rotMat = array with the transformation matrices of the joint and its parent
