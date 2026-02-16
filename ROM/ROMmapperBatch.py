@@ -4,7 +4,7 @@
 #	a set of bone meshes. It is an implementation of the Marai et al., 2006 and Lee
 #	et al. 2023 approach for Autodesk Maya. It creates signed distance fields for the
 #	proximal and distal bone meshes which are then used to caculate intersections
-#	between the meshes and the distance between them. 
+#	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
 #	Last updated 16.02.2026 - Oliver Demuth
