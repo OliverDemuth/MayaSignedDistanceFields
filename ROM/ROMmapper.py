@@ -123,7 +123,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 	# get the meshs transformation matrix
 
 	meshMat = dag.inclusiveMatrix()
-	meshMatInv = np.linalg.solve(np.array(meshMat).reshape(4,4), np.eye(4))
+	meshMatInv = np.linalg.solve(meshMat.inverse())
 
 	# create the intersector
 
