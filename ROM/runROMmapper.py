@@ -82,10 +82,10 @@ jDag = dagObjFromName(jointName)[1]
 
 # get gridsize from glenoid sphere radius
 
-meanRad, dims = meanRad(fittedShape)
+meanR, dims = meanRad(fittedShape)
 
 if thickness is None:
-	thickness = meanRad / 2
+	thickness = meanR / 2
 
 gridSize = 16 * thickness
 
@@ -274,7 +274,7 @@ for i in range(keyDiff):
 
 	if not shapeCheck: # cylinder or ellipsoid
 			
-		initial_guess = (np.array((1.1 * meanRad, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
+		initial_guess = (np.array((1.1 * meanR, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
 
 		# clip initial guess to cylinder bounds
 
