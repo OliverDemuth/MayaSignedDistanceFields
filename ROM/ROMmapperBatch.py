@@ -146,10 +146,10 @@ def processMayaFiles(filePath,args):
 	cmds.rotate(0,0,0,jointName)
 
 	# get gridsize from glenoid sphere radius
-	meanRad, dims = meanRad(fittedShape)
+	meanR, dims = meanRad(fittedShape)
 
 	if thickness is None:
-		thickness = meanRad / 2
+		thickness = meanR / 2
 
 	gridSize = 16 * thickness
 
