@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 13.02.2026 - Oliver Demuth
+#	Last updated 16.02.2026 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -149,7 +149,7 @@ if shapeCheck: # sphere
 
 else: # cylinder or elipsoid
 
-	bound = np.clip(dims * 0.75, 0, gridSize) # 1.5 times the dimensions in each axis (X,Y,Z)
+	bound = np.clip(dims * 0.75, 0, gridSize) # +/- 1.5 times the radius for each axis (X,Y,Z)
 	bounds = tuple((-b, b) for b in bound)
 
 # create 3D grid for rotations
@@ -176,11 +176,13 @@ if ContinueKeys:
 
 	idxs = np.flatnonzero(matches)
 
-	if idxs.size == 0: 
-		error("Last keyed rotation not found in rotation grid.") 
-
-	rotIdx = idxs[0] # get index of last keyed frame
-	minKeys = rotIdx + 2 # get index of next frame to be keyed
+	if idxs.size != 0: 
+		rotIdx = idxs[0] # get index of last keyed frame
+		minKeys = rotIdx + 2 # get index of next frame to be keyed
+	else: # key not part of rotations
+		minKeys = 1
+		cmds.cutKey(jointName, option = 'keys') # delete all previous keyframes
+		lastKey = 0
 
 	# set current time
 
