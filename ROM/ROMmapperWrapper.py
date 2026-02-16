@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 13.02.2026 - Oliver Demuth
+#	Last updated 16.02.2026 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -114,14 +114,14 @@ if __name__ == "__main__":
 	# get Maya files
 
 	mayaFiles = os.listdir(fileDir)
-	mayaFiles[:] = [item for item in mayaFiles if not item.startswith('._') if item.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
+	mayaFiles[:] = [file for file in mayaFiles if not item.startswith('._') if item.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
 
 	numFiles = len(mayaFiles)
 
 	print('Detected following {0} Maya files within the \'{1}\' directory:'.format(numFiles,fileDir))
 	[print(file) for file in mayaFiles]
 
-	filePaths = [fileDir + '/' + mayaFile for mayaFile in mayaFiles]
+	filePaths = [os.path.join(fileDir, file) for file in mayaFiles]
 
 	# get available CPU cores (max two thirds)
 
