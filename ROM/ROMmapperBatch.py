@@ -146,7 +146,7 @@ def processMayaFiles(filePath,args):
 	cmds.rotate(0,0,0,jointName)
 
 	# get gridsize from glenoid sphere radius
-	meanRad, dims = meanRadMaya(fittedShape)
+	meanRad, dims = meanRad(fittedShape)
 
 	if thickness is None:
 		thickness = meanRad / 2
@@ -190,8 +190,9 @@ def processMayaFiles(filePath,args):
 
 	# get joint exclusive transformation matrix (parent)
 
-	jExclNPMat = np.array(jDag.exclusiveMatrix()).reshape(4,4) # world rotation matrix of parent joint as numpy 4x4 array
-	jExclNPMatInv = np.linalg.solve(jExclNPMat, np.eye(4)) # inverse of parent rotMat (prox) as numpy 4x4 array
+	jExclMat = jDag.exclusiveMatrix()
+	jExclNPMat = np.array(jExclMat).reshape(4,4) # world rotation matrix of parent joint as numpy 4x4 array
+	jExclNPMatInv = np.array(jExclMat.inverse()).reshape(4,4) # inverse of parent rotMat (prox) as numpy 4x4 array
 
 	# define initial guess condition
 
