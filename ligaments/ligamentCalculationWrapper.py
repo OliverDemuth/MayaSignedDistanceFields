@@ -63,8 +63,8 @@ cores = 8					# Integer value to specify number of CPU cores to be assigned. Dep
 # ========== set directories ========== 
 
 # make sure you have set directories as follows:
-# 	project folder directory: 	"path/to/project folder"		Project folder with the following subfolders: 'python', 'maya files' and 'results'
-#	python scripts directory:	"path/to/project folder/python"		Ligament calculation python scripts go in here
+# 	project folder directory: 	"path/to/project folder"			Project folder with the following subfolders: 'python', 'maya files' and 'results'
+#	python scripts directory:	"path/to/project folder/python"		Ligament calculation python scripts go in here (ligamenCalculation.py, ligamenCalculationBatch.py, ligamenCalculationWrapper.py)
 #	Maya files directory:		"path/to/project folder/maya files"	Maya scenes (.mb) to be processed go in here
 #	output/results directory:	"path/to/project folder/results"	CSV files will be saved here
 # ======================================== #
