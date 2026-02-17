@@ -8,12 +8,13 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 16.02.2026 - Oliver Demuth
+#	Last updated 17.02.2026 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
 #	same folder before executing this script
 #
+#		- 'ROMmapper.py'
 #		- 'ROMmapperBatch.py'
 #
 #	For further information please check the Python script(s) referenced above
@@ -75,7 +76,7 @@ cores = 8								# integer value to specify maximal number of CPU cores to be as
 #	output/results directory:	"path/to/project folder/results"		CSV files will be saved here
 # ======================================== #
 
-path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\ROM\\python' # add your file path. Make sure 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
+path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\ROM\\python' # add your file path. Make sure 'ROMmapper.py', 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
 
 fileDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/maya files' # path for Maya files
 outDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/results' # path for Maya output
