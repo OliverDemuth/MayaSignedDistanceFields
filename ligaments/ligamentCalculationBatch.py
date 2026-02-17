@@ -7,32 +7,32 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 05.12.2025 - Oliver Demuth
+#	Last updated 17.02.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
 #		INPUT params:
-#			string  jointName:	Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-#			string  meshes:		Name(s) of the bone meshes (e.g., several individual meshes in the form of ['prox_mesh','dist_mesh'])
-#			int	gridSubdiv:	Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-#			float	gridScale:	Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-#			int 	ligSubdiv:	Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
+#			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+#			string  meshes:			Name(s) of the bone meshes (e.g., several individual meshes in the form of ['prox_mesh','dist_mesh'])
+#			int	gridSubdiv:			Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			float	gridScale:		Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+#			int 	ligSubdiv:		Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
 #
 #		RETURN params:
 #			list	pathLengths:	Return value is a list with the path lengths for all ligaments designated as custom attributes in the 'jointName'
-#			list 	pathPoints:	Return value is a list of lists with the 3D coordinates of the path points in world space for all ligaments designated as custom attributes in the 'jointName'
-#			list 	results: 	Return value is a list of objects of the scipy.optimize.OptimizeResult class. They represent the outputs of the scipy.optimize.minimize() function
+#			list 	pathPoints:		Return value is a list of lists with the 3D coordinates of the path points in world space for all ligaments designated as custom attributes in the 'jointName'
+#			list 	results: 		Return value is a list of objects of the scipy.optimize.OptimizeResult class. They represent the outputs of the scipy.optimize.minimize() function
 #
 #
 #	IMPORTANT notes:
 #		
-#	(1) 	Meshes need realtively uniform face areas, otherwise large faces might skew 
+#	(1) Meshes need realtively uniform face areas, otherwise large faces might skew 
 #		vertex normals in their direction. It is, therefore, important to extrude 
 #		edges around large faces prior to closing the hole at edges with otherwise 
 #		acute angles to circumvent this issue (e.g., if meshes have been cut to reduce
 #		polycount) prior to executing the Python scripts.
 #
-#	(2) 	For each ligament create a float attribute at 'jointName' and name it 
+#	(2) For each ligament create a float attribute at 'jointName' and name it 
 #		accordingly. Make sure that the naming convention for the ligament origins 
 #		and insertions is correct, i.e. the locators should be named 'ligament*_orig' 
 #		and 'ligament*_ins' for an attribute in 'jointName' called 'ligament*'.
@@ -58,387 +58,9 @@ import functools
 import os
 import time
 
-from maya.api.OpenMaya import MPoint, MTransformationMatrix
 from math import floor, ceil
 from datetime import timedelta
-
-
-################################################
-# ========== Maya specific functions ========= #
-################################################
-
-
-# ========== ligament length calculation function ==========
-def ligCalc(x, jPos, ipProx, ipDist, rotMat, LigAttributes, bounds):
-
-	# Input variables:
-	#	x = constant X coordinates for ligament points
-	#	jPos = world coordinates of joint
-	#	ipProx = proximal signed distance field in tricubic form
-	#	ipDist = distal signed distance field in tricubic form
-	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	LigAttributes = array consisting of dag obects for ligament origin and insertions
-	#	bounds = bounds for optimisation
-	# ======================================== #
-
-	# create variables
-
-	ligLengths = []
-
-	numPoints = len(x)
-
-	ligArr = np.stack([np.eye(4)] * (numPoints-2), axis = 0)
-
-	# define initual guess condition for optimiser
-
-	initial_guess = np.zeros(2 * numPoints)
-
-	for ligament in LigAttributes:
-
-		# get ligament transformation matrices
-
-		ligRotMat, offset = getLigTransMat(ligament[0], ligament[1], jPos)
-
-		# get ligament specific transformation matrix to cubic grid
-		
-		relRotMat = []
-		relRotMat.append(np.dot(ligRotMat,rotMat[0]))
-		relRotMat.append(np.dot(ligRotMat,rotMat[1]))
-
-		# minimise ligament length through optimiser
-
-		res = ligLengthOptMin(x, initial_guess, ipProx, ipDist, relRotMat, ligArr, bounds)
-
-		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
-
-		if res.success: # check if optimiser terminated successfully
-			ligLengths.append(res.fun * offset)
-		else:
-			ligLengths.append(-offset) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
-
-	return ligLengths
-
-
-# ========== signed distance field per joint function ==========
-
-def sigDistField(jointName, meshes, subdivision, gridScale):
-
-	# Input variables:
-	#	jointName = name of joint centre (represented by object in Maya scene; e.g. joint or locator)
-	#	meshes = name(s) of the mesh(es) for which the signed distance field is calculated
-	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-	#	gridScale = scale factor for the cubic grid dimensions
-	# ======================================== #
-
-	# get joint centre position
-
-	jPos, jDag = getWSPos(jointName)
-	
-	# get number and names of ligaments
-
-	LigAttributes = cmds.listAttr(jointName, ud = True) # get user defined attributes of 'jointName' (i.e. the float attributes that will contain the ligament lengths)
-
-	# cycle through ligaments and extract their information
-
-	distArr = []
-	LigDags = []
-
-	for ligament in LigAttributes:
-
-		# get positions of points of interest
-
-		oPos, oDag = getWSPos(ligament + '_orig')
-		iPos, iDag = getWSPos(ligament + '_ins')
-
-		LigDags.append([oDag, iDag])
-
-		# get distances from origin and insertion to joint centre
-				
-		distArr.append((jPos - oPos).length()) # Euclidean distance from origin to joint centre (i.e., scale factor for grid point positions)
-		distArr.append((jPos - iPos).length()) # Euclidean distance from insertion to joint centre (i.e., scale factor for grid point positions)
-
-	bounds = max(distArr) * gridScale # maximal distance from joint centre to ligament attachment
-
-	# get rotation matrices
-
-	rotMat = []
-	rotMat.append(np.array(jDag.exclusiveMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(np.array(jDag.inclusiveMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
-
-	# cycle through all meshes
-
-	if len(meshes) > 2:
-		error('Too many meshes in array. Please specify only the distal and proximal bone mesh in the mesh array.')
-	elif len(meshes) < 2:
-		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
-	
-	SDFs = []
-	for i, mesh in enumerate(meshes):
-		meshSigDist, elements = sigDistMesh(mesh, rotMat[i], subdivision, bounds) # get signed distance field for each mesh
-
-		# initialise sp.interpolate.RegularGridInterpolator with signed distance data on default cubic grid
-
-		SDFs.append(sp.interpolate.RegularGridInterpolator((elements, elements, elements), meshSigDist, method = 'cubic', bounds_error = False, fill_value = -1)) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
-
-	return SDFs, LigAttributes, LigDags, jDag, bounds
-
-
-# ========== signed distance field per mesh function ==========
-
-def sigDistMesh(mesh, rotMat, subdivision, gridScale):
-
-	# Input variables:
-	#	mesh = name of the mesh for which the signed distance field is calculated
-	#	rotMat = transformation matrix of parent (joint) of the mesh
-	#	subdivision = number of elements per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points
-	# 	gridScale = scale factor for the cubic grid dimensions
-	# ======================================== #
-
-	# get dag paths
-
-	dag = dagObjFromName(mesh)[1]
-
-	# create MObject
-
-	shape = dag.extendToShape()
-	mObj = shape.node()
-
-	# get the meshs transformation matrix
-
-	meshMat = dag.inclusiveMatrix()
-	meshMatInv = np.linalg.inv(np.array(meshMat).reshape(4,4)) # get inverse of mesh matrix as numpy 4x4 array
-
-	# create the intersector
-
-	polyIntersect = om.MMeshIntersector()
-	polyIntersect.create(mObj,meshMat)
-	ptON = om.MPointOnMesh()
-
-	# create 3D grid
-
-	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint=True, dtype=float)
-
-	points = np.array([[x, y, z] for x in elements
-				     for y in elements
-				     for z in elements])
-
-	numPoints = points.shape[0]
-
-	# get coordinates and transform them into matrices
-
-	gridArr = np.stack([np.eye(4)] * points.shape[0], axis = 0)
-	gridArr[:,3,0:3] = points # append coordinates to rotation matrix array
-
-	# calculate position of vertices relative to cubic grid
-
-	gridWSArr = np.dot(gridArr,rotMat)
-	gridWSList = gridWSArr[:,3,0:3].tolist()
-
-	# go through grid points and calculate signed distance for each of them
-
-	P = np.zeros((points.shape[0],3))
-	N = np.zeros((points.shape[0],3))
-
-	for i, gridPoint in enumerate(gridWSList):
-		ptON = polyIntersect.getClosestPoint(MPoint(gridPoint)) # get point on mesh
-		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # coordinates of point on mesh in mesh coordinate system
-		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # surface normal at point on mesh
-
-	# get vectors from gridPoints to points on mesh
-
-	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P
-
-	# get distances from gridPoints to points on mesh
-
-	dist = np.linalg.norm(diff, axis = 1)
-
-	# normalise vector to get direction from gridPoints to points on mesh
-
-	normDiff = diff / dist.reshape(-1,1)
-
-	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
-
-	dot = np.sum(N * normDiff, axis = 1)
-
-	# get sign from dot product for distance
-
-	signDist = dist * np.sign(dot)
-
-	return signDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1), elements # convert signed distance array into cubic grid format
-
-
-# ========== ligament rotation matrix function ==========
-
-def getLigTransMat(oDag, iDag, jPos):
-
-	# Input variables:
-	#	oDag = om.MDagPath to origin object (represented by object locator in Maya scene)
-	#	iDag = om.MDagPath to insertion object (represented by object locator in Maya scene)
-	#	jPos = joint centre position
-	# ======================================== #
-
-	# get positions of points of interest
-
-	oPos = MTransformationMatrix(oDag.inclusiveMatrix()).translation(4)
-	iPos = MTransformationMatrix(iDag.inclusiveMatrix()).translation(4)
-
-	# calculate vectors from origin to insertion and to joint centre
-				
-	LigDir = iPos - oPos
-	JointDir = jPos - oPos
-
-	offset = LigDir.length() # linear distance from origin to insertion, i.e., scale factor for grid point positions
-
-	# calculate planes relative to ligaments
-
-	uDir = LigDir.normal() * offset
-	wDir = (JointDir.normal() ^ uDir).normal() * offset # cross product to get z axis
-	vDir = (wDir ^ uDir).normal() * offset # cross product to get y axis 
-
-	# get transformation matrix from liagament plane directions
-
-	transMat = np.array([[uDir.x, uDir.y, uDir.z, 0],
-			     [vDir.x, vDir.y, vDir.z, 0],
-			     [wDir.x, wDir.y, wDir.z, 0],
-			     [oPos[0],oPos[1],oPos[2],1]]) # centre position around origin
-		
-	return transMat, offset 
-
-
-# ========== get ws pos ==========
-
-def getWSPos(name):
-
-	# Input variables:
-	#	name = string representing object name
-	# ======================================== #
-	
-	dag = dagObjFromName(name)[1]
-	
-	return MTransformationMatrix(dag.inclusiveMatrix()).translation(4), dag # extract translation in world space from transformation matrix (3x faster than xform; om.MSpace.kWorld = 4)
-
-
-# ========== get dag path function ==========
-
-def dagObjFromName(name):
-
-	# Input variables:
-	#	name = string representing object name
-	# ======================================== #
-	
-	sel = om.MSelectionList()
-	sel.add(name)
-
-	return sel.getDependNode(0), sel.getDagPath(0)
-
-
-################################################
-# ============ optimiser functions =========== #
-################################################
-
-
-# ========== ligament optimiser function ==========
-
-def ligLengthOptMin(x, initial_guess, ipProx, ipDist, rotMat, ligArr, bounds):
-
-	# Input variables:
-	#	x = constant X coordinates for ligament points
-	#	initial_guess = initual guess condition for optimiser
-	#	ipProx = proximal signed distance field in tricubic form
-	#	ipDist = distal signed distance field in tricubic form
-	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates
-	# ======================================== #
-
-	# create tuple for arguments passed to both constraints and cost functions
-
-	arguments = (x, ipProx, ipDist, rotMat, ligArr)
-
-	# set constraints functions
-
-	cons = ({'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
-		 'fun': sigDist_cons_fun,	# set constraint function
-		 'args': arguments},		# pass arguments to constrain function
-		{'type': 'ineq',		# set type to inequality, which means that it is to be non-negative
-		 'fun': path_cons_fun,		# set constraint function
-		 'args': arguments})		# pass arguments to constrain function
-
-	# set bounds
-
-	length_init = len(initial_guess)
-
-	boundsList = [(-bounds, bounds)] * length_init # set y and z coordinate boundaries to the euclidean distance between origin and insertion
-	boundsList[0] = boundsList[1] = boundsList[length_init - 2] = boundsList[length_init - 1] = (0,0) # set y and z bounds of origin and insertion to zero
-	bnds = tuple(boundsList)
-
-	# set options
-
-	options = {"maxiter": 1000} # if it doesn't solve within 1000 iterations it usually won't solve
-
-	# optimization using SLSQP:res.x = ligament point coordinates, res.fun = relative ligament length
-
-	return sp.optimize.minimize(cost_fun, initial_guess, args = arguments, bounds = bnds, method = 'SLSQP', constraints = cons, options = options)
-
-
-# ========== signed distance field constraint function ==========
-
-def sigDist_cons_fun(params, x, ipProx, ipDist, rotMat, ligArr):
-
-	# Input variables:
-	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
-	#	x = constant X coordinates for ligament points
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid
-	#	rotMat = array with the transformation matrices of the joint and its parent
-	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates
-	# ======================================== #
-
-	# assign values to 3D array for matrix multiplications
-
-	ligArr[:,3,0] = x[1:-1] # x coordinates, skip first and last ligament coords (i.e., origin and insertion)
-	ligArr[:,3,1] = params[0::2][1:-1] # y coordinates, skip first and last ligament coords (i.e., origin and insertion)
-	ligArr[:,3,2] = params[1::2][1:-1] # z coordinates, skip first and last ligament coords (i.e., origin and insertion)
-
-	relPosProxArr = np.dot(ligArr,rotMat[0])[:,3,0:3] # get points in proximal cubic grid coordinates
-	relPosDistArr = np.dot(ligArr,rotMat[1])[:,3,0:3] # get points in distal cubic grid coordinates
-
-	return np.concatenate((ipProx(relPosProxArr),ipDist(relPosDistArr)))
-
-
-# ========== path constraint function ==========
-
-def path_cons_fun(params, x, ipProx, ipDist, rotMat, ligArr):
-
-	# Input variables:
-	#	params = array of Y and Z coordinates of ligament points, i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)].
-	#	x = constant X coordinates for ligament points. Passed through args, not part of this constraint function
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of this constraint function
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid. Passed through args, not part of this constraint function
-	#	rotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of this constraint function
-	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates. Passed through args, not part of this constraint function
-	# ======================================== #
-
-	# calculate squared offset between subsequent points
-
-	offset = (np.diff([params[0::2], params[1::2]]) ** 2).sum(axis = 0) # y = params[0::2], z = params[1::2]
-
-	return (1.7 / offset.size) - np.sqrt(offset) # mediolateral offset can be maximally 1.7 times the distance between path segment along X-axis (i.e., arctan(offset/dist) <= ~60°)
-
-
-# ========== cost function for optimisation ==========
-
-def cost_fun(params, x, ipProx, ipDist, rotMat, ligArr):
-
-	# Input variables:
-	#	params = array of Y and Z coordinates of ligament points, i.e., params = [[y_0, z_0],[y_1, z_1], ... ,[y_n-1, z_n-1]]. They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
-	#	x = constant X coordinates for ligament points.
-	#	ipProx = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the proximal cubic grid. Passed through args, not part of cost function
-	#	ipDist = tricubic interpolation function from tricubic.tricubic() for the signed distance data on the distal cubic grid. Passed through args, not part of cost function
-	#	rotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of cost function
-	#	ligArr = 3D array of ligament point transformation matrices for fast computation of relative coordinates. Passed through args, not part of cost function
-	# ======================================== #
-
-	return (np.sqrt((np.diff([x, params[0::2], params[1::2]]) ** 2).sum(axis = 0))).sum() # length of ligament from origin to insertion; y = params[0::2], z = params[1::2]
+from ligamentCalculation import * # source the ligament functions
 
 
 ################################################
@@ -490,7 +112,7 @@ def processMayaFiles(filePath,args):
 
 	# get file name 
 
-	fileName = filePath.split('/')[-1]
+	fileName = os.path.basename(filePath)
 
 	print('Processing file: ', fileName)
 
@@ -514,7 +136,7 @@ def processMayaFiles(filePath,args):
 	cmds.move(0,0,0, jointName, localSpace = True)
 	cmds.rotate(0,0,0,jointName)
 	
-	SDFs, LigAttributes, ligDags, jDag, bounds = sigDistField(jointName, meshes, gridSubdiv, gridScale)
+	SDFs, LigAttributes, oDags, iDags, jDag, maxDist = sigDistField(jointName, meshes, gridSubdiv, gridScale)
 	
 	# get inverse of rotation matrix for default cubic grid coordinate system
 
@@ -525,26 +147,43 @@ def processMayaFiles(filePath,args):
 
 	# ==== calculate ligament lengths ====
 
-	
+
+	# set to starting frame 
+
+	cmds.currentTime(1)
+
 	# get total number of keyed frames from 'jointName', i.e., max number of frames to be calculated
 
 	if FrameInterval:
 		frames = FrameInterval
 	else:
-		frames = cmds.keyframe(jointName, attribute='rotateX', query = True, keyframeCount = True)
+		frames = cmds.keyframe(jointName, attribute = 'rotateX', query = True, keyframeCount = True)
+
+	numPoints = ligSubdiv + 1
 
 	# initialise results array
-	
+
 	ligRes =[] 
 	ligRes.append(LigAttributes)
 
-	# initialise constant x coords
+	# define constant x coords
 
-	x = np.linspace(0.0, 1.0, num = ligSubdiv + 1, endpoint=True)
+	ligArr = np.stack([np.array([0.0,0.0,0.0,1.0])] * numPoints, axis = 0)
+	ligArr[:,0] = np.linspace(0.0, 1.0, num = numPoints, endpoint = True) # constant X coordinates
 
-	# set to starting frame 
+	# maximal offset for path constraint
 
-	cmds.currentTime(1)
+	maxOffset = 3 / (ligSubdiv ** 2) # max squared mediolateral offset (i.e., arctan(offset/dist) ≤ 60° as tan(60°) = sqrt(3))
+
+	# define initual guess condition for optimiser
+
+	initial_guess = np.zeros(2 * numPoints)
+
+	# set bounds
+
+	bounds = [(-maxDist, maxDist) for _ in range(2 * numPoints)]
+	bounds[0] = bounds[1] = bounds[-2] = bounds[-1] = (0,0)
+	bounds = tuple(bounds)
 
 	# go through each frame and calculate ligament lengths 
 
@@ -557,17 +196,28 @@ def processMayaFiles(filePath,args):
 		# get joint centre position
 
 		jInclMat = jDag.inclusiveMatrix()
-		jPos = om.MTransformationMatrix(jInclMat).translation(4)
+		jPos = np.array(om.MTransformationMatrix(jInclMat).translation(4)) # om.MSpace.kWorld = 4
 
 		# get rotation matrices
 
 		rotMat = []
-		rotMat.append(np.linalg.inv(np.array(jDag.exclusiveMatrix()).reshape(4,4))) # inverse of parent rotMat (prox)
-		rotMat.append(np.linalg.inv(np.array(jInclMat).reshape(4,4))) # inverse of child rotMat (dist)
+		rotMat.append(np.array(jDag.exclusiveMatrix().inverse()).reshape(4,4)) # inverse of parent rotMat (prox)
+		rotMat.append(np.array(jInclMat.inverse()).reshape(4,4)) # inverse of child rotMat (dist)
 
-		# calculate the length of the ligaments for the current frame and append it to results array
+		# get world coordinates of ligament origins and insertions
 
-		ligRes.append(ligCalc(x, jPos, SDFs[0], SDFs[1], rotMat, ligDags, bounds)) # add row of ligament lengths to result array
+		oPos = np.array([om.MTransformationMatrix(orig.inclusiveMatrix()).translation(4) for orig in oDags]) # get world coordinates from dagPaths; om.MSpace.kWorld = 4
+		iPos = np.array([om.MTransformationMatrix(ins.inclusiveMatrix()).translation(4) for ins in iDags]) # get world coordinates from dagPaths; om.MSpace.kWorld = 4
+
+		# calculate 4x4 transformation matrices for all ligaments
+
+		ligRotMats, offsets = getLigTransMat(oPos, iPos, jPos)
+
+		# calculate the length of each ligament 
+
+		pathLengths, *_ = ligCalc(initial_guess, ligArr, SDFs[0], SDFs[1], rotMat, ligRotMats, offsets, False, maxOffset, numPoints, bounds)
+
+		ligRes.append(pathLengths) # add row of ligament lengths to result array
 
 		# update progress
 		
@@ -585,30 +235,30 @@ def processMayaFiles(filePath,args):
 		# go to next frame
 
 		cmds.currentTime(frame + 2) # frames start from 1 and not from 0 (current frame is frame + 1)
-	
-	
+
+
 	# ==== save results and print to file ====
 
 
 	# define outpule file name and path
 
-	namei = fileName.replace('.mb','')
-	fname = outDir + '/' + namei + '.csv'
-	
+	namei = fileName.replace('.mb','.csv')
+	fname = os.path.join(outDir,namei)
+
 	# write to output file
 
 	with open(fname, 'w') as filehandle:
 		for listitem in ligRes:
 			s = ",".join(map(str, listitem))
 			filehandle.write('%s\n' % s)
-	
+
 	# shut down the Maya scene
 
-	cmds.file(modified=0) 
+	cmds.file(modified = 0) 
 
 	# print simulation time for each Maya scene
 
 	end = time.time()
-	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil(end - mid))).split(':'))
+	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds = ceil(end - mid))).split(':'))
 	print('Ligament calculation for {0} done in {1}!'.format(fileName,convert))
 	
