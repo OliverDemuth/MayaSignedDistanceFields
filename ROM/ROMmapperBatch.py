@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 16.02.2026 - Oliver Demuth
+#	Last updated 23.02.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -28,6 +28,7 @@
 #			float	tolerance: 			Float value for the joint proximity tolerance
 #			float	scaleFactor:		Float value for the joint offset to determine joint disarticulation
 #			float	cutOff:				Float value for the final SDF interpolation (default is 0.0)
+#			int		maxIter:			Integer value specifying the maximum number of iterations for the SLSQP optimisation
 #
 #		RETURN params:
 #			array 	coords:				Return value is a an array of 3D coordinates of the distal bone relative to the proximal one
@@ -129,7 +130,7 @@ def processMayaFiles(filePath,args):
 
 	# extract arguments	
 
-	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, simBounds, interval, weights, tolerance, scaleFactor, cutOff, thickness, outDir] = args
+	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, simBounds, interval, weights, tolerance, scaleFactor, cutOff, thickness, outDir, maxIter] = args
 
 
 	# ==== calculate signed distance fields ====
