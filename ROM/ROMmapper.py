@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 13.02.2026 - Oliver Demuth
+#	Last updated 23.02.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -28,6 +28,7 @@
 #			float	tolerance: 			Float value for the joint proximity tolerance
 #			float	scaleFactor:		Float value for the joint offset to determine joint disarticulation
 #			float	cutOff:				Float value for the final SDF interpolation (default is 0.0)
+#			int		maxIter:			Integer value specifying the maximum number of iterations for the SLSQP optimiser
 #
 #		RETURN params:
 #			float 	coords:				Return value is a float array of 3D coordinates (X, Y, Z) of the distal bone (ACS) relative to the proximal one 
