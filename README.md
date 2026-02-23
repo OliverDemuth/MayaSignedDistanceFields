@@ -4,6 +4,19 @@
 
 # Implementation of signed distance field based simulations in Autodesk Maya
 
+## Version 1.2
+Substantial performance boost in the ROM mapper and the ligament optimisations due to:
+1. Reduced dimensions for the matrix multiplications
+2. Evaluator class caching the shared parts of the cost and constraint functions, thus reducing redundant calculations (ROM mapper)
+3. Streamlining of cost and constraint functions (ROM mapper and ligament path estimation)
+4. Precalculation of partial transform contributions (ligament path estimation)
+5. Preallocation of MPoint object in the SDF calculations
+
+Run times for 1000 random poses on an Apple M2 Pro processor: <br>
+Simple collision check (sensu Manafzadeh and Padian, 2018): >150 poses per second <br>
+ROMmapper translation optimisation: ~5.61 poses per second <br>
+Ligament path optimisation: ~5.10 ligaments per second <br>
+
 ## Version 1.1
 Version 1.1 removes the pytricubic dependencies throughout and streamlines the installation which now only requires [NumPy](https://numpy.org/) and [SciPy](https://scipy.org/). In addition to minor code changes this significantly improved the performance of the simulations. The ligament calculations in version 1.1 are approximately twice as fast as in version 1.0 (on average 0.679 FPS in v1.1 vs. 0.344 FPS in v1.0 for 100 random frames on an Apple M2 Pro) while the performance for the ROM simulations was improved by 5-15%.
 
