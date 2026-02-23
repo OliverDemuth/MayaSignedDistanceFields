@@ -52,7 +52,7 @@ StartFrame = None 						# Integer value to specify the start frame. If all frame
 FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 ContinueKeys = False					# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
 debug = 0 								# Debug mode to check if signed distance fields have already been calculated
-
+maxIter = 50							# maximum number of iterations for the SLSQP optimisation
 
 #################################################
 # ==========    main script below    ========== #
