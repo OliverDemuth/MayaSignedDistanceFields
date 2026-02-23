@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 17.02.2026 - Oliver Demuth
+#	Last updated 23.02.2026 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -66,6 +66,7 @@ scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulat
 cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
 thickness = None						# Float value indicating the thickness value which correlates with the joint spacing. If set to None it will automatically be determined based on the fitted shape radius.
 cores = 8								# integer value to specify maximal number of CPU cores to be assigned
+maxIter = 50							# maximum number of iterations for the SLSQP optimiser
 
 # ========== set directories ========== 
 
@@ -141,7 +142,7 @@ if __name__ == "__main__":
 
 	# create tuple for arguments passed to ligament calculation functions
 
-	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, [xBounds,yBounds,zBounds], interval, weights, tolerance, scaleFactor, cutOff, thickness, outDir)
+	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, [xBounds,yBounds,zBounds], interval, weights, tolerance, scaleFactor, cutOff, thickness, outDir, maxIter)
 
 	# initialise multiprocessing
 
