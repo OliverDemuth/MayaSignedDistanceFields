@@ -9,7 +9,7 @@
 #	meshes for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 05.12.2025 - Oliver Demuth
+#	Last updated 17.02.2026 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -22,6 +22,7 @@
 #	This script relies on the following other (Python) script(s) which need to be in the
 #	same folder before executing this script
 #
+#		- 'ligamentCalculation.py'
 #		- 'ligamentCalculationBatch.py'
 #
 #	For further information please check the Python script(s) referenced above
@@ -52,23 +53,23 @@
 
 jointName = 'myJoint' 		# Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['prox_mesh', 		# Names of the two bone meshes (e.g., individual meshes in the form of ['prox_mesh','dist_mesh'])
-	  'dist_mesh']	
-gridSubdiv = 100		# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-gridScale = 1.5			# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-ligSubdiv = 20			# Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
+	  	  'dist_mesh']	
+gridSubdiv = 100			# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+gridScale = 1.5				# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+ligSubdiv = 20				# Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
 FrameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-cores = 8			# Integer value to specify number of CPU cores to be assigned. Depending on the number of files and/or avialable CPU cores the actual number can be lower. Maximally two thirds of all cores will be assigned.
+cores = 8					# Integer value to specify number of CPU cores to be assigned. Depending on the number of files and/or avialable CPU cores the actual number can be lower. Maximally two thirds of all cores will be assigned.
 
 # ========== set directories ========== 
 
 # make sure you have set directories as follows:
-# 	project folder directory: 	"path/to/project folder"		Project folder with the following subfolders: 'python', 'maya files' and 'results'
-#	python scripts directory:	"path/to/project folder/python"		Ligament calculation python scripts go in here
+# 	project folder directory: 	"path/to/project folder"			Project folder with the following subfolders: 'python', 'maya files' and 'results'
+#	python scripts directory:	"path/to/project folder/python"		Ligament calculation python scripts go in here (ligamenCalculation.py, ligamenCalculationBatch.py, ligamenCalculationWrapper.py)
 #	Maya files directory:		"path/to/project folder/maya files"	Maya scenes (.mb) to be processed go in here
 #	output/results directory:	"path/to/project folder/results"	CSV files will be saved here
 # ======================================== #
 
-path = '\\path\\to\\python files' # add your file path. Make sure 'ligamenCalculationWrapper.py' and 'ligamenCalculationBatch.py' are in this folder
+path = '\\path\\to\\python files' # add your file path. Make sure 'ligamenCalculation.py', 'ligamenCalculationWrapper.py' and 'ligamenCalculationBatch.py' are in this folder
 
 fileDir = '/path/to/maya files' # path for Maya files
 outDir = '/path/to/results' # path for Maya output
@@ -91,7 +92,8 @@ import os
 
 from math import floor
 from multiprocessing import cpu_count, Process, Queue
-from ligamentCalculationBatch import * # source the ligament functions
+from ligamentCalculationBatch import * # source the batch functions
+from ligamentCalculation import * # source the ligament functions
 
 # ========== append path to python files ========== 
 
@@ -104,14 +106,14 @@ if __name__ == "__main__":
 	# get Maya files
 
 	mayaFiles = os.listdir(fileDir)
-	mayaFiles[:] = [item for item in mayaFiles if not item.startswith('._') if item.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
+	mayaFiles[:] = [file for file in mayaFiles if not item.startswith('._') if item.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
 
 	numFiles = len(mayaFiles)
 
 	print('Detected following {0} Maya files within the \'{1}\' directory:'.format(numFiles,fileDir))
 	[print(file) for file in mayaFiles]
-		
-	filePaths = [fileDir + '/' + mayaFile for mayaFile in mayaFiles]
+
+	filePaths = [os.path.join(fileDir, file) for file in mayaFiles]
 
 	# get available CPU cores (max two thirds)
 

@@ -9,7 +9,7 @@
 #	articular surface.
 #
 #	Written by Oliver Demuth
-#	Last updated 02.12.2025 - Oliver Demuth
+#	Last updated 23.02.2026 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -91,24 +91,14 @@ def meanRad(mesh):
 	dag = dagObjFromName(mesh)[1]
 	shape = dag.extendToShape()
 
-	transMat = np.array(dag.inclusiveMatrix()).reshape(4,4)
-
 	# get mesh object
 
 	fnMesh = om.MFnMesh(shape)
-
-	fnMeshMat = np.eye(4)
-	fnMeshMat[3,:] = np.array(fnMesh.boundingBox.center)
-
-	centerPos = np.dot(fnMeshMat,transMat)[3,:]
-
-	# get world position of all vertices (om.MSpace.kWorld = 4)
-
 	vertices = np.array(fnMesh.getPoints(4))
 
 	# substract center position from vertices and return mean distance
 
-	return np.linalg.norm((vertices - centerPos), axis = 1).mean() 
+	return np.linalg.norm((vertices - vertices.mean(axis = 0)), axis = 1).mean()
 
 
 # ========== get vertices position in reference frame ==========
@@ -128,23 +118,18 @@ def relVtcPos(mesh, rotMat):
 
 	vertices = np.array(om.MFnMesh(dag).getPoints(4)) # get world position of all vertices (om.MSpace.kWorld = 4)
 
-	# get coordinates and transform them into matrices
-
-	vtxArr = np.stack([np.eye(4)] * vertices.shape[0], axis = 0)
-	vtxArr[:,3,:] = vertices # append coordinates to rotation matrix array
-
-	return np.dot(vtxArr,np.linalg.inv(rotMat)) # calculate new coordinates and return 3D array
+	return vertices @ np.linalg.solve(rotMat, np.eye(4)) # calculate new coordinates and return 3D array
 
 
 # ========== signed distance field per mesh function ==========
 
-def sigDistMesh(mesh, rotMat, subdivision, gridScale):
+def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# Input variables:
 	#	mesh = name of the mesh for which the signed distance field is calculated
 	#	rotMat = transformation matrix of parent (joint) of the mesh
 	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-	#	gridScale = scale factor for the cubic grid dimensions
+	#	scale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get dag paths
@@ -159,53 +144,49 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 	# get the meshs transformation matrix
 
 	meshMat = dag.inclusiveMatrix()
-	meshMatInv = np.linalg.inv(np.array(meshMat).reshape(4,4)) # get inverse of mesh matrix as numpy 4x4 array
+	meshMatInv = np.array(meshMat.inverse()).reshape(4,4)
 
 	# create the intersector
 
 	polyIntersect = om.MMeshIntersector()
 	polyIntersect.create(mObj,meshMat)
+	get_closest_point = polyIntersect.getClosestPoint # extract function from intersector
 	ptON = om.MPointOnMesh()
 
 	# create 3D grid
 
-	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint = True, dtype = float)
-
-	points = np.array([[x, y, z] for x in elements
-				     for y in elements 
-				     for z in elements])
-
-	# get coordinates and transform them into matrices
-
-	gridArr = np.stack([np.eye(4)] * points.shape[0], axis = 0)
-	gridArr[:,3,0:3] = points # append coordinates to rotation matrix array
+	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint = True, dtype = float)
+	X, Y, Z = np.meshgrid(elements, elements, elements, indexing = 'ij')
+	points = np.vstack((X.ravel(), Y.ravel(), Z.ravel(), np.ones(X.size))).T 
 
 	# calculate position of vertices relative to cubic grid
 
-	gridWSArr = np.dot(gridArr,rotMat)
-	gridWSList = gridWSArr[:,3,0:3].tolist()
+	gridWsPos = (points @ rotMat)
+	gridWSArr = gridWsPos[:,0:3]
 
 	# go through grid points and calculate signed distance for each of them
 
-	P = np.zeros((points.shape[0],3))
-	N = np.zeros((points.shape[0],3))
+	P = np.zeros(points.shape)
+	N = np.zeros((X.size,3))
+	ptRel = om.MPoint()
 
-	for i, gridPoint in enumerate(gridWSList):
-		ptON = polyIntersect.getClosestPoint(MPoint(gridPoint)) # get point on mesh
-		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # coordinates of point on mesh in mesh coordinate system
-		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # surface normal at point on mesh
+	for i, gridPoint in enumerate(gridWSArr):
+		ptRel.x, ptRel.y, ptRel.z = gridPoint # extract coordinates from gridPoint and feed into preallocated MPoint
+		ptON = get_closest_point(ptRel) # get point on mesh
+		P[i,:] = ptON.point # point on mesh coordinates in mesh coordinate system
+		N[i,:] = ptON.normal # normal at point on mesh
 
-	# get vectors from gridPoints to points on mesh
+	# get vectors from gridPoints to their closest points on mesh
 
-	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P
+	diff = (gridWsPos @ meshMatInv)[:,0:3] - P[:,0:3]
 
-	# get distances from gridPoints to points on mesh
+	# get length of vectors (distance)
 
 	dist = np.linalg.norm(diff, axis = 1)
 
-	# normalise vector to get direction from gridPoints to points on mesh
+	# get the vectors' direction from gridPoints to points on mesh
 
-	normDiff = diff/dist.reshape(-1,1)
+	normDiff = diff / dist.reshape(-1,1) # direction of point relative to cubic grid
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
@@ -213,11 +194,11 @@ def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	# get sign for distance from dot product
 
-	sigDist = (dist * np.sign(dot)).reshape(subdivision + 1, subdivision + 1, subdivision + 1)
+	sigDist = dist * np.sign(dot).reshape(subdivision + 1, subdivision + 1, subdivision + 1)
 
 	# convert signed distance array into cubic grid format
 
-	return sp.interpolate.RegularGridInterpolator((elements, elements, elements), sigDist, method = 'cubic', bounds_error = False) # grid will be initialised in its relative coordinate system from [-gridScale,-gridScale,-gridScale] to [gridScale,gridScale,gridScale]
+	return sp.interpolate.RegularGridInterpolator((elements, elements, elements), sigDist, method = 'cubic', bounds_error = False, fill_value = -1)) # grid will be initialised in its relative coordinate system from [-gridScale,-gridScale,-gridScale] to [gridScale,gridScale,gridScale]
 
 
 # ========== get distances between articular surface and distal mesh ==========
@@ -235,16 +216,16 @@ def artDist(jDag, vtxArr, SDF, threshold):
 	# get rotation matrices
 
 	rotMatProx = np.array(jDag.exclusiveMatrix()).reshape(4,4) # parent rotMat (prox) as numpy 4x4 array
-	rotMatDist = np.array(jDag.inclusiveMatrix()).reshape(4,4) # child rotMat (dist) as numpy 4x4 array
+	rotMatDist = np.array(jDag.inclusiveMatrix().inverse()).reshape(4,4) # child rotMat (dist) as numpy 4x4 array
 
 	# calculate position of vertices relative to cubic grid
 
-	vtcRelArr = np.dot(vtxArr,np.dot(rotMatProx,np.linalg.inv(rotMatDist)))[:,3,0:3]
+	vtcRelArr = vtxArr @ (rotMatProx @ rotMatDist))[:,0:3]
 
 	# calculate distance 
 
 	signDist = SDF(vtcRelArr)
-	signDist = signDist[~np.isnan(signDist)]
+	signDist = signDist[signDist != -1]
 
 	return signDist, signDist.mean(), (signDist < threshold).mean() # signed distances, average distance and overlap
 

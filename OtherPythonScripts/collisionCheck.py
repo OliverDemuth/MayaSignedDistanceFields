@@ -3,11 +3,11 @@
 #	This script checks for collision between two meshes with one of them ('proxMesh') 
 #	represented by a signed distance field (SDF). This script is equivalent to the 
 #	Boolean method first proposed by Manafzadeh & Padian (2018), however, it is 
-#	several orders of magnitude faster. The runtime is >125 frames per second
+#	several orders of magnitude faster. The runtime is >150 frames per second
 #	on a target mesh ('distMesh') with ~5000 vertices.
 #
 #	Written by Oliver Demuth
-#	Last updated 02.12.2025 - Oliver Demuth
+#	Last updated 16.02.2026 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -42,14 +42,14 @@
 #################################################
 
 
-jointName = 'myJoint' 		# Specify according to the joint centre in the Maya scene (i.e. the name of a locator or joint; e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-proxMesh = 'prox_mesh'		# Specify according to the proximal mesh in the Maya scene (i.e., parented under the parent of 'jointName'/hierarchically on the same layer as 'jointName'; e.g., 'myJoint' if following Manafzadeh & Padian 2018)
-distMesh = 'dist_mesh'		# Specify according to the distal mesh in the Maya scene (i.e., parented under 'jointName'; e.g., 'myJoint' if following Manafzadeh & Padian 2018)
+jointName = 'myJoint' 	# Specify according to the joint centre in the Maya scene (i.e. the name of a locator or joint; e.g. 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+proxMesh = 'prox_mesh'	# Specify according to the proximal mesh in the Maya scene (i.e., parented under the parent of 'jointName'/hierarchically on the same layer as 'jointName'; e.g., 'myJoint' if following Manafzadeh & Padian 2018)
+distMesh = 'dist_mesh'	# Specify according to the distal mesh in the Maya scene (i.e., parented under 'jointName'; e.g., 'myJoint' if following Manafzadeh & Padian 2018)
 gridSubdiv = 100		# Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-gridSize = 50			# Dimensions of cubic grid (in the Maya working units) which will be initialised from -gridSize to gridSize (e.g., 10 will result in a cubic grid with an edge length of 20 from -10 to 10). Set sufficiently large to make sure that all vertices of the target mesh are within the grid for all joint orientations
+gridSize = 20			# Dimensions of cubic grid (in the Maya working units) which will be initialised from -gridSize to gridSize (e.g., 10 will result in a cubic grid with an edge length of 20 from -10 to 10). Set sufficiently large to make sure that all vertices of the target mesh are within the grid for all joint orientations
 StartFrame = None 		# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
-FrameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-debug = 0 			# Integer value to specify whether signed distance field calculations should be skipped (0 = false, 1 = true)
+FrameInterval = None	# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+debug = 0 				# Integer value to specify whether signed distance field calculations should be skipped (0 = false, 1 = true)
 
 
 # ========== load modules ==========
@@ -59,8 +59,6 @@ import maya.cmds as cmds
 import numpy as np
 import scipy as sp
 import time
-
-from maya.api.OpenMaya import MPoint
 
 
 #################################################
@@ -82,31 +80,6 @@ def dagObjFromName(name):
 	return sel.getDependNode(0), sel.getDagPath(0)
 
 
-# ========== get vertices position in reference frame ==========
-
-def relVtcPos(mesh, rotMat):
-
-	# Input variables:
-	#	mesh = name of the mesh for which the signed distance field is calculated
-	#	rotMat = transformation matrix of parent (joint) of the mesh
-	# ======================================== #
-
-	# get dag paths
-
-	dag = dagObjFromName(mesh)[1]
-
-	# get vertices in global coordinate system
-
-	vertices = np.array(om.MFnMesh(dag).getPoints(4)) # get world position of all vertices (om.MSpace.kWorld = 4)
-
-	# get coordinates and transform them into matrices
-
-	vtxArr = np.stack([np.eye(4)] * vertices.shape[0], axis = 0)
-	vtxArr[:,3,:] = vertices # append coordinates to rotation matrix array
-
-	return np.dot(vtxArr,np.linalg.inv(rotMat)) # calculate new coordinates and return 3D array
-
-
 # ========== signed distance field per mesh function ==========
 
 def sigDistMesh(mesh, rotMat, subdivision, scale):
@@ -120,63 +93,59 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get dag paths
 
-	dag = dagObjFromName(mesh)[1]
+	meshDag = dagObjFromName(mesh)[1]
 
 	# create MObject
 
-	shape = dag.extendToShape()
+	shape = meshDag.extendToShape()
 	mObj = shape.node()
 
 	# get the meshs transformation matrix
 
-	meshMat = dag.inclusiveMatrix()
-	meshMatInv = np.linalg.inv(np.array(meshMat).reshape(4,4)) # get inverse of mesh matrix as numpy 4x4 array
+	meshMat = meshDag.inclusiveMatrix()
+	meshMatInv = np.array(meshDag.inclusiveMatrix().inverse()).reshape(4,4)
 
 	# create the intersector
 
 	polyIntersect = om.MMeshIntersector()
 	polyIntersect.create(mObj,meshMat)
+	get_closest_point = polyIntersect.getClosestPoint # extract function from intersector
 	ptON = om.MPointOnMesh()
 
 	# create 3D grid
 
-	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint=True, dtype=float)
-
-	points = np.array([[x, y, z] for x in elements
-				     for y in elements 
-				     for z in elements])
-
-	# get coordinates and transform them into matrices
-
-	gridArr = np.stack([np.eye(4)] * points.shape[0], axis = 0)
-	gridArr[:,3,0:3] = points # append coordinates to rotation matrix array
+	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint = True, dtype = float)
+	X, Y, Z = np.meshgrid(elements, elements, elements, indexing = 'ij')
+	points = np.vstack((X.ravel(), Y.ravel(), Z.ravel(), np.ones(X.size))).T 
 
 	# calculate position of vertices relative to cubic grid
 
-	gridWSArr = np.dot(gridArr,rotMat)
-	gridWSList = gridWSArr[:,3,0:3].tolist()
+	gridWsPos = (points @ rotMat)
+	gridWSArr = gridWsPos[:,0:3]
 
 	# go through grid points and calculate signed distance for each of them
 
-	P = np.zeros((points.shape[0],3))
-	N = np.zeros((points.shape[0],3))
+	P = np.zeros(points.shape)
+	N = np.zeros((X.size,3))
+	ptRel = om.MPoint()
 
-	for i, gridPoint in enumerate(gridWSList):
-		ptON = polyIntersect.getClosestPoint(MPoint(gridPoint)) # get point on mesh
-		P[i,:] = [ptON.point.x, ptON.point.y, ptON.point.z] # coordinates of point on mesh in mesh coordinate system
-		N[i,:] = [ptON.normal.x, ptON.normal.y, ptON.normal.z] # surface normal at point on mesh
+	for i, gridPoint in enumerate(gridWSArr):
+		ptRel.x, ptRel.y, ptRel.z = gridPoint # extract coordinates from gridPoint and feed into preallocated MPoint
+		ptON = get_closest_point(ptRel) # get point on mesh
+		P[i,:] = ptON.point # point on mesh coordinates in mesh coordinate system
+		N[i,:] = ptON.normal # normal at point on mesh
 
-	# get vectors from gridPoints to points on mesh
+	# get vectors from gridPoints to their closest points on mesh
 
-	diff = np.dot(gridWSArr,meshMatInv)[:,3,0:3] - P
+	diff = (gridWsPos @ meshMatInv)[:,0:3] - P[:,0:3]
 
-	# get distances from gridPoints to points on mesh
+	# get length of vectors (distance)
 
 	dist = np.linalg.norm(diff, axis = 1)
 
-	# normalise vector to get direction from gridPoints to points on mesh
+	# get the vectors' direction from gridPoints to points on mesh
 
-	normDiff = diff/dist.reshape(-1,1)
+	normDiff = diff / dist.reshape(-1,1) # direction of point relative to cubic grid
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
@@ -188,32 +157,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# convert signed distance array into cubic grid format
 
-	return sp.interpolate.RegularGridInterpolator((elements, elements, elements), sigDist, method = 'cubic', bounds_error = False) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
-
-
-
-# ========== get distances between articular surface and distal mesh ==========
-
-def artDist(jDag, vtxArr, SDF):
-
-	# Input variables:
-	#	jDag = MDagPath object representing joint
-	#	vtxArr = 3D array of vertex transformation matrices for fast computation of relative coordinates 
-	#	SDF = signed distance field in form of scipy.interpolate.RegularGridInterpolator
-	# ======================================== #
-
-	# get rotation matrices
-
-	rotMatProx = np.array(jDag.exclusiveMatrix()).reshape(4,4) # parent rotMat (prox) as numpy 4x4 array
-	rotMatDist = np.array(jDag.inclusiveMatrix()).reshape(4,4) # child rotMat (dist) as numpy 4x4 array
-
-	# calculate position of vertices relative to cubic grid
-
-	vtcRelArr = np.dot(vtxArr,np.dot(rotMatDist,np.linalg.inv(rotMatProx)))[:,3,0:3]
-
-	# calculate distances 
-
-	return SDF(vtcRelArr)
+	return sp.interpolate.RegularGridInterpolator((elements, elements, elements), sigDist, method = 'cubic', bounds_error = False,  fill_value = -1) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
 
 
 #################################################
@@ -284,7 +228,9 @@ if not var_exists:
 
 	# calculate relative position of articular surfaces
 
-	vtxArr = relVtcPos(distMesh,np.array(jDag.inclusiveMatrix()).reshape(4,4)) # world transformation matrix of joint
+	mesh = dagObjFromName(distMesh)[1]
+	vertices = np.array(om.MFnMesh(mesh).getPoints(4)) # world space coordinates of vertices
+	vtxArr = vertices @ np.array(jDag.inclusiveMatrix().inverse()).reshape(4,4) # homogenous vertex coordinates relative to joint coordinate system
 
 mid = time.time()
 
@@ -309,13 +255,16 @@ cmds.currentTime(minKeys)
 
 counter = 0
 
+invMat = np.array(jDag.exclusiveMatrix().inverse()).reshape(4,4) # inverse of parent rotMat (prox) as numpy 4x4 array
+
 for i in range(keyDiff):
 
-	signDist = artDist(jDag, vtxArr, SDF)
+	rotMat = np.array(jDag.inclusiveMatrix()).reshape(4,4)
+	signDist = SDF((vtxArr @ (rotMat @ invMat))[:,0:3])
 
 	# key viable attribute at joint
 
-	if signDist[~np.isnan(signDist)].min() > 0:
+	if signDist[signDist != -1].min() > 0:
 		cmds.setKeyframe(jointName, at = 'viable', v = 1)
 		counter += 1
 	else:
@@ -332,9 +281,8 @@ for i in range(keyDiff):
 end = time.time()
 
 if cmds.progressWindow(query = True, isCancelled = True):
-	print('# Abort: Mesh intersection check cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i + 1, int(counter)))
+	print('# Abort: Mesh intersection check cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i + 1, counter))
 else:
-	print('# Result: Mesh intersection check completed in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid, keyDiff, int(counter)))
+	print('# Result: Mesh intersection check completed in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid, keyDiff, counter))
 
 cmds.progressWindow(edit = True, endProgress = True)
-
