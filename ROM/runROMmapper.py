@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 16.02.2026 - Oliver Demuth
+#	Last updated 23.02.2026 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
