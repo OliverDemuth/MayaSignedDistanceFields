@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 23.02.2026 - Oliver Demuth
+#	Last updated 06.05.2026 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -55,12 +55,11 @@ zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] 
 interval = 5							# sampling interval, see Manafzadeh & Padian, 2018 (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 gridSubdiv = 100						# integer value for the subdivision of the cube (i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 gridScale = 1							# float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 weights = [1.0,							# weight for first cost term (proximal joint spacing; prox_art_surf in ipDist)
 		   0.0,							# weight for second cost term (distal joint spacing; dist_art_surf in ipProx)
 		   1.0,							# weight for third cost term (proximal joint congruency)
-		   0.1,							# weight for fourth cost term (distal joint congruency)
-		   0.1]							# weight for fifth cost term (joint offset)
+		   0.0,							# weight for fourth cost term (distal joint congruency)
+		   0.0]							# weight for fifth cost term (joint offset)
 tolerance = 0.07						# tolerance for joint proximity (i.e, set target thickness tolerance; e.g., 0.07 based on experimental data)
 scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
 cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
