@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 23.02.2026 - Oliver Demuth
+#	Last updated 06.05.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -166,7 +166,7 @@ def processMayaFiles(filePath,args):
 
 
 	# ==== initialise variables and precalculations ====
-
+	
 
 	# calculate relative position of articular surfaces
 
@@ -174,11 +174,37 @@ def processMayaFiles(filePath,args):
 	distArr = relVtcPos(congruencyMeshes[1], initialRotMat[1])
 	distMeshArr = relVtcPos(meshes[1], initialRotMat[1])
 
+	# get dimensions of target object
+
+	dimComp = np.isclose(dims[:,None], dims[None,:]).sum(axis = 1)
+
+	if dimComp.max() == 1: # all axes are different (e.g., elliposid): get average radius
+		shapeRad = dims.mean() / 2
+	else: # either sphere (all axes identical; dimComp.max() = 3) or cylinder (two axes identical; dimComp.max() = 2)
+		shapeRad = dims[np.argmax(dimComp)] / 2 # get radius of shape
+
+	# determine fitted shape
+
+	shapeCheck = dimComp.max() == 3 # if true is sphere (i.e., X, Y, Z axis dimensions are identical), otherwise is cylinder 
+
+	# set bounds
+
+	if shapeCheck: # sphere
+
+		bound = np.clip(dims, 0, gridSize)[0] # clamp dims to gridSize
+		bounds = tuple([(-bound, bound)] * 3) # bounds for translations (X,Y,Z)
+
+	else: # cylinder or elipsoid
+
+		bound = np.clip(dims * 0.75, 0, gridSize) # 1.5 times the dimensions in each axis (X,Y,Z)
+		bounds = tuple((-b, b) for b in bound)
+
+
 	# create 3D grid for rotations
 
-	xRots = np.arange(xBounds[0], ceil(xBounds[1] + interval / 2), interval, dtype = float)
-	yRots = np.arange(yBounds[0], ceil(yBounds[1] + interval / 2), interval, dtype = float)
-	zRots = np.arange(zBounds[0], ceil(zBounds[1] + interval / 2), interval, dtype = float)
+	xRots = np.arange(simBounds[0][0], ceil(simBounds[0][1] + interval / 2), interval, dtype = float)
+	yRots = np.arange(simBounds[1][0], ceil(simBounds[1][1] + interval / 2), interval, dtype = float)
+	zRots = np.arange(simBounds[2][0], ceil(simBounds[2][1] + interval / 2), interval, dtype = float)
 
 	rotX, rotY, rotZ = np.meshgrid(xRots, yRots, zRots, indexing='ij')
 	rotations = np.vstack((rotX.ravel(), rotY.ravel(), rotZ.ravel())).T 
@@ -203,6 +229,8 @@ def processMayaFiles(filePath,args):
 	# ==== optimise translations ====
 
 
+	tol = 1 + tolerance
+
 	# go through all possible combinations
 
 	updateSwitch = True
@@ -213,7 +241,7 @@ def processMayaFiles(filePath,args):
 
 		# extract rotation
 
-		rotation = rotations[j,:]
+		rotation = rotations[frame,:]
 
 		# get joint inclusive transformation matrix (child)
 
@@ -251,7 +279,7 @@ def processMayaFiles(filePath,args):
 										  bounds, 		 # bounds for optimisation
 										  scaleFactor, 	 # scale factor to roughly check if joint is disarticulated
 										  maxIter, 		 # maximum number of iterations
-										  tol, 			 # tolerance for joint proximity
+										  tol, 	 		 # tolerance for joint proximity
 										  cutOff)		 # cutoff value for signed distance fields
 
 		# check if pose was viable
