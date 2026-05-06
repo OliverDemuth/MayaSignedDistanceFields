@@ -45,10 +45,10 @@
 
 jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['prox_mesh', 					# specify according to meshes in the Maya scene
-	  'dist_mesh']				
+		  'dist_mesh']				
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
 		    		'dist_art_surf']	
-fittedShape = 'prox_sphere'				# specify according to meshes in the Maya scene		
+fittedShape = 'sphere'					# specify according to meshes in the Maya scene		
 xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
 yBounds = [-90,90]						# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
 zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
@@ -59,8 +59,8 @@ interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., fo
 weights = [1.0,							# weight for first cost term (proximal joint spacing; prox_art_surf in ipDist)
 		   0.0,							# weight for second cost term (distal joint spacing; dist_art_surf in ipProx)
 		   1.0,							# weight for third cost term (proximal joint congruency)
-		   0.0,							# weight for fourth cost term (distal joint congruency)
-		   0.0]							# weight for fifth cost term (joint offset)
+		   0.1,							# weight for fourth cost term (distal joint congruency)
+		   0.1]							# weight for fifth cost term (joint offset)
 tolerance = 0.07						# tolerance for joint proximity (i.e, set target thickness tolerance; e.g., 0.07 based on experimental data)
 scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
 cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
@@ -77,10 +77,10 @@ maxIter = 50							# maximum number of iterations for the SLSQP optimiser
 #	output/results directory:	"path/to/project folder/results"		CSV files will be saved here
 # ======================================== #
 
-path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Data_Chapter_02\\Maya\\ROM\\python' # add your file path. Make sure 'ROMmapper.py', 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
+path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Fellowship\\Crocodile\\DDNC04\\simulations\\python' # add your file path. Make sure 'ROMmapper.py', 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
 
-fileDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/maya files' # path for Maya files
-outDir = '/Users/itz/Documents/Cambridge/PhD/Data_Chapter_02/Maya/ROM/results' # path for Maya output
+fileDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/maya files' # path for Maya files
+outDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/results' # path for Maya output
 
 
 #################################################
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 	# get Maya files
 
 	mayaFiles = os.listdir(fileDir)
-	mayaFiles[:] = [file for file in mayaFiles if not item.startswith('._') if item.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
+	mayaFiles[:] = [file for file in mayaFiles if not file.startswith('._') if file.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
 
 	numFiles = len(mayaFiles)
 
