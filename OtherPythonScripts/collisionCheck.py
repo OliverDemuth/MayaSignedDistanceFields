@@ -3,11 +3,12 @@
 #	This script checks for collision between two meshes with one of them ('proxMesh') 
 #	represented by a signed distance field (SDF). This script is equivalent to the 
 #	Boolean method first proposed by Manafzadeh & Padian (2018), however, it is 
-#	several orders of magnitude faster. The runtime is >150 frames per second
-#	on a target mesh ('distMesh') with ~5000 vertices.
+#	several orders of magnitude faster. The runtime is ~500 frames per second
+#	on a target mesh ('distMesh') with ~5000 vertices. The script automatically
+#	creates a 'viable' attribute that is keyed throughout.
 #
 #	Written by Oliver Demuth
-#	Last updated 16.02.2026 - Oliver Demuth
+#	Last updated 19.05.2026 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -22,10 +23,7 @@
 #	    (i.e., 'proxMesh' below), is a convex hull it first needs to be remeshed and 
 #	    retopologised (using the standard settings in Maya) otherwise the sign 
 #	    determination using the surface normals might be inaccurate.
-#	(3) Make sure to have a Boolean attribute called 'viable' at your animated joint 
-#	    (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian
-#	    2018).
-#	(4) This script requires several modules for Python (see README files). Make sure
+#	(3) This script requires several modules for Python (see README files). Make sure
 #	    to have the following external modules installed for the mayapy application:
 #
 #		- 'numpy' 	NumPy:		https://numpy.org/about/
@@ -33,7 +31,7 @@
 #
 #	    For further information regarding them, please check the website(s) referenced 
 #	    above.
-#	(5) To execute this script copy and paste it into the Python Script Editor in Maya,
+#	(4) To execute this script copy and paste it into the Python Script Editor in Maya,
 #	    adjust the user-defined variables below and hit run.
 
 
@@ -55,6 +53,7 @@ debug = 0 				# Integer value to specify whether signed distance field calculati
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
+import maya.api.OpenMayaAnim as oma
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
@@ -64,20 +63,6 @@ import time
 #################################################
 # ==========     functions below     ========== #
 #################################################
-
-
-# ========== get dag path function ==========
-
-def dagObjFromName(name):
-
-	# Input variables:
-	#	name = string representing object name
-	# ======================================== #
-
-	sel = om.MSelectionList()
-	sel.add(name)
-
-	return sel.getDependNode(0), sel.getDagPath(0)
 
 
 # ========== signed distance field per mesh function ==========
@@ -93,7 +78,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get dag paths
 
-	meshDag = dagObjFromName(mesh)[1]
+	meshDag = om.MGlobal.getSelectionListByName(mesh).getDagPath(0)
 
 	# create MObject
 
@@ -129,11 +114,27 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 	N = np.zeros((X.size,3))
 	ptRel = om.MPoint()
 
+	# set up progress bar
+
+	cmds.progressWindow(title = 'Calculating signed distance field...',
+						progress = 1,
+						status = 'Processing point {0} of {1} points'.format(1,X.size),
+						isInterruptable = True,
+						max = X.size)
+
 	for i, gridPoint in enumerate(gridWSArr):
 		ptRel.x, ptRel.y, ptRel.z = gridPoint # extract coordinates from gridPoint and feed into preallocated MPoint
 		ptON = get_closest_point(ptRel) # get point on mesh
 		P[i,:] = ptON.point # point on mesh coordinates in mesh coordinate system
 		N[i,:] = ptON.normal # normal at point on mesh
+
+		# log progress
+
+		cmds.progressWindow(edit = True, progress = i + 1, status = 'Processing frame {0} of {1} frames'.format(i + 1, X.size))
+
+	# close progress window when done
+
+	cmds.progressWindow(edit = True, endProgress = True)
 
 	# get vectors from gridPoints to their closest points on mesh
 
@@ -167,31 +168,63 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 # ========================================
 
-# set time to 1 or to start frame
-
-frame = cmds.currentTime(query=True)
-
 if StartFrame == None:
-	minKeys = 1
+	minFrames = 1
 else: 
-	minKeys = StartFrame
+	minFrames = StartFrame
+
+# get joint dag path and dedependency node
+
+j_sel = om.MGlobal.getSelectionListByName(jointName)
+j_node = om.MFnDependencyNode(j_sel.getDependNode(0))
+j_dag = j_sel.getDagPath(0)
+
+if not j_node.hasAttribute('viable'):
+	viable_attr = om.MFnNumericAttribute()
+	viable_obj = viable_attr.create('viable', 'viable', om.MFnNumericData.kInt, 0)
+	viable_attr.keyable = True
+	j_node.addAttribute(viable_obj)
+	
+# check if 'viable' has keys and strip them if so
+
+viable_plug = j_node.findPlug('viable', False)
+
+if viable_plug.isDestination:
+	source =  viable_plug.source()
+	anim_node = source.node()
+	
+	# delete the node using MDGModifier
+	
+	if anim_node.hasFn(om.MFn.kAnimCurve):
+		dg_mod = om.MDGModifier()
+		dg_mod.deleteNode(anim_node)
+		dg_mod.doIt()
 
 # get total number of keyed frames from 'jointName'
 
-maxKeys = cmds.keyframe(jointName, attribute='rotateX', query=True, keyframeCount=True)
+attributes = ["translateX","translateY","translateZ","rotateX","rotateY","rotateZ"]
+maxFrames = 0
 
-if FrameInterval == None or (minKeys + FrameInterval) > maxKeys:
-	keyframes = maxKeys
-	keyDiff = keyframes - minKeys + 1
+for attr in attributes:
+	attr_node = om.MSelectionList().add(f"{jointName}_{attr}").getDependNode(0)
+	attr_curve = oma.MFnAnimCurve(attr_node)
+	maxFrames = max(maxFrames,attr_curve.numKeys)
 
+# set frame interval to be tested
+
+if FrameInterval is None or (minFrames + FrameInterval) > maxFrames:
+	keyframes = maxFrames
+	frames = keyframes - minFrames + 1
 else:
-	keyframes = minKeys + FrameInterval
-	keyDiff = keyframes - minKeys
+	keyframes = minFrames + FrameInterval
+	frames = keyframes - minFrames
 
-if keyDiff <= 0:
-	keyDiff = 1
+if frames <= 0:
+	frames = 1
 
 start = time.time()
+
+# calculate signed distance fields
 
 var_exists = False
 
@@ -214,75 +247,105 @@ if not var_exists:
 
 	print('Calculating signed distance field...')
 
-	cmds.currentTime(0)
-	cmds.move(0,0,0, jointName, localSpace=True)
-	cmds.rotate(0,0,0,jointName)
+	oma.MAnimControl.setCurrentTime(om.MTime(0)) # set fast time
 
-	# get rotation matrices of joint
+	# reset transformations
 
-	jDag = dagObjFromName(jointName)[1]
+	eyeMat = om.MTransformationMatrix(om.MMatrix(np.eye(4)))
+	om.MFnTransform(j_dag).setTransformation(eyeMat)
 
 	# initialise sp.interpolate.RegularGridInterpolator with signed distance data on default cubic grid for one signed distance field (i.e., for 'proxMesh')
 
-	SDF = sigDistMesh(proxMesh, np.array(jDag.exclusiveMatrix()).reshape(4,4), gridSubdiv, gridSize)  # world transformation matrix of parent of joint
+	SDF = sigDistMesh(proxMesh, np.array(j_dag.exclusiveMatrix()).reshape(4,4), gridSubdiv, gridSize)  # world transformation matrix of parent of joint
 
 	# calculate relative position of articular surfaces
 
-	mesh = dagObjFromName(distMesh)[1]
+	mesh = om.MGlobal.getSelectionListByName(distMesh).getDagPath(0)
 	vertices = np.array(om.MFnMesh(mesh).getPoints(4)) # world space coordinates of vertices
-	vtxArr = vertices @ np.array(jDag.inclusiveMatrix().inverse()).reshape(4,4) # homogenous vertex coordinates relative to joint coordinate system
+	vtxArr = vertices @ np.array(j_dag.inclusiveMatrix().inverse()).reshape(4,4) # homogenous vertex coordinates relative to joint coordinate system
 
-mid = time.time()
+part1 = time.time()
 
 if not var_exists:
-	print('Signed distance fields calculated in {0:.3f} seconds!'.format(mid - start))
+	print('Signed distance fields calculated in {0:.3f} seconds!'.format(part1 - start))
 else:
-	print('Signed distance fields succesfully loaded in {0:.3f} seconds!'.format(mid - start))
+	print('Signed distance fields succesfully loaded in {0:.3f} seconds!'.format(part1 - start))
 
 # define progress bar
 
 cmds.progressWindow(title = 'Checking for mesh intersections...',
-		    progress = 1,
-		    status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
-		    isInterruptable = True,
-		    max = keyDiff)
+			progress = 1,
+			status = 'Processing frame {0} of {1} frames'.format(1,frames),
+			isInterruptable = True,
+			max = frames)
 
 print('Checking mesh intersections...')
 
-# set current time
+# create empty animation curve
 
-cmds.currentTime(minKeys)
+viable_curve = oma.MFnAnimCurve()
+viable_curve.create(viable_plug)
+
+# extract keyframes
+
+keyedArr = np.zeros((frames,len(attributes)))
+
+for idx, attr in enumerate(attributes):
+	attr_node = om.MSelectionList().add(f"{jointName}_{attr}").getDependNode(0)
+	attr_curve = oma.MFnAnimCurve(attr_node)
+	keyedArr[:, idx] = [attr_curve.value(frame) for frame in range(frames)]
+
+# convert keyframes to transformation matrices
+
+localMat = np.stack([np.eye(4)] * frames, axis = 0)	
+localMat[:,3,0:3] = keyedArr[:,0:3]
+localMat[:,0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', keyedArr[:,3:6], degrees = False).as_matrix()[:,::-1,::-1]
+
+part2 = time.time()
+
+print('# Calculated {0} joint transformations in {1:.3f} seconds.'.format(frames, part2 - part1))
+
+# setup progress bar
+
+cmds.progressWindow(title = 'Checking for mesh intersections...',
+			progress = 1,
+			status = 'Processing frame {0} of {1} frames'.format(1, frames),
+			isInterruptable = True,
+			max = frames)
+
+# set counter for viable poses
 
 counter = 0
 
-invMat = np.array(jDag.exclusiveMatrix().inverse()).reshape(4,4) # inverse of parent rotMat (prox) as numpy 4x4 array
+# calculate signed distances and key them
 
-for i in range(keyDiff):
-
-	rotMat = np.array(jDag.inclusiveMatrix()).reshape(4,4)
-	signDist = SDF((vtxArr @ (rotMat @ invMat))[:,0:3])
+for frame in range(frames):
+	
+	signDist = SDF((vtxArr @ localMat[i,:,:])[:,0:3])
 
 	# key viable attribute at joint
 
 	if signDist[signDist != -1].min() > 0:
-		cmds.setKeyframe(jointName, at = 'viable', v = 1)
+		viable_curve.addKey(om.MTime(i), 1)
 		counter += 1
 	else:
-		cmds.setKeyframe(jointName, at = 'viable', v = 0)
+		viable_curve.addKey(om.MTime(i), 0)
 
-	cmds.currentTime(i + minKeys + 1)
+	# log progress
 
-	# update progress bar
+	cmds.progressWindow(edit = True, progress = frame + 1, status = 'Processing frame {0} of {1} frames'.format(frame + 1, frames))
 
-	cmds.progressWindow(edit = True, progress = i + 1, status = 'Processing frame {0} of {1} frames'.format(i + 1, keyDiff))
+# shut down progress bar
 
-# when done close progress bar
+cmds.progressWindow(edit = True, endProgress = True)
 
 end = time.time()
 
 if cmds.progressWindow(query = True, isCancelled = True):
-	print('# Abort: Mesh intersection check cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid,i + 1, counter))
+	print('# Abort: Mesh intersection check cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - part2,i + 1, counter))
 else:
-	print('# Result: Mesh intersection check completed in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid, keyDiff, counter))
+	print('# Result: Mesh intersection check completed in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - part2, frames, counter))
 
 cmds.progressWindow(edit = True, endProgress = True)
+
+
