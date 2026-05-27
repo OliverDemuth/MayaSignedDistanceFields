@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 06.05.2026 - Oliver Demuth
+#	Last updated 27.05.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -130,7 +130,7 @@ def processMayaFiles(filePath,args):
 
 	# extract arguments	
 
-	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, simBounds, interval, weights, tolerance, scaleFactor, cutOff, thickness, outDir, maxIter] = args
+	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, simBounds, interval, weights, tolerance, scaleFactor, cutOff, thickness, thicknessScale, outDir, maxIter] = args
 
 
 	# ==== calculate signed distance fields ====
@@ -140,23 +140,25 @@ def processMayaFiles(filePath,args):
 
 	print('Calculating signed distance fields for {}...'.format(fileName))
 
-	# reset joint
-
-	cmds.currentTime(0)
-	cmds.move(0,0,0, jointName, localSpace=True)
-	cmds.rotate(0,0,0,jointName)
-
-	# get gridsize from glenoid sphere radius
-	meanR, dims = meanRad(fittedShape)
-
-	if thickness is None:
-		thickness = meanR / 2
-
-	gridSize = 16 * thickness
-
 	# get dag path for joint
 
 	jDag = dagObjFromName(jointName)[1]
+
+	# reset joint
+
+	eyeMat = om.MTransformationMatrix(om.MMatrix(np.eye(4)))
+	om.MFnTransform(jDag).setTransformation(eyeMat)
+
+	# get gridsize from glenoid sphere radius
+
+	meanR, dims = meanRad(fittedShape)
+
+	if thickness is None:
+		thickness = meanR * thicknessScale
+
+	gridSize = 16 * thickness
+
+	# calculate signed distance fields
 
 	SDF, initialRotMat = sigDistField(jDag, meshes, gridSubdiv, gridSize, gridScale)
 
@@ -166,7 +168,7 @@ def processMayaFiles(filePath,args):
 
 
 	# ==== initialise variables and precalculations ====
-	
+
 
 	# calculate relative position of articular surfaces
 
@@ -225,6 +227,12 @@ def processMayaFiles(filePath,args):
 
 	initial_guess = np.zeros(3)
 
+	# precalculate rotation matrices in bulk
+
+	transMatArr = np.stack([np.eye(4)] * rotations.shape[0], axis = 0)	
+	transMatArr[:,0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotations, degrees = True).as_matrix()[:,::-1,::-1]
+	relTransMatArr = transMatArr @ jExclNPMat
+
 
 	# ==== optimise translations ====
 
@@ -239,20 +247,11 @@ def processMayaFiles(filePath,args):
 
 	for frame in range(frames):
 
-		# extract rotation
-
-		rotation = rotations[frame,:]
-
-		# get joint inclusive transformation matrix (child)
-
-		transMat = np.eye(4)
-		transMat[0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotation, degrees = True).as_matrix()[::-1,::-1] # inverse matrix directions to be consistent with previous approach (i.e., converting SciPy’s (x,y,z) basis into Maya’s (z,y,x) basis)
-
 		# update initial guess condition
 
 		if not shapeCheck: # cylinder or ellipsoid
 
-			initial_guess = (np.array((1.1 * meanR, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
+			initial_guess = (np.array((1.1 * meanR, 0.0, 0.0, 1.0)) @ transMatArr[frame,:,:])[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
 
 			# clip initial guess to cylinder bounds
 
@@ -263,7 +262,7 @@ def processMayaFiles(filePath,args):
 
 		rotMat = []
 		rotMat.append(jExclNPMat) # append parent rotMat (prox) as numpy 4x4 array
-		rotMat.append(transMat @ jExclNPMat) # append child rotMat (dist) as numpy 4x4 array
+		rotMat.append(relTransMatArr[frame,:,:]) # append child rotMat (dist) as numpy 4x4 array
 		rotMat.append(jExclNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
 
 		# optimise the joint translations
@@ -285,7 +284,7 @@ def processMayaFiles(filePath,args):
 		# check if pose was viable
 
 		if viable:
-			transRes.append(coords.tolist() + rotation.tolist()) # combine both lists and append to results array [Tx, Ty, Tz, Rx, Ry, Rz]
+			transRes.append(coords.tolist() + rotations[frame,:].tolist()) # combine both lists and append to results array [Tx, Ty, Tz, Rx, Ry, Rz]
 
 		# update progress
 
@@ -326,4 +325,5 @@ def processMayaFiles(filePath,args):
 	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil(end - mid))).split(':'))
 	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,len(transRes)))
 	print('Wrote joint transformations to {0} file at {1}.'.format(namei, outDir))
+
 	
