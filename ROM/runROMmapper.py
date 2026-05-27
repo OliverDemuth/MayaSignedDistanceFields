@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 23.02.2026 - Oliver Demuth
+#	Last updated 27.05.2026 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -48,11 +48,13 @@ tolerance = 0.07						# tolerance for joint proximity (i.e, set target thickness
 scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
 cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
 thickness = None						# Float value indicating the thickness value which correlates with the joint spacing. If set to None it will automatically be determined based on the fitted shape radius.
+thicknessScale = 0.35					# Float value indicating the scale factor for joint spacing
 StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 ContinueKeys = False					# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
 debug = 0 								# Debug mode to check if signed distance fields have already been calculated
 maxIter = 50							# maximum number of iterations for the SLSQP optimisation
+
 
 #################################################
 # ==========    main script below    ========== #
@@ -62,6 +64,7 @@ maxIter = 50							# maximum number of iterations for the SLSQP optimisation
 # ========== load modules ==========
 
 import maya.api.OpenMaya as om
+import maya.api.OpenMayaAnim as oma
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
@@ -71,21 +74,22 @@ from math import ceil
 
 # ========================================
 
-# reset joint
-
-cmds.rotate(0, 0, 0, jointName)
-cmds.move(0, 0, 0, jointName)
-
 # get dag path for joint
 
-jDag = dagObjFromName(jointName)[1]
+jNode,jDag = dagObjFromName(jointName)
+j_node = om.MFnDependencyNode(jNode)
+
+# reset joint
+
+eyeMat = om.MTransformationMatrix(om.MMatrix(np.eye(4)))
+om.MFnTransform(jDag).setTransformation(eyeMat)
 
 # get gridsize from glenoid sphere radius
 
 meanR, dims = meanRad(fittedShape)
 
 if thickness is None:
-	thickness = meanR / 2
+	thickness = meanR * thicknessScale
 
 gridSize = 16 * thickness
 
@@ -163,16 +167,51 @@ rotations = np.vstack((rotX.ravel(), rotY.ravel(), rotZ.ravel())).T
 
 numFrames = len(rotations)
 
+# get transformations
+
+attributes = ["translateX","translateY","translateZ","rotateX","rotateY","rotateZ"]
+attr_curves = []
+
 # set time to 1 or to start frame
 
 if ContinueKeys:
-	lastKey = cmds.keyframe(jointName, attribute = 'rotateX', query = True, index = (1, cmds.keyframe(jointName, attribute = 'rotateX', query = True, keyframeCount = True)))[-1]
 
-	xRot = cmds.keyframe(jointName, attribute = 'rotateX', query = True, eval = True, time = (lastKey,lastKey))[0]
-	yRot = cmds.keyframe(jointName, attribute = 'rotateY', query = True, eval = True, time = (lastKey,lastKey))[0]
-	zRot = cmds.keyframe(jointName, attribute = 'rotateZ', query = True, eval = True, time = (lastKey,lastKey))[0]
+	maxFrames = np.zeros((3,))
+	rots = np.empty((3,))
+	rots[:] = np.nan
 
-	matches = np.all(np.isclose(rotations, np.array([xRot,yRot,zRot])), axis=1)
+	for idx, attr in enumerate(attributes):
+
+		attr_plug = j_node.findPlug(attr, False)
+
+		# check if it exists
+
+		if attr_plug.isDestination:
+			source =  attr_plug.source()
+			anim_node = source.node()
+			
+			# check if animation curves is present
+			
+			if anim_node.hasFn(om.MFn.kAnimCurve):
+
+				# get animation curve
+
+				attr_node = om.MSelectionList().add(f"{jointName}_{attr}").getDependNode(0)
+				attr_curve = oma.MFnAnimCurve(attr_node)
+				
+				# get rotations at their last key
+
+				if idx >=3:
+					lastKey = attr_curve.numKeys
+					maxFrames[idx - 3] = lastKey
+					if lastKey > 0:
+						rots[idx - 3] = attr_curve.value(lastKey-1)
+
+				# append animation curves to list
+			
+				attr_curves.append(attr_curve) 
+
+	matches = np.all(np.isclose(rotations, np.rad2deg(rots)), axis = 1)
 
 	idxs = np.flatnonzero(matches)
 
@@ -181,17 +220,60 @@ if ContinueKeys:
 		minKeys = rotIdx + 2 # get index of next frame to be keyed
 	else: # key not part of rotations
 		minKeys = 1
-		cmds.cutKey(jointName, option = 'keys') # delete all previous keyframes
 		lastKey = 0
 
-	# set current time
+		# clear animation curves
 
-	cmds.currentTime(lastKey + 1)
+		for idx, attr in enumerate(attributes):
+			attr_plug = j_node.findPlug(attr, False)
+
+			# remove any data that might have been keyed previously
+
+			if attr_plug.isDestination:
+				source =  attr_plug.source()
+				anim_node = source.node()
+
+				# delete the node using MDGModifier
+
+				if anim_node.hasFn(om.MFn.kAnimCurve):
+					dg_mod = om.MDGModifier()
+					dg_mod.deleteNode(anim_node)
+					dg_mod.doIt()
+
+			# create empty animation curve
+
+			attr_curve = oma.MFnAnimCurve()
+			attr_curve.create(attr_plug)
+			attr_curves.append(attr_curve)
 
 else:
 	if StartFrame is None:
 		minKeys = 1 # get index of next frame to be keyed
-		cmds.cutKey(jointName, option = 'keys') # delete all previous keyframes
+
+		# clear animation curves
+
+		for idx, attr in enumerate(attributes):
+			attr_plug = j_node.findPlug(attr, False)
+
+			# remove any data that might have been keyed previously
+
+			if attr_plug.isDestination:
+				source =  attr_plug.source()
+				anim_node = source.node()
+
+				# delete the node using MDGModifier
+
+				if anim_node.hasFn(om.MFn.kAnimCurve):
+					dg_mod = om.MDGModifier()
+					dg_mod.deleteNode(anim_node)
+					dg_mod.doIt()
+
+			# create empty animation curve
+
+			attr_curve = oma.MFnAnimCurve()
+			attr_curve.create(attr_plug)
+			attr_curves.append(attr_curve)
+
 	else: 
 		minKeys = StartFrame
 
@@ -199,7 +281,7 @@ else:
 
 	# set current time
 
-	cmds.currentTime(minKeys)
+	oma.MAnimControl.setCurrentTime(om.MTime(minKeys)) # set fast time
 
 # get total number of frames to be keyed
 
@@ -212,23 +294,21 @@ else:
 
 keyDiff = max(1, keyDiff)
 
-if debug == 1 and FrameInterval is not None: # randomly assign rotations for testing
-	rng = np.random.default_rng(seed = 42)
-	rotations = rotations[rng.integers(0,rotations.shape[0],FrameInterval)]
+# preallocate joint coordinates array with joint rotations
+
+jCoords = np.zeros((rotations.shape[0],6))
+jCoords[:,3:6] = np.deg2rad(rotations)
 
 # define progress bar
 
 cmds.progressWindow(title = 'Translation optimisation in progress...',
-				    progress = 1,
-		    		status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
-		    		isInterruptable = True,
-		    		max = keyDiff)
+					progress = 1,
+					status = 'Processing frame {0} of {1} frames'.format(1,keyDiff),
+					isInterruptable = True,
+					max = keyDiff)
 
 print('Translation optimisation in progress...')
 
-# get joint exclusive transformation matrix (parent)
-
-jDag = dagObjFromName(jointName)[1]
 
 # get joint exclusive transformation matrix (parent)
 
@@ -240,11 +320,19 @@ jExclNPMatInv = np.array(jExclmat.inverse()).reshape(4,4) # inverse of parent ro
 
 initial_guess = np.zeros(3)
 
+# calculate rotation matrices in bulk
+
+transMatArr = np.stack([np.eye(4)] * rotations.shape[0], axis = 0)	
+transMatArr[:,0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotations, degrees = True).as_matrix()[:,::-1,::-1] # inverse matrix directions to be consistent with previous approach (i.e., converting SciPy’s (x,y,z) basis into Maya’s (z,y,x) basis)
+relTransMatArr = transMatArr @ jExclNPMat
+
 
 # ==== optimise translations ====
 
 
-frame = 0
+frame = lastKey + 1
+oma.MAnimControl.setCurrentTime(om.MTime(frame))
+
 tol = 1 + tolerance
 
 # go through all possible combinations
@@ -260,21 +348,12 @@ for i in range(keyDiff):
 
 	if cmds.progressWindow(query = True, isCancelled = True):
 		break
-
-	# extract rotation
-
-	rotation = rotations[j,:]
-
-	# get joint inclusive transformation matrix (child)
-
-	transMat = np.eye(4)
-	transMat[0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotation, degrees = True).as_matrix()[::-1,::-1] # inverse matrix directions to be consistent with previous approach (i.e., converting SciPy’s (x,y,z) basis into Maya’s (z,y,x) basis)
-
+	
 	# define initial guess condition
 
 	if not shapeCheck: # cylinder or ellipsoid
 			
-		initial_guess = (np.array((1.1 * meanR, 0.0, 0.0, 1.0)) @ transMat)[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
+		initial_guess = (np.array((1.1 * meanR, 0.0, 0.0, 1.0)) @ transMatArr[j,:,:])[0:3] # set initial guess as 1.1 times the radius in X-axis direction (joint distraction)
 
 		# clip initial guess to cylinder bounds
 
@@ -285,7 +364,7 @@ for i in range(keyDiff):
 
 	rotMat = []
 	rotMat.append(jExclNPMat) # append parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(transMat @ jExclNPMat) # append child rotMat (dist) as numpy 4x4 array
+	rotMat.append(relTransMatArr[j,:,:]) # append child rotMat (dist) as numpy 4x4 array
 	rotMat.append(jExclNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
 
 	# optimise the joint translations
@@ -308,23 +387,15 @@ for i in range(keyDiff):
 
 	if viable:
 
-		frame = cmds.currentTime(query = True)
+		jCoords[j,0:3] = coords
 
-		# key rotation to animate joint
+		# key transformation curves and animate joint
 
-		cmds.setKeyframe(jointName, at = 'rotateX', v = rotation[0])
-		cmds.setKeyframe(jointName, at = 'rotateY', v = rotation[1])
-		cmds.setKeyframe(jointName, at = 'rotateZ', v = rotation[2])
-
-		# key translation
-
-		cmds.setKeyframe(jointName, at = 'translateX', v = coords[0])
-		cmds.setKeyframe(jointName, at = 'translateY', v = coords[1])
-		cmds.setKeyframe(jointName, at = 'translateZ', v = coords[2])
+		[curve.addKey(om.MTime(frame), jCoords[j,idx]) for idx, curve in enumerate(attr_curves)]
 
 		# update time
 
-		cmds.currentTime(frame + 1)
+		frame = frame + 1
 
 	# update progress bar
 
@@ -332,11 +403,14 @@ for i in range(keyDiff):
 
 # when done close progress bar
 
+oma.MAnimControl.setCurrentTime(om.MTime(frame))
+
 end = time.time()
 
 if cmds.progressWindow(query = True, isCancelled = True):
-	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid, i + 1, int(frame - lastKey)))
+	print('# Abort: Translation optimisation cancelled after {0:.3f} seconds. Total {1} frames tested and keyed {2} viable frames'.format(end - mid, i + 1, int(frame - 1 - lastKey)))
 else:
-	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid, keyDiff, int(frame - lastKey)))
+	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid, keyDiff, int(frame - 1 - lastKey)))
 
 cmds.progressWindow(edit = True, endProgress = True)
+
