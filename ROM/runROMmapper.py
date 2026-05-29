@@ -165,7 +165,7 @@ zRots = np.arange(zBounds[0], ceil(zBounds[1] + interval / 2), interval, dtype =
 rotX, rotY, rotZ = np.meshgrid(xRots, yRots, zRots, indexing='ij')
 rotations = np.vstack((rotX.ravel(), rotY.ravel(), rotZ.ravel())).T 
 
-numFrames = len(rotations)
+numFrames = rotations.shape[0]
 
 # get transformations
 
@@ -296,7 +296,7 @@ keyDiff = max(1, keyDiff)
 
 # preallocate joint coordinates array with joint rotations
 
-jCoords = np.zeros((rotations.shape[0],6))
+jCoords = np.zeros((numFrames,6))
 jCoords[:,3:6] = np.deg2rad(rotations)
 
 # define progress bar
@@ -322,9 +322,13 @@ initial_guess = np.zeros(3)
 
 # calculate rotation matrices in bulk
 
-transMatArr = np.stack([np.eye(4)] * rotations.shape[0], axis = 0)	
+transMatArr = np.stack([np.eye(4)] * numFrames, axis = 0)	
 transMatArr[:,0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotations, degrees = True).as_matrix()[:,::-1,::-1] # inverse matrix directions to be consistent with previous approach (i.e., converting SciPy’s (x,y,z) basis into Maya’s (z,y,x) basis)
 relTransMatArr = transMatArr @ jExclNPMat
+
+# get transformation matrices template
+
+rotMat = np.stack([jExclNPMat, np.empty((4,4)), jExclNPMatInv], axis = 0)
 
 
 # ==== optimise translations ====
@@ -359,13 +363,10 @@ for i in range(keyDiff):
 
 		bnds = np.array(bounds)
 		initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
-		
-	# get rotation matrices
 
-	rotMat = []
-	rotMat.append(jExclNPMat) # append parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(relTransMatArr[j,:,:]) # append child rotMat (dist) as numpy 4x4 array
-	rotMat.append(jExclNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
+	# update rotation matrix
+
+	rotMat[1,:,:] = relTransMatArr[frame,:,:]
 
 	# optimise the joint translations
 
