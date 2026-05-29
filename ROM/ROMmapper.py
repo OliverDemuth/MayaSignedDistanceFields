@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 23.02.2026 - Oliver Demuth
+#	Last updated 29.05.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -58,9 +58,11 @@
 
 # ========== load modules ==========
 
-import maya.api.OpenMaya as om
 import numpy as np
 import scipy as sp
+import maya.cmds as cmds
+import maya.api.OpenMaya as om
+import maya.api.OpenMayaAnim as oma
 
 
 # ========== signed distance field per joint function ==========
@@ -77,9 +79,7 @@ def sigDistField(jDag, meshes, subdivision, size, scale):
 
 	# get rotation matrices
 
-	rotMat = []
-	rotMat.append(np.array(jDag.exclusiveMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(np.array(jDag.inclusiveMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
+	rotMat = np.array([jDag.exclusiveMatrix(), jDag.inclusiveMatrix()]).reshape(2,4,4)
 
 	# cycle through all meshes
 
@@ -91,7 +91,7 @@ def sigDistField(jDag, meshes, subdivision, size, scale):
 		error('Fewer rotation matrices than meshes supplied. Please assign corresponding rotation matrices for each mesh.')
 
 	SDFs = []
-	for j,mesh in enumerate(meshes):
+	for j, mesh in enumerate(meshes):
 		meshSigDist, elements = sigDistMesh(mesh, rotMat[j], subdivision, size * scale) # get signed distance field for each mesh
 
 		# initialise tricubic interpolator with signed distance data on default cubic grid
@@ -141,7 +141,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# calculate position of vertices relative to cubic grid
 
-	gridWsPos = (points @ rotMat)
+	gridWsPos = points @ rotMat
 	gridWSArr = gridWsPos[:,0:3]
 
 	# go through grid points and calculate signed distance for each of them
@@ -196,7 +196,7 @@ def relVtcPos(mesh, rotMat):
 
 	vertices = np.array(om.MFnMesh(dag).getPoints(4)) # get world position of all vertices (om.MSpace.kWorld = 4)
 
-	return vertices @ np.linalg.solve(rotMat, np.eye(4)) # calculate new coordinates and return 3D array
+	return vertices @ np.linalg.inv(rotMat) # calculate new coordinates and return 3D array
 
 
 # ========== get dag path function ==========
@@ -296,12 +296,12 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, weig
 
 	# get transformation matrix
 
-	transMat = rotMat[1] # transformation matrix
+	transMat = rotMat[1].copy() # transformation matrix
 	transMat[3,:] = np.append(results.x,1.0) @ rotMat[0] # append result world space coordinates to transformation matrix
 
 	# calculate position of vertices relative to cubic grid
 	
-	artRelArr = (proxArr @ np.linalg.solve(transMat.T, rotMat[0].T).T)[:,0:3] # get inverse of transformation matrix
+	artRelArr = (proxArr @ (rotMat[0] @ np.linalg.inv(transMat)))[:,0:3] # get inverse of transformation matrix
 	meshRelArr = (distMeshArr @ (transMat @ rotMat[2]))[:,0:3]
 
 	avgdist = SDF[1](artRelArr)
@@ -315,7 +315,6 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, weig
 		return results.x, True # coords, viable
 	else:
 		return [], False # empty list, viable
-
 
 
 ################################################
@@ -340,7 +339,7 @@ class ROMeval:
 
 		self.proxArr = np.ascontiguousarray(proxArr, dtype = dtype) # shape (N,4)
 		self.distArr = np.ascontiguousarray(distArr, dtype = dtype) # shape (M,4)
-		self.w = np.ascontiguousarray(w, dtype = dtype) # shape (5,1)
+		self.w = np.ascontiguousarray(w, dtype = dtype) # shape (5,)
 
 		self._proxDist = None
 		self._distDist = None
@@ -384,7 +383,7 @@ class ROMeval:
 
 		# go through each proximal articular surface point and check if any of them intersect with distal mesh (i.e., signDist < 0)
 
-		self._proxDist = self.ipDist((self.proxArr @ np.linalg.solve(transMat.T, self.rotMat[0].T).T)[:,0:3]) # calculate signed distances for the proximal articular surface
+		self._proxDist = self.ipDist((self.proxArr @ (self.rotMat[0] @ np.linalg.inv(transMat)))[:,0:3]) # calculate signed distances for the proximal articular surface
 		self._distDist = self.ipProx((self.distArr @ (transMat @ self.rotMat[2]))[:,0:3])
 
 		# update cache
@@ -438,5 +437,3 @@ class ROMeval:
 		# go through each distal articular surface point and check if any of them intersect with proximal mesh (i.e., signDist < 0)
 
 		return min(self._proxDist.min(), self._distDist.min()) # return minimal value, if any of the points are inside a mesh (intersection) it will be negative
-
-
