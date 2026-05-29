@@ -6,7 +6,7 @@
 
 ## Version 1.3
 Substantial performance boost in the ROM mapper and the ligament optimisations due to:
-1. Precalculaions of matrix transformations and pure numpy/scipy math within loops
+1. Precalculations of matrix transformations and pure numpy/scipy math within loops
 2. Input keyframes are extracted directly from their animation curves and translated into a transformation matrix array in bulk
 3. Viewport is no longer updated during simulations
 4. Output keyframes are directly inserted into animation curves
