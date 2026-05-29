@@ -9,7 +9,7 @@
 #	meshes for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 17.02.2026 - Oliver Demuth
+#	Last updated 29.05.2026 - Oliver Demuth
 #
 #
 #	Note, for each ligament create a float attribute at 'jointName' and name it 
