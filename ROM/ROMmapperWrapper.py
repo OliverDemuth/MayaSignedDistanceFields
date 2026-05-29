@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 27.05.2026 - Oliver Demuth
+#	Last updated 29.05.2026 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -67,6 +67,7 @@ thickness = None						# Float value indicating the thickness value which correla
 thicknessScale = 0.35 					# Float value indicating the scale factor for joint spacing
 cores = 8								# integer value to specify maximal number of CPU cores to be assigned
 maxIter = 50							# maximum number of iterations for the SLSQP optimiser
+subset = 100							# integer value to specify maximal number of joint poses to be tested
 
 # ========== set directories ========== 
 
@@ -77,10 +78,9 @@ maxIter = 50							# maximum number of iterations for the SLSQP optimiser
 #	output/results directory:	"path/to/project folder/results"		CSV files will be saved here
 # ======================================== #
 
-path = '\\Users\\itz\\Documents\\Cambridge\\PhD\\Fellowship\\Crocodile\\DDNC04\\simulations\\python' # add your file path. Make sure 'ROMmapper.py', 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
-
-fileDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/maya files' # path for Maya files
-outDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/results' # path for Maya output
+path = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/ROM/python' # add your file path. Make sure 'ROMmapper.py', 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
+fileDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/ROM/maya files' # path for Maya files
+outDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/ROM/results' # path for Maya output
 
 
 #################################################
@@ -90,14 +90,8 @@ outDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations
 # ========== load modules  ========== 
 
 import sys
-import maya.standalone
-import maya.api.OpenMaya as om
-import maya.cmds as cmds
-import numpy as np
-import scipy as sp
 import functools
 import os
-import time
 
 from math import sqrt, floor
 from datetime import timedelta
@@ -142,7 +136,7 @@ if __name__ == "__main__":
 
 	# create tuple for arguments passed to ligament calculation functions
 
-	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, [xBounds,yBounds,zBounds], interval, weights, tolerance, scaleFactor, cutOff, thickness, thicknessScale, outDir, maxIter)
+	arguments = (jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, [xBounds,yBounds,zBounds], interval, weights, tolerance, scaleFactor, cutOff, thickness, thicknessScale, outDir, maxIter, subset)
 
 	# initialise multiprocessing
 
