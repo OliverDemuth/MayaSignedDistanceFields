@@ -8,7 +8,7 @@
 #	creates a 'viable' attribute that is keyed throughout.
 #
 #	Written by Oliver Demuth
-#	Last updated 19.05.2026 - Oliver Demuth
+#	Last updated 29.05.2026 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -105,7 +105,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# calculate position of vertices relative to cubic grid
 
-	gridWsPos = (points @ rotMat)
+	gridWsPos = points @ rotMat
 	gridWSArr = gridWsPos[:,0:3]
 
 	# go through grid points and calculate signed distance for each of them
@@ -288,7 +288,7 @@ viable_curve.create(viable_plug)
 
 # extract keyframes
 
-keyedArr = np.zeros((frames,len(attributes)))
+keyedArr = np.empty((frames,len(attributes)))
 
 for idx, attr in enumerate(attributes):
 	attr_node = om.MSelectionList().add(f"{jointName}_{attr}").getDependNode(0)
