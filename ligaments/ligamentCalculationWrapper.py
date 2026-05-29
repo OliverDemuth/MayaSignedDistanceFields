@@ -57,7 +57,7 @@ meshes = ['prox_mesh', 		# Names of the two bone meshes (e.g., individual meshes
 gridSubdiv = 100			# Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 gridScale = 1.5				# Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
 ligSubdiv = 20				# Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
-FrameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
+frameInterval = None		# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 cores = 8					# Integer value to specify number of CPU cores to be assigned. Depending on the number of files and/or avialable CPU cores the actual number can be lower. Maximally two thirds of all cores will be assigned.
 
 # ========== set directories ========== 
@@ -82,11 +82,6 @@ outDir = '/path/to/results' # path for Maya output
 # ========== load modules  ========== 
 
 import sys
-import maya.standalone
-import maya.api.OpenMaya as om
-import maya.cmds as cmds
-import numpy as np
-import scipy as sp
 import functools
 import os
 
@@ -106,7 +101,7 @@ if __name__ == "__main__":
 	# get Maya files
 
 	mayaFiles = os.listdir(fileDir)
-	mayaFiles[:] = [file for file in mayaFiles if not item.startswith('._') if item.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
+	mayaFiles[:] = [file for file in mayaFiles if not file.startswith('._') if file.endswith('.mb')] # get Maya scenes and remove macOS specific files from list
 
 	numFiles = len(mayaFiles)
 
@@ -132,7 +127,7 @@ if __name__ == "__main__":
 
 	# create tuple for arguments passed to ligament calculation functions
 
-	arguments = (jointName, meshes, gridSubdiv, gridScale, ligSubdiv, FrameInterval, outDir)
+	arguments = (jointName, meshes, gridSubdiv, gridScale, ligSubdiv, frameInterval, maxIter, outDir)
 
 	# initialise multiprocessing
 
