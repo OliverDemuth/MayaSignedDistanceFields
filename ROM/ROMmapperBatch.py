@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 27.05.2026 - Oliver Demuth
+#	Last updated 29.05.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -58,14 +58,9 @@
 
 # ========== load modules ==========
 
-import maya.standalone
-import maya.api.OpenMaya as om
-import maya.cmds as cmds
-import numpy as np
-import scipy as sp
 import functools
-import os
 import time
+import os
 
 from math import ceil
 from datetime import timedelta
@@ -93,7 +88,38 @@ def MayaInstance(function):
 		#	args = arguments to be passed to internal functions
 		# ======================================== #
 
-		# initialise Maya
+		# ==== frist set environment to single core ==== 
+
+
+		# IMPORTANT:
+		# 	Force single core execution of underlaying C libraries to prevent severe 
+		#	thread over-subscription and hardware starvation! Otherwise they parallelise
+		#	across all available CPU cores for each mayapy instance (requiring N times
+		#	more CPU cores than are actually available, regardless of how many cores were
+		#	assigned in the ligamentCalculationWrapper.py) and thus leading to CPU 
+		#	thrashing.
+
+		import os
+
+		os.environ["OMP_NUM_THREADS"] = "1"
+		os.environ["MKL_NUM_THREADS"] = "1"
+		os.environ["OPENBLAS_NUM_THREADS"] = "1"
+		os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+		os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+
+		# ==== now import modules into single core enivornment ==== 
+
+
+		import maya.standalone
+		import maya.cmds as cmds
+		import maya.api.OpenMaya as om
+		import maya.api.OpenMayaAnim as oma
+		import numpy as np
+		import scipy as sp
+
+
+		# ==== initialise Maya ====
 
 		maya.standalone.initialize(name = 'python')
 
@@ -130,7 +156,7 @@ def processMayaFiles(filePath,args):
 
 	# extract arguments	
 
-	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, simBounds, interval, weights, tolerance, scaleFactor, cutOff, thickness, thicknessScale, outDir, maxIter] = args
+	[jointName, meshes, congruencyMeshes, fittedShape, gridSubdiv, gridScale, simBounds, interval, weights, tolerance, scaleFactor, cutOff, thickness, thicknessScale, outDir, maxIter, subset] = args
 
 
 	# ==== calculate signed distance fields ====
@@ -211,11 +237,15 @@ def processMayaFiles(filePath,args):
 	rotX, rotY, rotZ = np.meshgrid(xRots, yRots, zRots, indexing='ij')
 	rotations = np.vstack((rotX.ravel(), rotY.ravel(), rotZ.ravel())).T 
 
-	frames = len(rotations)
+	if type(subset) is int and subset < rotations.shape[0]: 
+		rotations = rotations[0:subset]
 
-	# initialise results array
+	frames = rotations.shape[0]
 
-	transRes =[] 
+	# initialise result arrays
+
+	transRes = np.empty((frames, 6))
+	viableRes = np.zeros(frames, dtype = bool)
 
 	# get joint exclusive transformation matrix (parent)
 
@@ -229,9 +259,13 @@ def processMayaFiles(filePath,args):
 
 	# precalculate rotation matrices in bulk
 
-	transMatArr = np.stack([np.eye(4)] * rotations.shape[0], axis = 0)	
+	transMatArr = np.stack([np.eye(4)] * frames, axis = 0)	
 	transMatArr[:,0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotations, degrees = True).as_matrix()[:,::-1,::-1]
 	relTransMatArr = transMatArr @ jExclNPMat
+
+	# get transformation matrices template
+
+	rotMat = np.stack([jExclNPMat, np.empty((4,4)), jExclNPMatInv], axis = 0)
 
 
 	# ==== optimise translations ====
@@ -258,33 +292,32 @@ def processMayaFiles(filePath,args):
 			bnds = np.array(bounds)
 			initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
 
-		# get rotation matrices
+		# update rotation matrix
 
-		rotMat = []
-		rotMat.append(jExclNPMat) # append parent rotMat (prox) as numpy 4x4 array
-		rotMat.append(relTransMatArr[frame,:,:]) # append child rotMat (dist) as numpy 4x4 array
-		rotMat.append(jExclNPMatInv) # append inverse of parent rotMat (prox) as numpy 4x4 array
+		rotMat[1,:,:] = relTransMatArr[frame,:,:]
 
 		# optimise the joint translations
 
-		coords, viable = optimisePosition(proxArr, 		 # 2D array of proximal articular surface vertex coordinates for fast computation of relative coordinates 
-										  distArr, 		 # 2D array of distal articular surface vertex coordinates for fast computation of relative coordinates 
-										  distMeshArr,   # 2D array of distal mesh vertex coordinates for fast computation of relative coordinates
-										  SDF, 			 # list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist])
-										  rotMat, 		 # array with the transformation matrices of the joint and its parent
-										  thickness, 	 # thickness measure correlated with joint spacing
-										  weights, 		 # weights for the individual cost function terms
-										  initial_guess, # initual guess condition for optimiser 
-										  bounds, 		 # bounds for optimisation
-										  scaleFactor, 	 # scale factor to roughly check if joint is disarticulated
-										  maxIter, 		 # maximum number of iterations
-										  tol, 	 		 # tolerance for joint proximity
-										  cutOff)		 # cutoff value for signed distance fields
+		coords, viable = optimisePosition(proxArr, 			# 2D array of proximal articular surface vertex coordinates for fast computation of relative coordinates 
+										  distArr, 			# 2D array of distal articular surface vertex coordinates for fast computation of relative coordinates 
+										  distMeshArr,  	# 2D array of distal mesh vertex coordinates for fast computation of relative coordinates
+										  SDF, 				# list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist])
+										  rotMat, 			# array with the transformation matrices of the joint and its parent
+										  thickness, 		# thickness measure correlated with joint spacing
+										  weights, 			# weights for the individual cost function terms
+										  initial_guess,	# initual guess condition for optimiser 
+										  bounds, 			# bounds for optimisation
+										  scaleFactor, 		# scale factor to roughly check if joint is disarticulated
+										  maxIter, 			# maximum number of iterations
+										  tol, 	 			# tolerance for joint proximity
+										  cutOff)			# cutoff value for signed distance fields
 
 		# check if pose was viable
 
 		if viable:
-			transRes.append(coords.tolist() + rotations[frame,:].tolist()) # combine both lists and append to results array [Tx, Ty, Tz, Rx, Ry, Rz]
+			transRes[frame,0:3] = coords
+			transRes[frame,3:6] = rotations[frame,:]
+			viableRes[frame] = True
 
 		# update progress
 
@@ -303,6 +336,11 @@ def processMayaFiles(filePath,args):
 	# ==== save results and print to file ====
 
 
+	# collect output
+
+	exportData = transRes[viableRes].tolist() # drop inviable poses
+	exportData.insert(0,['tx','ty','tz','rx','ry','rz'])
+
 	# define outpule file name and path
 
 	namei = fileName.replace('.mb','.csv')
@@ -311,7 +349,7 @@ def processMayaFiles(filePath,args):
 	# write to output file
 
 	with open(fname, 'w') as filehandle:
-		for listitem in transRes:
+		for listitem in exportData:
 			s = ",".join(map(str, listitem))
 			filehandle.write('%s\n' % s)
 
@@ -323,7 +361,7 @@ def processMayaFiles(filePath,args):
 
 	end = time.time()
 	convert = '{0} hours {1} min {2} seconds'.format(*str(timedelta(seconds=ceil(end - mid))).split(':'))
-	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,len(transRes)))
+	print('Translation optimisation for {0} done in {1}! Successfully tested {2} frames and exported {3} viable joint transformations'.format(fileName,convert,frames,sum(viableRes)))
 	print('Wrote joint transformations to {0} file at {1}.'.format(namei, outDir))
 
 	
