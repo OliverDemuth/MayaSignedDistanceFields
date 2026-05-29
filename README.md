@@ -1,8 +1,21 @@
 
 
-[![DOI](https://zenodo.org/badge/489695793.svg)](https://doi.org/10.5281/zenodo.15442127)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15442127.svg)](https://doi.org/10.5281/zenodo.15442127)
 
 # Implementation of signed distance field based simulations in Autodesk Maya
+
+## Version 1.3
+Substantial performance boost in the ROM mapper and the ligament optimisations due to:
+1. Precalculaions of matrix transformations and pure numpy/scipy math within loops
+2. Input keyframes are extracted directly from their animation curves and translated into a transformation matrix array in bulk
+3. Viewport is no longer updated during simulations
+4. Output keyframes are directly inserted into animation curves
+5. Fixed a critical bug where multiprocessing resulted in thread over-subscription and hardware starvation with SciPy 1.16 and newer
+
+Run times for 1000 random poses on an Apple M2 Pro processor: <br>
+Simple collision check (sensu Manafzadeh and Padian, 2018): ~500 poses per second on a single core <br>
+ROMmapper translation optimisation: ~7.95 poses per second on a single core <br>
+Ligament path optimisation: ~8.39 ligaments per second on a single core <br>
 
 ## Version 1.2
 Substantial performance boost in the ROM mapper and the ligament optimisations due to:
@@ -60,8 +73,8 @@ Information about how to run the ligament simulations can be found [here](https:
 ## Installation 
 #### Make sure to have the required Python modules installed for Autodesk Maya
 
-[NumPy](https://numpy.org/) (1.24.4)  
-[SciPy](https://scipy.org/) (1.15.0)   
+[NumPy](https://numpy.org/) (2.4.6)  
+[SciPy](https://scipy.org/) (1.17.1)   
 
 For **Windows** in the command prompt execute the following 
 ```
@@ -94,7 +107,7 @@ ligaments/
 ###### The Python scripts were written in Python 3 and tested with Python 3.11 and Autodesk Maya 2025
 
 ## Citation
-If you use this method, please cite this GitHub repository [![DOI](https://zenodo.org/badge/489695793.svg)](https://doi.org/10.5281/zenodo.15442127) and the following papers:
+If you use this method, please cite this GitHub repository [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15442127.svg)](https://doi.org/10.5281/zenodo.15442127) and the following papers:
 1. Demuth OE, Hutchinson JR, La Barbera V, Warner SE, Field DJ. 2025. [Soft tissue constraints on joint mobility in the avian shoulder](https://doi.org/10.1242/jeb.250952). J. Exp. Biol. 228(21), jeb250952.
 2. Marai GE, Laidlaw DH, Demiralp C, Andrews S, Grimm CM, Crisco JJ. 2004. [Estimating Joint Contact Areas and Ligament Lengths From Bone Kinematics and Surfaces](https://doi.org/10.1109/TBME.2004.826606). IEEE Trans. Biomed. Eng. 51(5), 790–799.
 3. Marai GE, Crisco JJ, Laidlaw DH. 2006. [A Kinematics-Based Method For Generating Cartilage Maps and Deformations in the Multi-Articulating Wrist Joint From CT Images](https://doi.org/10.1109/IEMBS.2006.259742). In 2006 International Conference of the IEEE Engineering in Medicine and Biology Society, 2079–2082.
