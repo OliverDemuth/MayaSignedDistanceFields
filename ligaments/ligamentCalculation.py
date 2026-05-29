@@ -7,16 +7,19 @@
 #   accross the SDFs to calculate the ligaments' lengths.
 #
 #   Written by Oliver Demuth and Vittorio la Barbera
-#   Last updated 17.02.2026 - Oliver Demuth
+#   Last updated 29.05.2026 - Oliver Demuth
 #
 #   SYNOPSIS:
 #
 #       INPUT params:
-#           string  jointName:      Name of the joint centre (i.e. the name of a locator or joint; e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
-#           string  meshes:         Name(s) of the bone meshes (e.g., several individual meshes in the form of ['prox_mesh','dist_mesh'])
-#           int     gridSubdiv:     Integer value for the subdivision of the cube (i.e., number of grid points per axis; e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-#           float   gridScale:      Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
-#           int     ligSubdiv:      Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
+#			string  jointName:		Name of the joint centre, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+#			string  meshes:			Name(s) of the bone meshes (e.g., several individual meshes in the form of ['prox_mesh','dist_mesh'])
+#			int		gridSubdiv:		Integer value for the subdivision of the cube, i.e., number of grid points per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+#			float	gridScale:		Float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+#			int 	ligSubdiv:		Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
+#			int 	frameInterval:	Integer value to specify number of frames to be tested. If all frames are to be tested set to standard value: None
+#			int 	maxIter:		Integer value specifying the maximum number of iterations for the SLSQP optimiser
+#			string 	outDir:			Output directory
 #
 #       RETURN params:
 #           list    pathLengths:    Return value is a list with the path lengths for all ligaments designated as custom attributes in the 'jointName'
@@ -53,6 +56,7 @@ import numpy as np
 import scipy as sp
 import maya.cmds as cmds
 import maya.api.OpenMaya as om
+import maya.api.OpenMayaAnim as oma
 
 
 ################################################
@@ -77,7 +81,7 @@ def sigDistField(jointName, meshes, subdivision, gridScale):
 
 	# get number and names of ligaments
 
-	LigAttributes = cmds.listAttr(jointName, ud = True) # get user defined attributes of 'jointName' (i.e. the float attributes that will contain the ligament lengths)
+	ligAttributes = cmds.listAttr(jointName, ud = True) # get user defined attributes of 'jointName' (i.e. the float attributes that will contain the ligament lengths)
 
 	# cycle through ligaments and extract their information
 
@@ -85,7 +89,7 @@ def sigDistField(jointName, meshes, subdivision, gridScale):
 	oDags = []
 	iDags = []
 
-	for ligament in LigAttributes:
+	for ligament in ligAttributes:
 
 		# get positions of points of interest
 
@@ -106,9 +110,7 @@ def sigDistField(jointName, meshes, subdivision, gridScale):
 
 	# get rotation matrices
 
-	rotMat = []
-	rotMat.append(np.array(jDag.exclusiveMatrix()).reshape(4,4)) # parent rotMat (prox) as numpy 4x4 array
-	rotMat.append(np.array(jDag.inclusiveMatrix()).reshape(4,4)) # child rotMat (dist) as numpy 4x4 array
+	rotMat = np.array([jDag.exclusiveMatrix(), jDag.inclusiveMatrix()]).reshape(2, 4, 4)
 
 	# cycle through all meshes
 
@@ -118,14 +120,14 @@ def sigDistField(jointName, meshes, subdivision, gridScale):
 		error('Too few meshes specified. Please specify TWO meshes in the mesh array.')
 	
 	SDFs = []
-	for i,mesh in enumerate(meshes):
+	for i, mesh in enumerate(meshes):
 		meshSigDist, elements = sigDistMesh(mesh, rotMat[i], subdivision, maxDist) # get signed distance field for each mesh
 		
 		# initialise sp.interpolate.RegularGridInterpolator with signed distance data on default cubic grid
 
 		SDFs.append(sp.interpolate.RegularGridInterpolator((elements, elements, elements), meshSigDist, method = 'cubic', bounds_error = False, fill_value = -1)) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
 	
-	return SDFs, LigAttributes, oDags, iDags, jDag, maxDist
+	return SDFs, ligAttributes, oDags, iDags, maxDist
 
 
 # ========== signed distance field per mesh function ==========
@@ -289,6 +291,39 @@ def dagObjFromName(name):
 	return sel.getDependNode(0), sel.getDagPath(0)
 
 
+# ========== get animation curve ==========
+
+def getAnimCurve(name, attribute):
+
+	# Input variables:
+	#   name = string representing object name
+	#   attribute = string representing object's attribute
+	# ======================================== #
+
+	# get dependency node
+
+	node = dagObjFromName(name)[0]
+	depNode = om.MFnDependencyNode(node)
+
+	# get plug
+
+	plug = depNode.findPlug(attribute, False)
+
+	# check if animation curve exists
+
+	if plug.isDestination:
+		sourceNode = plug.source().node()
+		if sourceNode.hasFn(om.MFn.kAnimCurve):
+			return oma.MFnAnimCurve(sourceNode) # return existing animation curve
+
+	# animation curve does not exist and need to create it
+
+	animCurve = oma.MFnAnimCurve()
+	animCurve.create(plug, oma.MFnAnimCurve.kAnimCurveTL)
+	
+	return animCurve # return newly created animation curve
+
+
 ################################################
 # ============ optimiser functions =========== #
 ################################################
@@ -296,7 +331,7 @@ def dagObjFromName(name):
 
 # ========== ligament length calculation function ==========
 
-def ligCalc(initial_guess, ligArr, ipProx, ipDist, rotMat, ligTransforms, offset, keyPathPoints, maxOffset, numPoints, bounds):
+def ligCalc(initial_guess, ligArr, ipProx, ipDist, rotMat, ligTransforms, offset, keyPathPoints, maxOffset, numPoints, bounds, maxIter):
 
 	# Input variables:
 	#   initial_guess = initual guess condition for optimiser
@@ -310,45 +345,43 @@ def ligCalc(initial_guess, ligArr, ipProx, ipDist, rotMat, ligTransforms, offset
 	#   maxOffset = squared maximum mediolateral offset for path constraint function
 	#   numPoints = number of ligament points
 	#   bounds = bounds for optimisation
+	#	maxIter = Integer value specifying the maximum number of iterations for the SLSQP optimiser
 	# ======================================== #
 
-	# create variables
+	# preallocate variables
 
-	ligLengths = []
-	ligPoints = []
+	numLigs = len(ligTransforms)
+
 	results = []
+	ligLengths = np.zeros(numLigs)
+	ligPoints = np.zeros((numLigs, numPoints, 3)) if keyPathPoints else None
+	ligArrCopies = np.repeat(ligArr[np.newaxis,:,:], numLigs, axis = 0) # copy initial array and only modify the copies
+
+	# get ligament specific transformation matrices to cubic grid
+		
+	relRotMats = [ligRotMat @ rotMat for ligRotMat in ligTransforms]
 
 	for index, ligRotMat in enumerate(ligTransforms):
 
-		# get ligament specific transformation matrix to cubic grid
-		
-		relRotMat = []
-		relRotMat.append(ligRotMat @ rotMat[0])
-		relRotMat.append(ligRotMat @ rotMat[1])
-
 		# minimise ligament length through optimiser
 
-		ligArrCopy = ligArr.copy() # copy initial array and only modify this copy
-		res = ligLengthOptMin(initial_guess, ligArrCopy, ipProx, ipDist, relRotMat, maxOffset, numPoints, bounds)
+		res = ligLengthOptMin(initial_guess, ligArrCopies[index], ipProx, ipDist, relRotMats[index], maxOffset, numPoints, bounds, maxIter)
 
 		# correct relative ligament length by linear distance between origin and insertion to get actual ligament length
 
-		if res.success: # check if optimiser terminated successfully
-			ligLengths.append(res.fun * offset[index])
-		else:
-			ligLengths.append(-offset[index]) # optimiser was unsuccessful: mark as outlier (negative Euclidean distance between origin and insertion)
+		ligLengths[index] = res.fun * offset[index] if res.success else -offset[index]
 
 		# check if path points are to be calculate
 
 		if keyPathPoints:
-			
+
 			# get world position of ligament points
 
-			ligArrCopy[:,1:3] = res.x.reshape(numPoints, 2) # extract y and z coordinates from optimiser results
-			ligPoints.append((ligArrCopy @ ligRotMat)[:,0:3].tolist()) # global coordinates of ligament points
+			ligArrCopies[index,:,1:3] = res.x.reshape(numPoints, 2) # extract y and z coordinates from optimiser results
+			ligPoints[index] = (ligArrCopies[index] @ ligRotMat)[:,0:3] # global coordinates of ligament points
 
 		# gather results
-		
+
 		results.append(res)
 
 	return ligLengths, ligPoints, results
@@ -356,7 +389,7 @@ def ligCalc(initial_guess, ligArr, ipProx, ipDist, rotMat, ligTransforms, offset
 
 # ========== ligament length optimiser function ==========
 
-def ligLengthOptMin(initial_guess, ligArr, ipProx, ipDist, rotMat, maxOffset, numPoints, bounds):
+def ligLengthOptMin(initial_guess, ligArr, ipProx, ipDist, rotMat, maxOffset, numPoints, bounds, maxIter):
 
 	# Input variables:
 	#   initial_guess = initual guess condition for optimiser
@@ -366,17 +399,18 @@ def ligLengthOptMin(initial_guess, ligArr, ipProx, ipDist, rotMat, maxOffset, nu
 	#   maxOffset = squared maximum mediolateral offset for path constraint function
 	#   numPoints = number of ligament points
 	#   bounds = bounds for optimisation
+	#	maxIter = Integer value specifying the maximum number of iterations for the SLSQP optimiser
 	# ======================================== #
 
 	# precompute X‑column transform contributions
 
 	xCoords = ligArr[:,0]
-	x_prox = xCoords[1:-1, None] * rotMat[0][0,0:3] + rotMat[0][3,0:3] # skip first and last ligament coords (i.e., origin and insertion)
-	x_dist = xCoords[1:-1, None] * rotMat[1][0,0:3] + rotMat[1][3,0:3] # skip first and last ligament coords (i.e., origin and insertion)
+	xProx = xCoords[1:-1, None] * rotMat[0][0,0:3] + rotMat[0][3,0:3] # skip first and last ligament coords (i.e., origin and insertion)
+	xDist = xCoords[1:-1, None] * rotMat[1][0,0:3] + rotMat[1][3,0:3] # skip first and last ligament coords (i.e., origin and insertion)
 
 	# create tuple for arguments passed to both constraints and cost functions
 
-	arguments = (ipProx, ipDist, rotMat, maxOffset, numPoints, x_prox, x_dist, np.empty((numPoints - 2) * 2), ligArr[:,0:3])
+	arguments = (ipProx, ipDist, rotMat, maxOffset, numPoints, xProx, xDist, np.empty((numPoints - 2) * 2), ligArr[:,0:3])
 
 	# set constraints functions
 
@@ -389,7 +423,7 @@ def ligLengthOptMin(initial_guess, ligArr, ipProx, ipDist, rotMat, maxOffset, nu
 
 	# set options
 
-	options = {"maxiter": 1000} # if it doesn't solve within 1000 iterations it usually won't solve
+	options = {"maxiter": maxIter} # if it doesn't solve within 50 iterations it usually won't solve
 
 	# optimization using SLSQP and get results: res.x = ligament point coordinates, res.fun = relative ligament length
 
@@ -398,7 +432,7 @@ def ligLengthOptMin(initial_guess, ligArr, ipProx, ipDist, rotMat, maxOffset, nu
 
 # ========== signed distance field constraint function ==========
 
-def sigDist_cons_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, x_prox, x_dist, consArr, costArr): # ligament points cannot impinge bones
+def sigDist_cons_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, xProx, xDist, consArr, costArr): # ligament points cannot impinge bones
 
 	# Input variables:
 	#   params = array of Y and Z coordinates of ligament points (i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]). They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
@@ -407,20 +441,20 @@ def sigDist_cons_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, x_pro
 	#   rotMat = array with the transformation matrices of the joint and its parent
 	#   maxOffset = squared maximum mediolateral offset for path constraint function. Passed through args, not part of this constraint function
 	#   numPoints = number of ligament points
-	#   x_prox = precomputed X‑column transform contributions in proximal rotation frame
-	#   x_dist = precomputed X‑column transform contributions in distal rotation frame
+	#   xProx = precomputed X‑column transform contributions in proximal rotation frame
+	#   xDist = precomputed X‑column transform contributions in distal rotation frame
 	#   consArr = preallocated constraint array
 	#   costArr = preallocated cost array. Passed through args, not part of constraint function
 	# ======================================== #
 
 	# extract y and z coordinates for matrix multiplications
 
-	yz = params.reshape(numPoints, 2)[1:-1] # skip first and last ligament coords (i.e., origin and insertion)
+	yz = params.reshape(numPoints, 2)[1:-1] # skip first and last ligament coords (i.e., origin and insertion), y = params[0::2], z = params[1::2]
 
 	# get relative coordinates
 
-	relPosProx = x_prox + yz @ rotMat[0][1:3,0:3] # get points in proximal cubic grid coordinates
-	relPosDist = x_dist + yz @ rotMat[1][1:3,0:3] # get points in distal cubic grid coordinates
+	relPosProx = xProx + yz @ rotMat[0][1:3,0:3] # get points in proximal cubic grid coordinates
+	relPosDist = xDist + yz @ rotMat[1][1:3,0:3] # get points in distal cubic grid coordinates
 
 	# get signed distances
 
@@ -433,7 +467,7 @@ def sigDist_cons_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, x_pro
 
 # ========== path constraint function ==========
 
-def path_cons_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, x_prox, x_dist, consArr, costArr): # smoothness constraint
+def path_cons_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, xProx, xDist, consArr, costArr): # smoothness constraint
 
 	# Input variables:
 	#   params = array of Y and Z coordinates of ligament points (i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]). They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
@@ -442,26 +476,26 @@ def path_cons_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, x_prox, 
 	#   rotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of this constraint function
 	#   maxOffset = squared maximum mediolateral offset for path constraint function
 	#   numPoints = number of ligament points
-	#   x_prox = precomputed X‑column transform contributions in proximal rotation frame. Passed through args, not part of this constraint function
-	#   x_dist = precomputed X‑column transform contributions in distal rotation frame. Passed through args, not part of this constraint function
+	#   xProx = precomputed X‑column transform contributions in proximal rotation frame. Passed through args, not part of this constraint function
+	#   xDist = precomputed X‑column transform contributions in distal rotation frame. Passed through args, not part of this constraint function
 	#   consArr = preallocated constraint array. Passed through args, not part of this constraint function
 	#   costArr = preallocated cost array. Passed through args, not part of this constraint function
 	# ======================================== #
 
 	# view params as (numPoints,2) without copy
 
-	yz = params.reshape(numPoints, 2)
+	yz = params.reshape(numPoints, 2) # y = params[0::2], z = params[1::2]
 
 	# calculate mediolatral offset between subsequent points
 
-	diff_yz = yz[1:] - yz[:-1]
+	diff = yz[1:] - yz[:-1]
 
-	return maxOffset - (diff_yz ** 2).sum(axis = 1) # squared mediolateral offset can be maximally 3 times the squared distance between path segment along X-axis (i.e., arctan(offset/dist) ≤ 60° as tan(60°) = sqrt(3))
+	return maxOffset - (diff ** 2).sum(axis = 1) # squared mediolateral offset can be maximally 3 times the squared distance between path segment along X-axis (i.e., arctan(offset/dist) ≤ 60° as tan(60°) = sqrt(3))
 
 
 # ========== cost function for optimisation ==========
 
-def cost_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, x_prox, x_dist, consArr, costArr): # minimise path length
+def cost_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, xProx, xDist, consArr, costArr): # minimise path length
 
 	# Input variables:
 	#   params = array of Y and Z coordinates of ligament points (i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]). They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
@@ -470,20 +504,20 @@ def cost_fun(params, ipProx, ipDist, rotMat, maxOffset, numPoints, x_prox, x_dis
 	#   rotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of cost function
 	#   maxOffset = maximum mediolateral offset for path constraint function. Passed through args, not part of cost function
 	#   numPoints = number of ligament points
-	#   x_prox = precomputed X‑column transform contributions in proximal rotation frame. Passed through args, not part of cost function
-	#   x_dist = precomputed X‑column transform contributions in distal rotation frame. Passed through args, not part of cost function
+	#   xProx = precomputed X‑column transform contributions in proximal rotation frame. Passed through args, not part of cost function
+	#   xDist = precomputed X‑column transform contributions in distal rotation frame. Passed through args, not part of cost function
 	#   consArr = preallocated constraint array. Passed through args, not part of cost function
 	#   costArr = preallocated cost array
 	# ======================================== #
 
 	# construct new array for cost function
 
-	costArr[:,1:3] = params.reshape(numPoints, 2) 
+	costArr[:,1:3] = params.reshape(numPoints, 2) # y = params[0::2], z = params[1::2]
 
 	# difference between consecutive xyz points
 
 	diff = costArr[1:] - costArr[:-1]
 
-	return np.sqrt((diff ** 2).sum(axis = 1)).sum() # length of ligament from origin to insertion; y = params[0::2], z = params[1::2]
+	return np.sqrt((diff ** 2).sum(axis = 1)).sum() # length of ligament from origin to insertion
 
 
