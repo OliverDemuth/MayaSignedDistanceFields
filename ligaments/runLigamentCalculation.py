@@ -5,7 +5,7 @@
 #   be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #   Written by Oliver Demuth
-#   Last updated 29.05.2026 - Oliver Demuth
+#   Last updated 02.06.2026 - Oliver Demuth
 #
 #
 #   Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -102,6 +102,20 @@ else:
 # ==== extract joint transformations from keyframes ====
 
 
+# get number of keyframes
+
+if StartFrame is None:
+	minKeys = 1
+else: 
+	minKeys = StartFrame
+
+if FrameInterval is None or (minKeys + FrameInterval) > maxFrames:
+	keyframes = maxFrames
+	keyDiff = max(1, keyframes - minKeys + 1)
+else:
+	keyframes = minKeys + FrameInterval
+	keyDiff = keyframes - minKeys
+
 # get reference transformation matrices
 
 jExclInv = jDag.exclusiveMatrix().inverse()
@@ -139,7 +153,7 @@ for frame in range(frames):
 
 	# get frame
 
-	context = om.MDGContext(om.MTime(frame + 1, 6)) # om.MTime.uiUnit() = 6
+	context = om.MDGContext(om.MTime(minKeys + frame, 6)) # om.MTime.uiUnit() = 6
 
 	# get joint transformation matrices
 
@@ -239,20 +253,6 @@ if keyPathPoints:
 			loc_curves[loc] = {'x': getAnimCurve(loc, 'translateX'),
 							   'y': getAnimCurve(loc, 'translateY'),
 							   'z': getAnimCurve(loc, 'translateZ')}
-
-# get number of keyframes
-
-if StartFrame is None:
-	minKeys = 1
-else: 
-	minKeys = StartFrame
-
-if FrameInterval is None or (minKeys + FrameInterval) > maxFrames:
-	keyframes = maxFrames
-	keyDiff = max(1, keyframes - minKeys + 1)
-else:
-	keyframes = minKeys + FrameInterval
-	keyDiff = keyframes - minKeys
 
 # define progress bar
 
