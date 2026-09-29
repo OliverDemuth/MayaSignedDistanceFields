@@ -5,7 +5,7 @@
 #   be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #   Written by Oliver Demuth
-#   Last updated 02.06.2026 - Oliver Demuth
+#   Last updated 29.09.2026 - Oliver Demuth
 #
 #
 #   Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -35,10 +35,9 @@ gridScale = 1.5                     # Float value for the scale factor of the cu
 ligSubdiv = 20                      # Integer value for the number of ligament segments (e.g., 20, see Marai et al., 2004 for details)
 StartFrame = None                   # Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None                # Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-maxIter = 100					 	# Integer value specifying the maximum number of iterations for the SLSQP optimiser
+maxIter = 200                       # Integer value specifying the maximum number of iterations for NLopt optimiser
 keyPathPoints = False               # Boolean to specify whether ligament point positions are to be keyed or not. True = yes, False = no
 debug = 0                           # Debug mode to check if signed distance fields have already been calculated
-
 
 
 #################################################
@@ -49,12 +48,18 @@ debug = 0                           # Debug mode to check if signed distance fie
 # ============= load modules =============
 
 
+import os
+os.environ["JAX_ENABLE_X64"] = "True"
+
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
 import maya.cmds as cmds
 import numpy as np
-import scipy as sp
+import jax
+import jax.numpy as jnp
 import time
+
+from jax.tree_util import register_pytree_node_class
 
 
 # ========================================
@@ -89,7 +94,7 @@ if not var_exists:
 
 	# calculate signed distance fields
 	
-	SDFs, ligAttributes, oDags, iDags, maxDist = sigDistField(jointName, meshes, gridSubdiv, gridScale)
+	SDFs, ligAttributes, oDags, iDags, maxDist, gridMat = sigDistField(jointName, meshes, gridSubdiv, gridScale)
 
 part1 = time.time()
 
@@ -101,6 +106,16 @@ else:
 
 # ==== extract joint transformations from keyframes ====
 
+
+# get total number of keyed frames from 'jointName', i.e., max number of frames to be calculated
+
+attributes = ["translateX","translateY","translateZ","rotateX","rotateY","rotateZ"]
+maxFrames = 0
+
+for attr in attributes:
+	attr_node = om.MSelectionList().add(f"{jointName}_{attr}").getDependNode(0)
+	attr_curve = oma.MFnAnimCurve(attr_node)
+	maxFrames = max(maxFrames,attr_curve.numKeys)
 
 # get number of keyframes
 
@@ -126,23 +141,13 @@ jInclInv = jDag.inclusiveMatrix().inverse()
 oRelPos = np.array([np.array(orig.inclusiveMatrix() * jExclInv) for orig in oDags]).reshape(len(oDags),4,4)[:,3,:]
 iRelPos = np.array([np.array(ins.inclusiveMatrix()  * jInclInv) for ins  in iDags]).reshape(len(oDags),4,4)[:,3,:]
 
-# get total number of keyed frames from 'jointName', i.e., max number of frames to be calculated
-
-attributes = ["translateX","translateY","translateZ","rotateX","rotateY","rotateZ"]
-maxFrames = 0
-
-for attr in attributes:
-	attr_node = om.MSelectionList().add(f"{jointName}_{attr}").getDependNode(0)
-	attr_curve = oma.MFnAnimCurve(attr_node)
-	maxFrames = max(maxFrames,attr_curve.numKeys)
-
 if FrameInterval and FrameInterval < maxFrames:
 	frames = FrameInterval
 else:
 	frames = maxFrames
 
-inclMat = np.empty((frames, 16), dtype=np.float64)
-exclMat = np.empty((frames, 16), dtype=np.float64)
+inclMat = np.empty((frames, 16), dtype = np.float64)
+exclMat = np.empty((frames, 16), dtype = np.float64)
 
 # cycle through frames and calculate matrix transformations
 
@@ -178,13 +183,13 @@ transMat[:,1,:,:] = inclMat.reshape(frames,4,4)
 
 # calculate world coordinates of joint and ligament attachments
 
-jPos = transMat[:,1,3,0:3]
-oPos = oRelPos @ transMat[:,0,:,:]
-iPos = iRelPos @ transMat[:,1,:,:]
+jPos = jnp.array(transMat[:,1,3,0:3])
+oPos = jnp.array(oRelPos @ transMat[:,0,:,:])
+iPos = jnp.array(iRelPos @ transMat[:,1,:,:])
 
 # get inverse of both parent and child rotation matrices
 
-invTransMat = np.linalg.inv(transMat)
+gridRelMat = jnp.array(np.linalg.inv(transMat) @ gridMat[None, None, :, :])
 
 part2 = time.time()
 
@@ -198,8 +203,8 @@ numPoints = ligSubdiv + 1
 
 # define constant x coords
 
-ligArr = np.stack([np.array([0.0,0.0,0.0,1.0])] * numPoints, axis = 0)
-ligArr[:,0] = np.linspace(0.0, 1.0, num = numPoints, endpoint = True) # constant X coordinates
+ligArr = jnp.tile(jnp.array([0.0,0.0,0.0,1.0]), (numPoints,1))
+ligArr = ligArr.at[:,0].set(jnp.linspace(0.0, 1.0, numPoints)) # constant X coordinates
 
 # maximal offset for path constraint
 
@@ -207,13 +212,7 @@ maxOffset = 3 / (ligSubdiv ** 2) # max squared mediolateral offset (i.e., arctan
 
 # define initual guess condition for optimiser
 
-initial_guess = np.zeros(2 * numPoints)
-
-# set bounds
-
-bounds = [(-maxDist, maxDist) for _ in range(2 * numPoints)]
-bounds[0] = bounds[1] = bounds[-2] = bounds[-1] = (0,0)
-bounds = tuple(bounds)
+initial_guess = jnp.zeros(2 * (numPoints - 2))
 
 # get ligament animation curves
 
@@ -273,11 +272,11 @@ for i in range(keyDiff):
 	if cmds.progressWindow(query = True, isCancelled = True):
 		break
 
-	ligRotMats, offsets = getLigTransMat(oPos[i,:], iPos[i,:], jPos[i,:])
+	ligRotMats, offsets = getLigTransMat(oPos[i], iPos[i], jPos[i])
 
 	# calculate the length of each ligament 
 
-	pathLengths, ligPoints, results = ligCalc(initial_guess, ligArr, SDFs[0], SDFs[1], invTransMat[i,:,:,:], ligRotMats, offsets, keyPathPoints, maxOffset, numPoints, bounds, maxIter)
+	pathLengths, ligPoints, results = ligCalc(initial_guess, ligArr, gridRelMat[i,:,:,:], ligRotMats, offsets, keyPathPoints, maxOffset, numPoints-2, maxIter, maxDist)
 
 	# get time for current frame
 
@@ -288,9 +287,6 @@ for i in range(keyDiff):
 		# key the attributes on the animated joint
 
 		lig_curves[index].addKey(mTime, pathLengths[index]) # append key to ligament curves
-
-		if debug == 1 and results[index].status != 0: # optimisation not successful, print info why not
-			print(ligament, results[index])
 
 		# check if ligament points are to be keyed
 
