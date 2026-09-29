@@ -4,6 +4,16 @@
 
 # Implementation of signed distance field based simulations in Autodesk Maya
 
+## Version 1.4
+Currently in progress. Substantial performance boost in the ROM mapper and the ligament optimisations due to:
+1. Switch optimiser from SciPy.optimize.minimize() with SLSQP to NLopt with Augmented Lagrangian as the main solver and L-BFGS as the internal solver 
+2. Automatic differentiation with JAX to calculate gradients and Lagrangians for the optimiser
+3. Automatic vectorisation through JAX to vectorise computations
+
+Run times for 1000 random poses on an Apple M2 Pro processor: <br>
+Ligament path optimisation: ~35.34 ligaments per second on a single core <br>
+
+
 ## Version 1.3
 Substantial performance boost in the ROM mapper and the ligament optimisations due to:
 1. Precalculations of matrix transformations and pure numpy/scipy math within loops
