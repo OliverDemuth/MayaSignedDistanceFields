@@ -19,7 +19,6 @@
 #			int 	ligSubdiv:		Integer value for the number of ligament points (e.g., 20 will divide the ligament into 20 equidistant segments, see Marai et al., 2004 for details)
 #			int 	frameInterval:	Integer value to specify number of frames to be tested. If all frames are to be tested set to standard value: None
 #			int 	maxIter:		Integer value specifying the maximum number of iterations for the SLSQP optimiser
-#			string 	outDir:			Output directory
 #
 #       RETURN params:
 #           list    pathLengths:    Return value is a list with the path lengths for all ligaments designated as custom attributes in the 'jointName'
@@ -429,7 +428,7 @@ class TricubicSDF:
 		return jax.vmap(self._single_lookup)(pts)
 
 
-# ========== SDF evaoluation wrappers ==========
+# ========== SDF evaluation wrappers ==========
 
 def evaluate_prox_sdf(points):
 	return SDFs[0](points)
@@ -447,15 +446,15 @@ def cons_fun(params, args, numPoints): # ligament points cannot impinge bones
 
 	# Input variables:
 	#   params = array of Y and Z coordinates of ligament points (i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]). They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
-	#   ipProx = proximal signed distance field in form of TricubicSDF class
-	#   ipDist = distal signed distance field in form of TricubicSDF class
-	#   rotMat = array with the transformation matrices of the joint and its parent
-	#   maxOffset = squared maximum mediolateral offset for path constraint function. Passed through args, not part of this constraint function
-	#   numPoints = number of ligament points
-	#   xProx = precomputed X‑column transform contributions in proximal rotation frame
-	#   xDist = precomputed X‑column transform contributions in distal rotation frame
-	#   consArr = preallocated constraint array
-	#   costArr = preallocated cost array. Passed through args, not part of constraint function
+	#   relRotMat = array with the transformation matrices of the joint and its parent. Passed through args 
+	#   maxOffset = squared maximum mediolateral offset for path constraint function. Passed through args
+	#   xProx = precomputed X‑column transform contributions in proximal rotation frame. Passed through args
+	#   xDist = precomputed X‑column transform contributions in distal rotation frame. Passed through args
+	#   ligArr = preallocated array for calculation of path points. Passed through args
+	#   cons = preallocated constraint array. Passed through args
+	#   numPoints = number of ligament points. Passed seperately as static argument
+	#   ipProx = proximal signed distance field in form of TricubicSDF class. Passed through closure
+	#   ipDist = distal signed distance field in form of TricubicSDF class. Passed through closure
 	# ======================================== #
 
 	(relRotMat, maxOffset, xProx, xDist, ligArr, cons) = args
@@ -492,6 +491,17 @@ def cons_fun(params, args, numPoints): # ligament points cannot impinge bones
 # ========== cost function for optimisation ==========
 
 def cost_fun(params, args, numPoints): # minimise path length
+	
+	# Input variables:
+	#   params = array of Y and Z coordinates of ligament points (i.e., params = [(y_0, z_0),(y_1, z_1), ... ,(y_n-1, z_n-1)]). They are, however, flattened into a single array, i.e., [y0, z0, y1, z1, y2, z2, ... , y_n-1, z_n-1], and therefore need to be extracted.
+	#   relRotMat = array with the transformation matrices of the joint and its parent. Passed through args, not part of cost function
+	#   maxOffset = squared maximum mediolateral offset for path constraint function. Passed through args, not part of cost function
+	#   xProx = precomputed X‑column transform contributions in proximal rotation frame. Passed through args, not part of cost function
+	#   xDist = precomputed X‑column transform contributions in distal rotation frame. Passed through args, not part of cost function
+	#   ligArr = preallocated array for calculation of path points. Passed through args
+	#   cons = preallocated constraint array. Passed through args, not part of cost function
+	#   numPoints = number of ligament points. Passed seperately as static argument
+	# ======================================== #
 
 	(_, _, _, _, ligArr, _) = args
 
@@ -523,8 +533,6 @@ def ligCalc(initial_guess, ligArr, rotMat, ligTransforms, offset, keyPathPoints,
 	# Input variables:
 	#	initial_guess = initual guess condition for optimiser
 	#	ligArr = 2D array of ligament point coordinates of shape (N,4)
-	#	ipProx = proximal signed distance field in form of TricubicSDF class
-	#	ipDist = distal signed distance field in form of TricubicSDF class
 	#	rotMat = array with the transformation matrices of the joint and its parent
 	#	ligTransforms = array with transformation matrices representing ligament coordinate systems
 	#	offset = array of euclidean distances from origin to insertion for each ligament
@@ -532,6 +540,9 @@ def ligCalc(initial_guess, ligArr, rotMat, ligTransforms, offset, keyPathPoints,
 	#	maxOffset = squared maximum mediolateral offset for path constraint function
 	#	numPoints = number of ligament points
 	#	maxIter = integer value specifying the maximum number of iterations for the optimiser
+	#	maxDist = maximal distance from joint centre to ligament attachment used for bounds
+	#   ipProx = proximal signed distance field in form of TricubicSDF class. Passed through closure
+	#   ipDist = distal signed distance field in form of TricubicSDF class. Passed through closure
 	# ======================================== #
 
 	# preallocate variables
