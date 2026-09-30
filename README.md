@@ -11,7 +11,7 @@ Currently in progress. Substantial performance boost in the ROM mapper and the l
 3. Automatic vectorisation through JAX to vectorise computations
 
 Run times for 1000 random poses on an Apple M2 Pro processor: <br>
-Ligament path optimisation: ~35.34 ligaments per second on a single core <br>
+Ligament path optimisation: ~40-110 ligaments per second on a single core <br>
 
 
 ## Version 1.3
