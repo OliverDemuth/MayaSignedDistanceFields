@@ -6,11 +6,12 @@
 
 ## Version 1.4
 Currently in progress. Substantial performance boost in the ROM mapper and the ligament optimisations due to:
-1. Switch optimiser from SciPy.optimize.minimize() with SLSQP to NLopt with Augmented Lagrangian as the main solver and L-BFGS as the internal solver 
-2. Automatic differentiation with JAX to calculate gradients and Lagrangians for the optimiser
-3. Automatic vectorisation through JAX to vectorise computations
+1. Automatic vectorisation through JAX to vectorise SDF interpolations
+2. Just in time (JIT) compilation of SDF evaluation
+3. Agressive caching of precomputed values wherever possible to reduce redundant calculations
 
 Run times for 1000 random poses on an Apple M2 Pro processor: <br>
+ROMmapper translation optimisation: ~58.45 poses per second on a single core <br>
 Ligament path optimisation: ~40-110 ligaments per second on a single core <br>
 
 
