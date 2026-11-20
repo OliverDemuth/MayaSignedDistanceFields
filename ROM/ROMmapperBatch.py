@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 29.05.2026 - Oliver Demuth
+#	Last updated 20.11.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -96,8 +96,7 @@ def MayaInstance(function):
 		#	thread over-subscription and hardware starvation! Otherwise they parallelise
 		#	across all available CPU cores for each mayapy instance (requiring N times
 		#	more CPU cores than are actually available, regardless of how many cores were
-		#	assigned in the ligamentCalculationWrapper.py) and thus leading to CPU 
-		#	thrashing.
+		#	assigned in the ROMmapperWrapper.py) and thus leading to CPU thrashing.
 
 		import os
 
@@ -106,6 +105,8 @@ def MayaInstance(function):
 		os.environ["OPENBLAS_NUM_THREADS"] = "1"
 		os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 		os.environ["NUMEXPR_NUM_THREADS"] = "1"
+		os.environ["JAX_ENABLE_X64"] = "True"
+		os.environ["JAX_PLATFORMS"] = "cpu" 
 
 
 		# ==== now import modules into single core enivornment ==== 
@@ -116,7 +117,11 @@ def MayaInstance(function):
 		import maya.api.OpenMaya as om
 		import maya.api.OpenMayaAnim as oma
 		import numpy as np
-		import scipy as sp
+		import nlopt
+		import jax
+		import jax.numpy as jnp
+
+		from jax.tree_util import register_pytree_node_class
 
 
 		# ==== initialise Maya ====
@@ -129,6 +134,59 @@ def MayaInstance(function):
 			function(queue.get(),args)
 
 	return instance_wrapper # return wrapped function
+
+
+# ========== checking names in Maya file function ==========
+
+def checkMayaFiles(filePath,objs):
+
+	# Input variables:
+	#	filePath = The path to a file to be processed
+	#	objs = object names to be searched in Maya files
+	# ======================================== #
+
+	# import modules
+	
+	import maya.standalone
+	import maya.cmds as cmds
+	import maya.api.OpenMaya as om
+
+	# initialise Maya
+
+	maya.standalone.initialize(name = 'python')
+
+	# supress error messages
+
+	cmds.scriptEditorInfo(sw = True, se = True)
+
+	# get file name 
+
+	fileName = os.path.basename(filePath)
+
+	# open Maya scene
+
+	cmds.file(filePath, open = True, force = True)
+	print('Checking file: ', fileName)
+
+	sel = om.MSelectionList()
+
+	# check if all objects exist
+
+	error = 0
+	for objname in objs:
+		try:
+			sel.add(objname)
+		except:
+			print('{0}: {1} does not exist!'.format(fileName,objname))
+			error = 1
+
+	# close file
+
+	cmds.file(modified = 0) 
+
+	# return errors
+
+	return error
 
 
 # ========== processing Maya file function ==========
@@ -220,12 +278,12 @@ def processMayaFiles(filePath,args):
 	if shapeCheck: # sphere
 
 		bound = np.clip(dims, 0, gridSize)[0] # clamp dims to gridSize
-		bounds = tuple([(-bound, bound)] * 3) # bounds for translations (X,Y,Z)
+		bounds = np.repeat([[-bound, bound]], 3, axis = 0) # bounds for translations (X,Y,Z)
 
 	else: # cylinder or elipsoid
 
-		bound = np.clip(dims * 0.75, 0, gridSize) # 1.5 times the dimensions in each axis (X,Y,Z)
-		bounds = tuple((-b, b) for b in bound)
+		bound = np.clip(dims * 0.75, 0, gridSize) # +/- 1.5 times the radius for each axis (X,Y,Z)
+		bounds = np.array([[-b, b] for b in bound], dtype = np.float64)
 
 
 	# create 3D grid for rotations
@@ -259,7 +317,7 @@ def processMayaFiles(filePath,args):
 
 	# precalculate rotation matrices in bulk
 
-	transMatArr = np.stack([np.eye(4)] * frames, axis = 0)	
+	transMatArr = np.tile(np.eye(4), (frames,1,1))
 	transMatArr[:,0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', rotations, degrees = True).as_matrix()[:,::-1,::-1]
 	relTransMatArr = transMatArr @ jExclNPMat
 
@@ -272,6 +330,7 @@ def processMayaFiles(filePath,args):
 
 
 	tol = 1 + tolerance
+	paramsArr = np.ones(4)
 
 	# go through all possible combinations
 
@@ -289,8 +348,7 @@ def processMayaFiles(filePath,args):
 
 			# clip initial guess to cylinder bounds
 
-			bnds = np.array(bounds)
-			initial_guess = np.clip(initial_guess, bnds[:,0], bnds[:,1])
+			initial_guess = np.clip(initial_guess, bounds[:,0], bounds[:,1])
 
 		# update rotation matrix
 
@@ -301,7 +359,8 @@ def processMayaFiles(filePath,args):
 		coords, viable = optimisePosition(proxArr, 			# 2D array of proximal articular surface vertex coordinates for fast computation of relative coordinates 
 										  distArr, 			# 2D array of distal articular surface vertex coordinates for fast computation of relative coordinates 
 										  distMeshArr,  	# 2D array of distal mesh vertex coordinates for fast computation of relative coordinates
-										  SDF, 				# list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist])
+										  paramsArr,		# 1D array of ones
+										  SDF,				# signed distance fields
 										  rotMat, 			# array with the transformation matrices of the joint and its parent
 										  thickness, 		# thickness measure correlated with joint spacing
 										  weights, 			# weights for the individual cost function terms
@@ -309,8 +368,8 @@ def processMayaFiles(filePath,args):
 										  bounds, 			# bounds for optimisation
 										  scaleFactor, 		# scale factor to roughly check if joint is disarticulated
 										  maxIter, 			# maximum number of iterations
-										  tol, 	 			# tolerance for joint proximity
-										  cutOff)			# cutoff value for signed distance fields
+										  tol, 				# tolerance for joint proximity
+										  cutOff)			# cut off value for signed distance fields
 
 		# check if pose was viable
 
