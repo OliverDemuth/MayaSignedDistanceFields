@@ -8,7 +8,7 @@
 #	translations and rotations of viable joint poses for each frame. 
 #
 #	Written by Oliver Demuth
-#	Last updated 29.05.2026 - Oliver Demuth
+#	Last updated 20.11.2026 - Oliver Demuth
 #
 #
 #	This script relies on the following other (Python) script(s) which need to be in the
@@ -43,11 +43,11 @@
 
 # ========== set variables ========== 
 
-jointName = 'myJoint' 					# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
+jointName = 'myJoint' 	 				# specify according to the joint centre in the Maya scene, i.e. the name of a locator or joint (e.g., 'myJoint' if following the ROM mapping protocol of Manafzadeh & Padian 2018)
 meshes = ['prox_mesh', 					# specify according to meshes in the Maya scene
 		  'dist_mesh']				
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
-		    		'dist_art_surf']	
+					'dist_art_surf']	
 fittedShape = 'sphere'					# specify according to meshes in the Maya scene		
 xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
 yBounds = [-90,90]						# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
@@ -55,19 +55,20 @@ zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] 
 interval = 5							# sampling interval, see Manafzadeh & Padian, 2018 (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 gridSubdiv = 100						# integer value for the subdivision of the cube (i.e., number of grid points per axis, e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
 gridScale = 1							# float value for the scale factor of the cubic grid (i.e., 1.5 initialises the grid from -1.5 to 1.5)
+interval = 5							# sampling interval, see Manafzadeh & Padian, 2018, (e.g., for FE and LAR -180:interval:180, and for ABAD -90:interval:90)
 weights = [1.0,							# weight for first cost term (proximal joint spacing; prox_art_surf in ipDist)
 		   0.0,							# weight for second cost term (distal joint spacing; dist_art_surf in ipProx)
 		   1.0,							# weight for third cost term (proximal joint congruency)
-		   0.1,							# weight for fourth cost term (distal joint congruency)
-		   0.1]							# weight for fifth cost term (joint offset)
+		   0.0,							# weight for fourth cost term (distal joint congruency)
+		   0.0]							# weight for fifth cost term (joint offset)
 tolerance = 0.07						# tolerance for joint proximity (i.e, set target thickness tolerance; e.g., 0.07 based on experimental data)
-scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
+scaleFactor = 2.5 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: disart = scaleFactor * radius; thickness = radius * thicknessScale)
 cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
 thickness = None						# Float value indicating the thickness value which correlates with the joint spacing. If set to None it will automatically be determined based on the fitted shape radius.
-thicknessScale = 0.35 					# Float value indicating the scale factor for joint spacing
+thicknessScale = 0.5 					# Float value indicating the scale factor for joint spacing
 cores = 8								# integer value to specify maximal number of CPU cores to be assigned
 maxIter = 50							# maximum number of iterations for the SLSQP optimiser
-subset = 100							# integer value to specify maximal number of joint poses to be tested
+subset = None							# integer value to specify maximal number of joint poses to be tested
 
 # ========== set directories ========== 
 
@@ -78,9 +79,9 @@ subset = 100							# integer value to specify maximal number of joint poses to b
 #	output/results directory:	"path/to/project folder/results"		CSV files will be saved here
 # ======================================== #
 
-path = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/ROM/python' # add your file path. Make sure 'ROMmapper.py', 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
-fileDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/ROM/maya files' # path for Maya files
-outDir = '/Users/itz/Documents/Cambridge/Fellowship/Crocodile/DDNC04/simulations/ROM/results' # path for Maya output
+path = '/Users/itz/Documents/Cambridge/Fellowship/Simulations/ROM/python' # add your file path. Make sure 'ROMmapper.py', 'ROMmapperWrapper.py' and 'ROMmapperBatch.py' are in this folder
+fileDir = '/Users/itz/Documents/Cambridge/Fellowship/Simulations/ROM/maya files' # path for Maya files
+outDir = '/Users/itz/Documents/Cambridge/Fellowship/Simulations/ROM/results' # path for Maya output
 
 
 #################################################
@@ -119,20 +120,29 @@ if __name__ == "__main__":
 
 	filePaths = [os.path.join(fileDir, file) for file in mayaFiles]
 
+	# check if objects with user supplied names exist in Maya files
+
+	checkObjs = [jointName] + meshes + congruencyMeshes + [fittedShape]
+	errors = []
+	[errors.append(checkMayaFiles(file, checkObjs)) for file in filePaths]
+	numErrors = sum(errors)
+
+	# raise exception if errors were found
+
+	if numErrors != 0: raise Exception('{0} name error(s) detected: Missing objects in the following files: {1}'.format(numErrors,[file for file, error in zip(mayaFiles, errors) if error]))
+
 	# get available CPU cores (max two thirds)
 
 	availableCores = floor(cpu_count()/3*2)
 	maxCores = availableCores if availableCores <= numFiles else numFiles 
 	CPUcores = cores if cores and cores <= maxCores else maxCores
 
-	print('Assigning {0} cores to process {1} Maya files.'.format(CPUcores,numFiles))
+	print('No name errors detected. Assigning {0} cores to process {1} Maya files.'.format(CPUcores,numFiles))
 
 	# append maya files to queue
 
 	q = Queue()
-
-	for file in filePaths:
-		q.put(file)
+	[q.put(file) for file in filePaths]
 
 	# create tuple for arguments passed to ligament calculation functions
 
