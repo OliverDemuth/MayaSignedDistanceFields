@@ -7,7 +7,7 @@
 #	between the meshes and the distances between them. 
 #
 #	Written by Oliver Demuth 
-#	Last updated 29.05.2026 - Oliver Demuth
+#	Last updated 20.11.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -49,20 +49,40 @@
 #	(3) This script requires several modules for Python, see README file. Make sure to
 #	    have the following external modules installed for the mayapy application:
 #
-#		- 'numpy' 	NumPy:			https://numpy.org/about/
-#		- 'scipy'	SciPy:			https://scipy.org/about/
+#		- 'numpy' 	NumPy:	https://numpy.org/about/
+#		- 'scipy'	SciPy:	https://scipy.org/about/
+#		- 'jax'		JAX:	https://docs.jax.dev/
+#		- 'nlopt'	NLopt:	https://nlopt.readthedocs.io/
 #
 #	    For further information regarding them, please check the website(s) referenced 
 #	    above.
 
 
+# ==== set environment options ==== 
+
+import os
+
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["JAX_ENABLE_X64"] = "True"
+os.environ["JAX_PLATFORMS"] = "cpu" 
+
+
 # ========== load modules ==========
 
+import jax
+import nlopt
+import jax.numpy as jnp
 import numpy as np
 import scipy as sp
 import maya.cmds as cmds
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
+
+from jax.tree_util import register_pytree_node_class
 
 
 # ========== signed distance field per joint function ==========
@@ -79,37 +99,31 @@ def sigDistField(jDag, meshes, subdivision, size, scale):
 
 	# get rotation matrices
 
-	rotMat = np.array([jDag.exclusiveMatrix(), jDag.inclusiveMatrix()]).reshape(2,4,4)
+	rotMat = np.array([jDag.exclusiveMatrix(), jDag.inclusiveMatrix()]).reshape(2, 4, 4)
 
-	# cycle through all meshes
-
-	if len(meshes) < 2:
-		error('Too few meshes specified. Please specify at least two meshes in the mesh array.')
-	if len(meshes) > 2:
-		rotMat.append(rotMat[0]) # parent rotMat (prox) as numpy 4x4 array
-	if len(rotMat) < len(meshes):
-		error('Fewer rotation matrices than meshes supplied. Please assign corresponding rotation matrices for each mesh.')
+	if len(meshes) != 2:
+		error('Please specify exactly TWO meshes (proximal, distal).')
 
 	SDFs = []
-	for j, mesh in enumerate(meshes):
-		meshSigDist, elements = sigDistMesh(mesh, rotMat[j], subdivision, size * scale) # get signed distance field for each mesh
+	for i, mesh in enumerate(meshes):
+		meshSigDist, elements = sigDistMesh(mesh, rotMat[i], subdivision, size * scale) # get signed distance field for each mesh
 
-		# initialise tricubic interpolator with signed distance data on default cubic grid
+		# initialise jax.scipy.interpolate.RegularGridInterpolator with signed distance data on default cubic grid
 
-		SDFs.append(sp.interpolate.RegularGridInterpolator((elements, elements, elements), meshSigDist, method = 'cubic', bounds_error = False, fill_value = -1)) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
+		SDFs.append(jax.scipy.interpolate.RegularGridInterpolator((elements, elements, elements), meshSigDist, method = 'linear', fill_value = -1.0)) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
 
 	return SDFs, rotMat
 
 
 # ========== signed distance field per mesh function ==========
 
-def sigDistMesh(mesh, rotMat, subdivision, scale):
+def sigDistMesh(mesh, rotMat, subdivision, gridScale):
 
 	# Input variables:
-	#	mesh = name of the mesh for which the signed distance field is calculated
-	#	rotMat = transformation matrix of parent (joint) of the mesh
-	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-	#	scale = scale factor for the cubic grid dimensions
+	#   mesh = name of the mesh for which the signed distance field is calculated
+	#   rotMat = transformation matrix of parent (joint) of the mesh
+	#   subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+	#   gridScale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get dag paths
@@ -121,6 +135,25 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 	shape = dag.extendToShape()
 	mObj = shape.node()
 
+	# create clean copy of mesh
+
+	fnMesh = om.MFnMesh(shape)
+	tempMesh = om.MFnMeshData().create()
+	fnMesh.copy(mObj,tempMesh)
+	tempFnMesh = om.MFnMesh(tempMesh)
+
+	# get edges
+
+	tempFnMesh.unlockVertexNormals(om.MIntArray())
+	numEdges = tempFnMesh.numEdges
+	edgeIdcs = om.MIntArray(range(numEdges))
+
+	# smooth all edges
+
+	tempFnMesh.setEdgeSmoothings(edgeIdcs, [True] * numEdges)
+	tempFnMesh.cleanupEdgeSmoothing()
+	tempFnMesh.updateSurface()
+
 	# get the meshs transformation matrix
 
 	meshMat = dag.inclusiveMatrix()
@@ -129,15 +162,15 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 	# create the intersector
 
 	polyIntersect = om.MMeshIntersector()
-	polyIntersect.create(mObj,meshMat)
-	get_closest_point = polyIntersect.getClosestPoint # extract function from intersector
+	polyIntersect.create(tempMesh, meshMat) # apply intersector on clean copy
+	get_closest_point = polyIntersect.getClosestPoint
 	ptON = om.MPointOnMesh()
 
 	# create 3D grid
 
-	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint = True, dtype = float)
+	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint = True, dtype = np.float64)
 	X, Y, Z = np.meshgrid(elements, elements, elements, indexing = 'ij')
-	points = np.vstack((X.ravel(), Y.ravel(), Z.ravel(), np.ones(X.size))).T 
+	points = np.vstack((X.ravel(), Y.ravel(), Z.ravel(), np.ones(X.size))).T
 
 	# calculate position of vertices relative to cubic grid
 
@@ -151,10 +184,10 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 	ptRel = om.MPoint()
 
 	for i, gridPoint in enumerate(gridWSArr):
-		ptRel.x, ptRel.y, ptRel.z = gridPoint # extract coordinates from gridPoint and feed into preallocated MPoint
-		ptON = get_closest_point(ptRel) # get point on mesh
-		P[i,:] = ptON.point # point on mesh coordinates in mesh coordinate system
-		N[i,:] = ptON.normal # normal at point on mesh
+		ptRel.x, ptRel.y, ptRel.z = gridPoint	# extract coordinates from gridPoint and feed into preallocated MPoint
+		ptON = get_closest_point(ptRel)			# get point on mesh
+		P[i,:] = ptON.point 					# point on mesh coordinates in mesh coordinate system
+		N[i,:] = ptON.normal 					# normal at point on mesh
 
 	# get vectors from gridPoints to their closest points on mesh
 
@@ -162,11 +195,12 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get length of vectors (distance)
 
-	dist = np.linalg.norm(diff, axis = 1)
+	dist = np.sqrt(np.einsum('ij,ij->i', diff, diff))
+	dist_safe = np.where(dist == 0.0, 1e-8, dist)
 
-	# get the vectors' direction from gridPoints to points on mesh
+	# get the vector directions from gridPoints to points on mesh
 
-	normDiff = diff / dist.reshape(-1,1) # direction of point relative to cubic grid
+	normDiff = diff / dist_safe.reshape(-1,1) # direction of point relative to cubic grid
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
@@ -174,9 +208,9 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get sign for distance from dot product
 
-	sigDist = dist * np.sign(dot)
+	signDist = dist_safe * np.sign(dot)
 
-	return sigDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1), elements # convert signed distance array into cubic grid format
+	return signDist.reshape(subdivision + 1, subdivision + 1, subdivision + 1), elements # convert signed distance array into cubic grid format
 
 
 # ========== get vertices position in reference frame ==========
@@ -247,19 +281,20 @@ def meanRad(mesh):
 
 # ========== check viability function ==========
 
-def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, weights, initial_guess, bounds, scaleFactor, maxIter, tol, cutOff):
+def optimisePosition(proxArr, distArr, distMeshArr, paramArr, SDF, rotMat, thickness, weights, initial_guess, bounds, scaleFactor, maxIter, tol, cutOff):
 
 	# Input variables:
 	#   proxArr = 2D array of proximal articular surface homogeneous vertex coordinates (Nx4) for fast computation of relative coordinates 
 	#   distArr = 2D array of distal articular surface homogeneous vertex coordinates (Mx4) for fast computation of relative coordinates 
 	#   distMeshArr = 3D array of distal mesh vertex transformation matrices for fast computation of relative coordinates
-	#   SDF = list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist, ipConv])
+	#	paramArr = 1D array of ones
+	#   SDF = list containing multiple signed distance fields of class jax.scipy.interpolate.RegularGridInterpolator (e.g., [ipProx, ipDist])
 	#   rotMat = array with the transformation matrices of the joint and its parent
 	#   thickness = thickness measure correlated with joint spacing
 	#   weights = weights for the individual cost function terms
 	#   initial_guess = initual guess condition for optimiser
 	#   bounds = bounds for optimisation
-	#   threshold = scale factor to roughly check if joint is disarticulated
+	#   scaleFactor = scale factor to roughly check if joint is disarticulated
 	#   maxIter = maximum number of iterations
 	#   tol = tolerance for joint proximity
 	#   cutOff = cut off value for signDist 
@@ -269,25 +304,49 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, weig
 
 	e = ROMeval(proxArr, distArr, SDF[0], SDF[1], rotMat, thickness, weights)
 
-	# set constraints functions
+	# define primary solver
 
-	cons = ({'type': 'ineq',    # set type to inequality, which means that it is to be non-negative
-			 'fun': e.constraint})  # set constraint function from evaluator
+	opt = nlopt.opt(nlopt.AUGLAG, initial_guess.size)
 
-	# set options
+	# define secondary solver
 
-	options = {"maxiter": maxIter} # if it doesn't solve within 25 iterations it usually won't solve. Any more than 50 will just increase computational time without much benefit
-	
-	# optimise translation for specific rotational pose using SLSQP: results.X = joint centre point coordinates
+	local_opt = nlopt.opt(nlopt.LD_LBFGS, initial_guess.size)
+	local_opt.set_xtol_rel(1e-4)
+	local_opt.set_ftol_rel(1e-4)
+	opt.set_local_optimizer(local_opt)
 
-	results = sp.optimize.minimize(e.cost, initial_guess, bounds = bounds, method = 'SLSQP', constraints = cons, options = options)
+	# define bounds
 
-	# check if optimisation was successful
+	opt.set_lower_bounds(np.array(bounds[:,0], dtype = np.float64))
+	opt.set_upper_bounds(np.array(bounds[:,1], dtype = np.float64))
 
-	if not results.success: 
+	# set objective function 
+
+	opt.set_min_objective(e.nlopt_cost)
+
+	# set constraints function 
+
+	opt.add_inequality_constraint(e.nlopt_constraint, 1e-5)
+
+	# set solver settings
+
+	opt.set_maxeval(int(maxIter))
+	opt.set_xtol_rel(1e-4)
+	opt.set_ftol_rel(1e-4)
+
+	try:
+		opt_x = opt.optimize(initial_guess.astype(np.float64))
+		status = opt.last_optimize_result()
+		success = (1 <= status <= 4)
+	except Exception:
+		opt_x = np.copy(initial_guess).astype(np.float64)
+		status = -1
+		success = False
+
+	if not success: 
 		return [], False # empty list, viable
 
-	diff = np.linalg.norm(results.x) # get offset from joint centre. Negligible slower than MVector(results.x).length() but software package agnostic
+	diff = np.sqrt(np.dot(opt_x,opt_x)) # get offset from joint centre. Negligible slower than MVector(results.x).length() but software package agnostic
 	
 	# check for disarticulation 
 	
@@ -296,40 +355,166 @@ def optimisePosition(proxArr, distArr, distMeshArr, SDF, rotMat, thickness, weig
 
 	# get transformation matrix
 
+	paramArr[0:3] = opt_x
 	transMat = rotMat[1].copy() # transformation matrix
-	transMat[3,:] = np.append(results.x,1.0) @ rotMat[0] # append result world space coordinates to transformation matrix
+	transMat[3,:] = paramArr @ rotMat[0] # append result world space coordinates to transformation matrix
 
 	# calculate position of vertices relative to cubic grid
 	
-	artRelArr = (proxArr @ (rotMat[0] @ np.linalg.inv(transMat)))[:,0:3] # get inverse of transformation matrix
-	meshRelArr = (distMeshArr @ (transMat @ rotMat[2]))[:,0:3]
+	artRelArr = jnp.asarray((proxArr @ (rotMat[0] @ np.linalg.inv(transMat)))[:,0:3]) # get inverse of transformation matrix
+	meshRelArr = jnp.asarray((distMeshArr @ (transMat @ rotMat[2]))[:,0:3])
 
-	avgdist = SDF[1](artRelArr)
+	avgdist = np.asarray(eval_SDF(SDF[1],artRelArr))
 	avgdist = avgdist[avgdist != -1].mean() # remove outliers that are beyond cubic grid and get mean interarticular distance 
 
-	signDist = SDF[0](meshRelArr) # make sure that bone meshes do not intersect
+	signDist = np.asarray(eval_SDF(SDF[0],meshRelArr))# make sure that bone meshes do not intersect
 	
 	# if disarticulated or any points impinge meshes the position becomes inviable
 
 	if avgdist < (tol * thickness) and signDist[signDist != -1].min() > cutOff: # remove outliers that are beyond cubic grid and set target thickness limit to tolerance (i.e., 1.07 based on experimental data)
-		return results.x, True # coords, viable
+		return opt_x, True # coords, viable
 	else:
 		return [], False # empty list, viable
+
+
+# ========== evaluate SDFs for cost and constraint functions ==========
+
+@jax.jit
+def eval_SDF(SDF,points):
+	return SDF(points)
+
+# ========== evaluate SDFs for cost and constraint functions ==========
+
+@jax.jit()
+def evaluate_SDFs(obj, params, forceBoth = False):
+	
+	# get transformation matrix from params
+
+	param_hom = jnp.append(params,1.0)
+	t_hom = param_hom @ obj.parentMat
+	transMat = obj.localMat.at[3,:].set(t_hom)
+
+	# proximal points in distal grid coordinates and evaluate SDF
+
+	def eval_prox():
+
+		# fast transformation matrix inverse
+
+		R = transMat[0:3,0:3]
+		t = transMat[3,0:3]
+		RT = R.T
+
+		# get scale
+
+		scale_sq = jnp.sum(R[0,:] * R[0,:]) # X-axis will suffice as they should all be uniformly scaled
+
+		# assemble inverse and correct for scaling
+
+		invTrans = jnp.eye(4).at[0:3,0:3].set(RT / scale_sq).at[3,0:3].set((-t @ RT) / scale_sq)
+
+		# get relative coordinates
+
+		parent_invTrans = obj.parentMat @ invTrans
+		relProx_hom = obj.proxArr @ parent_invTrans
+
+		return eval_SDF(obj.ipDist,relProx_hom[:,0:3])
+
+	# check if distal SDF is required otherwise skip
+
+	proxDist = jax.lax.cond(obj.useProx or forceBoth, eval_prox, lambda: jnp.zeros_like(obj.proxArr[:,0]))
+
+	# distal points in proximal grid coordinates and evaluate SDF
+
+	def eval_dist():
+
+		# ger relative coordinates
+
+		trans_child = transMat @ obj.childMat
+		relDist_hom = obj.distArr @ trans_child
+		return eval_SDF(obj.ipProx,relDist_hom[:,0:3])
+
+	# check if proximal SDF is required otherwise skip
+
+	distDist = jax.lax.cond(obj.useDist or forceBoth, eval_dist, lambda: jnp.zeros_like(obj.distArr[:,0]))
+
+	return proxDist, distDist
+
+
+# ========== cost function for optimisation ==========
+
+@jax.jit
+def cost(obj, params):
+	
+	# evaluate proximal and distal SDF
+
+	proxDist, distDist = evaluate_SDFs(obj, params, forceBoth = False)
+	
+	# proximal joint spacing (prox art surf in ipDist)
+
+	proxMean = proxDist.mean()
+	proxVar = proxDist - proxMean
+	proxOffset = (proxMean - obj.thickness)
+	term0 = proxOffset * proxOffset
+
+	# proximal joint congruency
+
+	term2 = jnp.dot(proxVar, proxVar) / jnp.maximum(proxVar.size, 1)
+
+	# distal joint spacing (prox art surf in ipDist)
+
+	distMean = distDist.mean()
+	distVar = distDist - distMean
+	distOffset = distMean - obj.thickness
+	term1 = distOffset * distOffset
+
+	# distal joint congruency
+
+	term3 = jnp.dot(distVar, distVar) / jnp.maximum(distVar.size, 1)
+
+	# calculate joint offset 
+
+	paramsEPS = params + 1e-12
+	term4 = jnp.sqrt(jnp.dot(paramsEPS, paramsEPS))
+
+	# apply weights to cost terms and sum
+
+	return jnp.dot(obj.w, jnp.array([term0, term1, term2, term3, term4]))
+
+
+# ========== signed distance field constraint function ==========
+
+@jax.jit
+def constraint(obj, params):
+	
+	# evaluate proximal and distal SDF
+
+	proxDist, distDist = evaluate_SDFs(obj, params, forceBoth = True)
+
+	# find largest impingement
+
+	return jnp.minimum(proxDist.min(),distDist.min())
+
+
+# ========== precompile cost and constraint functions ==========
+
+cost_vg_jit = jax.jit(jax.value_and_grad(cost, argnums = 1))
+cons_vg_jit = jax.jit(jax.value_and_grad(constraint, argnums = 1))
+
 
 
 ################################################
 # ========== shared evaluator class ========== #
 ################################################
 
-
+@register_pytree_node_class
 class ROMeval:
-	def __init__(self, proxArr, distArr, ipProx, ipDist, rotMat, thickness, w, dtype = np.float64):
+	def __init__(self, proxArr, distArr, ipProx, ipDist, rotMat, thickness, w, dtype = jnp.float64):
 
 		# Input variables:
 		#   proxArr = 2D array of proximal articular surface homogeneous vertex coordinates (Nx4) for fast computation of relative coordinates 
 		#   distArr = 2D array of distal articular surface homogeneous vertex coordinates (Mx4) for fast computation of relative coordinates 
-		#   ipProx = proximal signed distance field in form of scipy.interpolate.RegularGridInterpolator
-		#   ipDist = distal signed distance field in form of scipy.interpolate.RegularGridInterpolator
+		#   ipProx = proximal signed distance field of jax.scipy.interpolate.RegularGridInterpolator class
+		#   ipDist = distal signed distance field of jax.scipy.interpolate.RegularGridInterpolator class
 		#   rotMat = array with the transformation matrices of the joint and its parent
 		#   thickness = thickness measure correlated with joint spacing. Passed through args, not part of this constraint function
 		#   w = weights for the individual cost function terms
@@ -337,103 +522,190 @@ class ROMeval:
 		
 		# store contiguous arrays and callables
 
-		self.proxArr = np.ascontiguousarray(proxArr, dtype = dtype) # shape (N,4)
-		self.distArr = np.ascontiguousarray(distArr, dtype = dtype) # shape (M,4)
-		self.w = np.ascontiguousarray(w, dtype = dtype) # shape (5,)
+		self.proxArr = jnp.asarray(proxArr, dtype = dtype)
+		self.distArr = jnp.asarray(distArr, dtype = dtype)
+		self.w = jnp.asarray(w, dtype = dtype)
+		self.thickness = float(thickness)
 
-		self._proxDist = None
-		self._distDist = None
-		self._paramCoords = np.ones(4)
+		# get rotation matrices is an iterable of 3 (4x4) matrices: [parent, local, child]
+		
+		self.parentMat = jnp.asarray(rotMat[0], dtype = dtype)
+		self.localMat  = jnp.asarray(rotMat[1], dtype = dtype)
+		self.childMat  = jnp.asarray(rotMat[2], dtype = dtype)
 
 		# store signed distance fields
 
 		self.ipProx = ipProx
 		self.ipDist = ipDist
 
-		# rotMat is an iterable of 3 (4x4) matrices: [parent, local, child]
+		# get weight masks
 
-		self.rotMat = [np.ascontiguousarray(m, dtype = dtype) for m in rotMat]
-		self.thickness = float(thickness)
+		self.useProx = bool(w[0] != 0 or w[2] != 0)
+		self.useDist = bool(w[1] != 0 or w[3] != 0)
 
-		# last-eval cache (only keep last to bound memory)
+		# reset cache
 
-		self._last_params = None
-
-
-	# ========== compute and cache calculations for cost and constraint functions ==========
-
-	def _evaluate(self, params):
-
-		# Input variables:
-		#	params = array of optimised X, Y and Z coordinates of distal element position
-		# ======================================== #
-
-		# check cached values
-
-		if self._last_params is not None and all(params == self._last_params): return # params have not changed, no need to recalculate expensive SDF interpolation
-
-		# params are not the same as cached values
-
-		self._paramCoords[0:3] = params # add trailing one to params for matrix multiplications
-
-		# extract coordinates from params and transform them into transformation matrix coords
-
-		transMat = self.rotMat[1].copy() # transformation matrix
-		transMat[3,:] = self._paramCoords @ self.rotMat[0] # append result world space coordinates to transformation matrix
-
-		# go through each proximal articular surface point and check if any of them intersect with distal mesh (i.e., signDist < 0)
-
-		self._proxDist = self.ipDist((self.proxArr @ (self.rotMat[0] @ np.linalg.inv(transMat)))[:,0:3]) # calculate signed distances for the proximal articular surface
-		self._distDist = self.ipProx((self.distArr @ (transMat @ self.rotMat[2]))[:,0:3])
-
-		# update cache
-
-		self._last_params = params.copy()
+		self.reset_cache()
 
 
-	# ========== cost function for optimisation ==========
+	# ========== reset cache ==========
 
-	def cost(self, params):
-
-		# Input variables:
-		#   params = array of optimised X, Y and Z coordinates of distal element position
-		# ======================================== #
-
-		self._evaluate(params) # evaluate cached values and update if necessary
-
-		# calculate mean distances and variance 
-
-		proxDist = self._proxDist
-		proxMeanDist = proxDist.mean() 
-		proxVar = proxDist - proxMeanDist
-
-		distDist = self._distDist # distal art surf in proximal SDF
-		distMeanDist = distDist.mean()
-		distVar = distDist - distMeanDist
-
-		# calculate cost terms
-
-		terms = np.array([(proxMeanDist - self.thickness) ** 2,     # proximal joint spacing (prox art surf in ipDist)
-						  (distMeanDist - self.thickness) ** 2,     # distal joint spacing (dist art surf in ipProx)
-						  np.dot(proxVar, proxVar) / proxVar.size,  # proximal joint congruency
-						  np.dot(distVar, distVar) / distVar.size,  # distal joint congruency
-						  np.linalg.norm(params)])                  # joint offset 
-
-		# apply weights to cost terms and sum
-
-		return np.dot(self.w, terms)
+	def reset_cache(self):
+		self._rom_cache = {
+			"params": None,
+			"cost_val": None,
+			"cost_grad": None,
+			"cons_val": None,
+			"cons_grad": None
+		}
 
 
-	# ========== signed distance field constraint function ==========
+	# ========== flatten and unflatten ==========
 
-	def constraint(self, params):
+	def tree_flatten(self):
+
+		# get dynamic attributes (JAX-arrays)
+
+		children = (self.proxArr, self.distArr, self.w, self.parentMat, self.localMat, self.childMat)
+		
+		# get static auxiliary metadata
+
+		aux_data = {
+			"thickness": self.thickness,
+			"ipProx": self.ipProx,
+			"ipDist": self.ipDist,
+			"useProx": self.useProx,
+			"useDist": self.useDist
+		}
+
+		return (children, aux_data)
+
+	@classmethod
+	def tree_unflatten(cls, aux_data, children):
+
+		# extract dynamic attributes 
+
+		proxArr, distArr, w, parentMat, localMat, childMat = children
+		
+		# create a fresh instance without invoking __init__ again
+
+		obj = cls.__new__(cls)
+		obj.proxArr = proxArr
+		obj.distArr = distArr
+		obj.w = w
+		obj.parentMat = parentMat
+		obj.localMat = localMat
+		obj.childMat = childMat
+		
+		# get static data 
+
+		obj.thickness = aux_data["thickness"]
+		obj.ipProx  = aux_data["ipProx"]
+		obj.ipDist  = aux_data["ipDist"]
+		obj.useProx = aux_data["useProx"]
+		obj.useDist = aux_data["useDist"]
+
+		obj.reset_cache()
+		
+		return obj
+
+
+	# ========== NLopt cost function call with cache ==========
+
+	def nlopt_cost(self, x, grad):
 
 		# Input variables:
-		#   params = array of optimised X, Y and Z coordinates of distal element position
+		#   x = array of optimised X, Y and Z coordinates of distal element position
+		#	grad = gradient object for NLopt
+		# ======================================== #
+		
+		# convert to numpy array
+
+		params= np.asarray(x, dtype = np.float64)
+		params_jnp = jnp.asarray(params)
+		
+		# check cached values and if params unchanged, check validity mask
+
+		if self._rom_cache["params"] is not None and np.array_equal(params, self._rom_cache["params"]):
+			if self._rom_cache["cost_val"] is not None:
+				if grad.size > 0: 
+					grad[:] = self._rom_cache["cost_grad"]
+				return self._rom_cache["cost_val"]
+		else:
+
+			#partial reset protects cross-talk parameter validation inside NLopt AUGLAG
+
+			self._rom_cache["params"] = np.copy(params)
+			self._rom_cache["cost_val"] = None
+			self._rom_cache["cons_val"] = None
+
+		# get cost and gradient
+
+		val, gradient = cost_vg_jit(self, params_jnp)
+		val = float(val)
+		gradient = np.asarray(gradient, dtype = np.float64)
+
+		# cache cost and gradient
+		
+		self._rom_cache["cost_val"] = val
+		self._rom_cache["cost_grad"] = gradient
+
+		# set gradient
+		
+		if grad.size > 0: 
+			grad[:] = gradient
+
+		return val
+
+
+	# ========== NLopt constraint function call with cache ==========
+
+	def nlopt_constraint(self, x, grad):
+
+		# Input variables:
+		#   x = array of optimised X, Y and Z coordinates of distal element position
+		#	grad = gradient object for NLopt
+		#	cons_vg_jit = jitted function of constraint and jacobian
 		# ======================================== #
 
-		self._evaluate(params) # evaluate cached values and update if necessary
+		# convert to numpy array
 
-		# go through each distal articular surface point and check if any of them intersect with proximal mesh (i.e., signDist < 0)
+		params = np.asarray(x, dtype = np.float64)
+		params_jnp = jnp.asarray(params)
 
-		return min(self._proxDist.min(), self._distDist.min()) # return minimal value, if any of the points are inside a mesh (intersection) it will be negative
+		# check cached values and if params unchanged, check validity mask
+		
+		if self._rom_cache["params"] is not None and np.array_equal(params, self._rom_cache["params"]):
+			if self._rom_cache["cons_val"] is not None:
+				if grad.size > 0: 
+					grad[:] = self._rom_cache["cons_grad"]
+				return self._rom_cache["cons_val"]
+		else:
+
+			# partial reset protects cross-talk parameter validation inside NLopt AUGLAG
+
+			self._rom_cache["params"] = np.copy(params)
+			self._rom_cache["cost_val"] = None
+			self._rom_cache["cons_val"] = None
+		
+		# calculate and invert constraints for NLopt (c(x) <= 0)
+
+		val, jac = cons_vg_jit(self, params_jnp)
+		val = float(-val)
+
+		# invert jacobian for NLopt (c(x) <= 0)
+
+		jac = np.asarray(-jac, dtype = np.float64)
+
+		# cache inverted constraints and Jacobian for NLopt 
+
+		self._rom_cache["cons_val"] = val
+		self._rom_cache["cons_grad"] = jac
+
+		# set Jacobian
+		
+		if grad.size > 0: 
+			grad[:] = jac
+
+		return val
+
