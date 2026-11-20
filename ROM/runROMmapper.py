@@ -7,7 +7,7 @@
 #	Lee et al., 2023 approach for Autodesk Maya.
 #
 #	Written by Oliver Demuth
-#	Last updated 27.05.2026 - Oliver Demuth
+#	Last updated 20.11.2026 - Oliver Demuth
 #
 #
 #	Rename the strings in the user defined variables below according to the objects in
@@ -32,7 +32,7 @@ meshes = ['prox_mesh', 					# specify according to meshes in the Maya scene
 		  'dist_mesh']
 congruencyMeshes = ['prox_art_surf', 	# specify according to meshes in the Maya scene
 					'dist_art_surf']
-fittedShape = 'prox_sphere'				# specify according to meshes in the Maya scene		
+fittedShape = 'sphere'				# specify according to meshes in the Maya scene		
 xBounds = [-180,180]					# bounds for X-axis rotation in the form of [min, max] (i.e., LAR, e.g., [-180,180] for spherical joints or [-90,90] for hinge joints)
 yBounds = [-90,90]						# bounds for Y-axis rotation in the form of [min, max] (i.e., ABAD, e.g.,  [-90,90] for spherical joints or [-90,90] for hinge joints)
 zBounds = [-180,180]					# bounds for Z-axis rotation in the form of [min, max] (i.e., FE, e.g.,  [-180,180] for spherical joints or [0,180] for hinge joints)
@@ -45,10 +45,10 @@ weights = [1.0,							# weight for first cost term (proximal joint spacing; prox
 		   0.0,							# weight for fourth cost term (distal joint congruency)
 		   0.0]							# weight for fifth cost term (joint offset)
 tolerance = 0.07						# tolerance for joint proximity (i.e, set target thickness tolerance; e.g., 0.07 based on experimental data)
-scaleFactor = 2.2 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
+scaleFactor = 2.5 						# scale factor to roughly check if joint is disarticulated (i.e, if distal ACS is more than 10% beyond radius of fitted proximal shape; default value is 2.2: thickness = 0.5 * radius)
 cutOff = 0 								# cut off value for final SDF interpolation (default is 0, but sometimes differences in mesh resolution between articular surfaces and mesh might result in slightly negative values. In that case -0.005 might be a better choice)
 thickness = None						# Float value indicating the thickness value which correlates with the joint spacing. If set to None it will automatically be determined based on the fitted shape radius.
-thicknessScale = 0.35					# Float value indicating the scale factor for joint spacing
+thicknessScale = 0.5					# Float value indicating the scale factor for joint spacing
 StartFrame = None 						# Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None					# Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
 ContinueKeys = False					# Boolean value (True or False) to specify whether a previous simulation should be continued (under the assumption that the interval has not changed)
@@ -67,8 +67,10 @@ import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
 import maya.cmds as cmds
 import numpy as np
-import scipy as sp
+import jax
+import jax.numpy as jnp
 import time
+import nlopt
 
 from math import ceil
 
@@ -149,12 +151,12 @@ shapeCheck = dimComp.max() == 3 # if true is sphere (i.e., X, Y, Z axis dimensio
 if shapeCheck: # sphere
 
 	bound = np.clip(dims, 0, gridSize)[0] # clamp dims to gridSize
-	bounds = tuple([(-bound, bound)] * 3) # bounds for translations (X,Y,Z)
+	bounds = np.repeat([[-bound, bound]], 3, axis = 0) # bounds for translations (X,Y,Z)
 
 else: # cylinder or elipsoid
 
 	bound = np.clip(dims * 0.75, 0, gridSize) # +/- 1.5 times the radius for each axis (X,Y,Z)
-	bounds = tuple((-b, b) for b in bound)
+	bounds = np.array([[-b, b] for b in bound], dtype = np.float64)
 
 # create 3D grid for rotations
 
@@ -341,6 +343,8 @@ tol = 1 + tolerance
 
 # go through all possible combinations
 
+paramArr = np.ones(4)
+
 for i in range(keyDiff):
 
 	if minKeys > keyframes:
@@ -366,13 +370,14 @@ for i in range(keyDiff):
 
 	# update rotation matrix
 
-	rotMat[1,:,:] = relTransMatArr[frame,:,:]
+	rotMat[1,:,:] = relTransMatArr[i,:,:]
 
 	# optimise the joint translations
 
 	coords, viable = optimisePosition(proxArr, 		# 2D array of proximal articular surface vertex coordinates for fast computation of relative coordinates 
 									  distArr, 		# 2D array of distal articular surface vertex coordinates for fast computation of relative coordinates 
 									  distMeshArr,  # 2D array of distal mesh vertex coordinates for fast computation of relative coordinates
+									  paramArr,
 									  SDF, 			# list containing multiple signed distance fields in tricubic form (e.g., [ipProx, ipDist])
 									  rotMat, 		# array with the transformation matrices of the joint and its parent
 									  thickness, 	# thickness measure correlated with joint spacing
@@ -414,4 +419,3 @@ else:
 	print('# Result: Translation optimisation done in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - mid, keyDiff, int(frame - 1 - lastKey)))
 
 cmds.progressWindow(edit = True, endProgress = True)
-
