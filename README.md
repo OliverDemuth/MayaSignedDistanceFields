@@ -6,9 +6,10 @@
 
 ## Version 1.4
 Currently in progress. Substantial performance boost in the ROM mapper and the ligament optimisations due to:
-1. Automatic vectorisation through JAX to vectorise SDF interpolations
-2. Just in time (JIT) compilation of SDF evaluation
+1. Automatic vectorisation and differentiation through JAX
+2. Just in time (JIT) compilation of SDF evaluation and cost and constraint functions
 3. Agressive caching of precomputed values wherever possible to reduce redundant calculations
+4. Optimisation through NLopt with AUGLAG and LD-BFGS
 
 Run times for 1000 random poses on an Apple M2 Pro processor: <br>
 ROMmapper translation optimisation: ~58.45 poses per second on a single core <br>
