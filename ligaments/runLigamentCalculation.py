@@ -5,7 +5,7 @@
 #   be apported by pressing 'esc' and the already keyed frames will not be lost.
 #
 #   Written by Oliver Demuth
-#   Last updated 29.09.2026 - Oliver Demuth
+#   Last updated 27.10.2026 - Oliver Demuth
 #
 #
 #   Note, for each ligament create a float attribute at 'jointName' and name it 
@@ -35,7 +35,7 @@ gridScale = 1.5                     # Float value for the scale factor of the cu
 ligSubdiv = 20                      # Integer value for the number of ligament segments (e.g., 20, see Marai et al., 2004 for details)
 StartFrame = None                   # Integer value to specify the start frame. If all frames are to be keyed from the beginning (Frame 1) set to standard value: None or 1.
 FrameInterval = None                # Integer value to specify number of frames to be keyed. If all frames are to be keyed set to standard value: None
-maxIter = 200                       # Integer value specifying the maximum number of iterations for NLopt optimiser
+maxIter = 200                       # Integer value specifying the maximum number of iterations for the NLopt optimiser
 keyPathPoints = False               # Boolean to specify whether ligament point positions are to be keyed or not. True = yes, False = no
 debug = 0                           # Debug mode to check if signed distance fields have already been calculated
 
@@ -49,7 +49,7 @@ debug = 0                           # Debug mode to check if signed distance fie
 
 
 import os
-os.environ["JAX_ENABLE_X64"] = "True"
+os.environ["JAX_ENABLE_X64"] = "True"  # Crucial flag for SciPy C-library tracking
 
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
@@ -94,7 +94,7 @@ if not var_exists:
 
 	# calculate signed distance fields
 	
-	SDFs, ligAttributes, oDags, iDags, maxDist, gridMat = sigDistField(jointName, meshes, gridSubdiv, gridScale)
+	SDFs, ligAttributes, oDags, iDags, maxDist = sigDistField(jointName, meshes, gridSubdiv, gridScale)
 
 part1 = time.time()
 
@@ -149,10 +149,22 @@ else:
 inclMat = np.empty((frames, 16), dtype = np.float64)
 exclMat = np.empty((frames, 16), dtype = np.float64)
 
-# cycle through frames and calculate matrix transformations
+# get plugs
 
-j_incl_plug = om.MFnDependencyNode(jNode).findPlug('worldMatrix', False).elementByPhysicalIndex(0)
-j_excl_plug = om.MFnDependencyNode(jNode).findPlug('parentMatrix', False).elementByPhysicalIndex(0)
+j_incl_plug = om.MFnDependencyNode(jNode).findPlug('worldMatrix', False)
+j_excl_plug = om.MFnDependencyNode(jNode).findPlug('parentMatrix', False)
+
+incl_element = j_incl_plug.elementByLogicalIndex(0)
+excl_element = j_excl_plug.elementByLogicalIndex(0)
+
+# check if parent has incoming connections
+
+is_parent_dynamic = excl_element.isConnected
+if not is_parent_dynamic:
+	static_excl_obj = excl_element.asMObject()
+	static_excl_mat = om.MFnMatrixData(static_excl_obj).matrix() if not static_excl_obj.isNull() else om.MMatrix.kIdentity
+	exclMat[:] = static_excl_mat
+
 
 for frame in range(frames):
 
@@ -162,18 +174,20 @@ for frame in range(frames):
 
 	# get joint transformation matrices
 
-	inclMat[frame,:] = om.MFnMatrixData(j_incl_plug.asMObject(context)).matrix() # extract matrix without updating viewport
+	inclMat[frame,:] = om.MFnMatrixData(incl_element.asMObject(context)).matrix() # extract matrix without updating viewport
 	
 	# check if parent has incoming connections, otherwise use static
 
-	jExclPlug = j_excl_plug.asMObject(context)
+	if is_parent_dynamic:
 
-	# get parent transformation matrices
+		jExclPlug = excl_element.asMObject(context)
 
-	if jExclPlug.isNull(): # check whether parent is stationary or dynamic (has incoming connections)
-		exclMat[frame,:] = om.MFnMatrixData(j_excl_plug.asMObject()).matrix()
-	else:
-		exclMat[frame,:] = om.MFnMatrixData(jExclPlug).matrix()
+		# get parent transformation matrices
+
+		if not jExclPlug.isNull(): # check whether parent is stationary or dynamic (has incoming connections)
+			exclMat[frame,:] = om.MFnMatrixData(jExclPlug).matrix()
+		else:
+			exclMat[frame,:] = static_excl_mat
 
 # reshape arrays into Nx4x4 transformation matrix arrays
 
@@ -183,13 +197,13 @@ transMat[:,1,:,:] = inclMat.reshape(frames,4,4)
 
 # calculate world coordinates of joint and ligament attachments
 
-jPos = jnp.array(transMat[:,1,3,0:3])
-oPos = jnp.array(oRelPos @ transMat[:,0,:,:])
-iPos = jnp.array(iRelPos @ transMat[:,1,:,:])
+jPos = jnp.asarray(transMat[:,1,3,0:3])
+oPos = jnp.asarray(oRelPos @ transMat[:,0,:,:])
+iPos = jnp.asarray(iRelPos @ transMat[:,1,:,:])
 
 # get inverse of both parent and child rotation matrices
 
-gridRelMat = jnp.array(np.linalg.inv(transMat) @ gridMat[None, None, :, :])
+invTransMat = jnp.asarray(np.linalg.inv(transMat))
 
 part2 = time.time()
 
@@ -276,7 +290,7 @@ for i in range(keyDiff):
 
 	# calculate the length of each ligament 
 
-	pathLengths, ligPoints, results = ligCalc(initial_guess, ligArr, gridRelMat[i,:,:,:], ligRotMats, offsets, keyPathPoints, maxOffset, numPoints-2, maxIter, maxDist)
+	pathLengths, ligPoints, results = ligCalc(initial_guess, ligArr, SDFs, invTransMat[i,:,:,:], ligRotMats, offsets, keyPathPoints, maxOffset, numPoints-2, maxIter, maxDist)
 
 	# get time for current frame
 
