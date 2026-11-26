@@ -14,6 +14,7 @@ Currently in progress. Substantial performance boost in the ROM mapper and the l
 6. Fixed critical bug where non smoothed meshes may have resulted in inaccurate SDF representations
 
 Run times for 1000 random poses on an Apple M2 Pro processor: <br>
+Simple collision check (sensu Manafzadeh and Padian, 2018): ~1500 poses per second on a single core <br>
 ROMmapper translation optimisation: ~58.45 poses per second on a single core <br>
 Ligament path optimisation: ~40-110 ligaments per second on a single core <br>
 
