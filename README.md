@@ -8,8 +8,10 @@
 Currently in progress. Substantial performance boost in the ROM mapper and the ligament optimisations due to:
 1. Automatic vectorisation and differentiation through JAX
 2. Just in time (JIT) compilation of SDF evaluation and cost and constraint functions
-3. Agressive caching of precomputed values wherever possible to reduce redundant calculations
-4. Optimisation through NLopt with AUGLAG and LD-BFGS
+3. Agressive caching of precomputed values wherever possible to reduce redundant calculations (ROM simulations)
+4. Fast optimisation through NLopt with AUGLAG and LD-BFGS
+5. SDF conversion to jax.scipy.interpolate.RegularGridInterpolator() class
+6. Fixed critical bug where non smoothed meshes may have resulted in inaccurate SDF representations
 
 Run times for 1000 random poses on an Apple M2 Pro processor: <br>
 ROMmapper translation optimisation: ~58.45 poses per second on a single core <br>
