@@ -8,7 +8,7 @@
 #	creates a 'viable' attribute that is keyed throughout.
 #
 #	Written by Oliver Demuth
-#	Last updated 29.05.2026 - Oliver Demuth
+#	Last updated 26.11.2026 - Oliver Demuth
 #
 #
 #	IMPORTANT notes:
@@ -28,6 +28,7 @@
 #
 #		- 'numpy' 	NumPy:		https://numpy.org/about/
 #		- 'scipy' 	SciPy: 		https://scipy.org/about/
+#		- 'jax'		JAX:		https://docs.jax.dev/
 #
 #	    For further information regarding them, please check the website(s) referenced 
 #	    above.
@@ -52,12 +53,20 @@ debug = 0 				# Integer value to specify whether signed distance field calculati
 
 # ========== load modules ==========
 
+import os
+
+os.environ["JAX_ENABLE_X64"] = "True"
+os.environ["JAX_PLATFORMS"] = "cpu" 
+
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
 import maya.cmds as cmds
 import numpy as np
 import scipy as sp
+import jax
+import jax.numpy as jnp
 import time
+
 
 
 #################################################
@@ -65,43 +74,76 @@ import time
 #################################################
 
 
-# ========== signed distance field per mesh function ==========
+# ========== get dag path function ==========
 
-def sigDistMesh(mesh, rotMat, subdivision, scale):
+def dagObjFromName(name):
 
 	# Input variables:
-	#	mesh = name of the mesh for which the signed distance field is calculated
-	#	rotMat = transformation matrix of parent (joint) of the mesh
-	#	subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
-	#	scale = scale factor for the cubic grid dimensions
+	#	name = string representing object name
+	# ======================================== #
+
+	sel = om.MSelectionList()
+	sel.add(name)
+
+	return sel.getDependNode(0), sel.getDagPath(0)
+
+
+# ========== signed distance field per mesh function ==========
+
+def sigDistMesh(mesh, rotMat, subdivision, gridScale):
+
+	# Input variables:
+	#   mesh = name of the mesh for which the signed distance field is calculated
+	#   rotMat = transformation matrix of parent (joint) of the mesh
+	#   subdivision = number of elements per axis (e.g., 20 will result in a cube grid with 21 x 21 x 21 grid points)
+	#   gridScale = scale factor for the cubic grid dimensions
 	# ======================================== #
 
 	# get dag paths
 
-	meshDag = om.MGlobal.getSelectionListByName(mesh).getDagPath(0)
+	dag = dagObjFromName(mesh)[1]
 
 	# create MObject
 
-	shape = meshDag.extendToShape()
+	shape = dag.extendToShape()
 	mObj = shape.node()
+
+	# create clean copy of mesh
+
+	fnMesh = om.MFnMesh(shape)
+	tempMesh = om.MFnMeshData().create()
+	fnMesh.copy(mObj,tempMesh)
+	tempFnMesh = om.MFnMesh(tempMesh)
+
+	# get edges
+
+	tempFnMesh.unlockVertexNormals(om.MIntArray())
+	numEdges = tempFnMesh.numEdges
+	edgeIdcs = om.MIntArray(range(numEdges))
+
+	# smooth all edges
+
+	tempFnMesh.setEdgeSmoothings(edgeIdcs, [True] * numEdges)
+	tempFnMesh.cleanupEdgeSmoothing()
+	tempFnMesh.updateSurface()
 
 	# get the meshs transformation matrix
 
-	meshMat = meshDag.inclusiveMatrix()
-	meshMatInv = np.array(meshDag.inclusiveMatrix().inverse()).reshape(4,4)
+	meshMat = dag.inclusiveMatrix()
+	meshMatInv = np.array(meshMat.inverse()).reshape(4,4)
 
 	# create the intersector
 
 	polyIntersect = om.MMeshIntersector()
-	polyIntersect.create(mObj,meshMat)
-	get_closest_point = polyIntersect.getClosestPoint # extract function from intersector
+	polyIntersect.create(tempMesh, meshMat) # apply intersector on clean copy
+	get_closest_point = polyIntersect.getClosestPoint
 	ptON = om.MPointOnMesh()
 
 	# create 3D grid
 
-	elements = np.linspace(-scale, scale, num = subdivision + 1, endpoint = True, dtype = float)
+	elements = np.linspace(-gridScale, gridScale, num = subdivision + 1, endpoint = True, dtype = np.float64)
 	X, Y, Z = np.meshgrid(elements, elements, elements, indexing = 'ij')
-	points = np.vstack((X.ravel(), Y.ravel(), Z.ravel(), np.ones(X.size))).T 
+	points = np.vstack((X.ravel(), Y.ravel(), Z.ravel(), np.ones(X.size))).T
 
 	# calculate position of vertices relative to cubic grid
 
@@ -130,7 +172,7 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 		# log progress
 
-		cmds.progressWindow(edit = True, progress = i + 1, status = 'Processing frame {0} of {1} frames'.format(i + 1, X.size))
+		cmds.progressWindow(edit = True, progress = i + 1, status = 'Processing point {0} of {1} points'.format(i + 1, X.size))
 
 	# close progress window when done
 
@@ -142,11 +184,12 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get length of vectors (distance)
 
-	dist = np.linalg.norm(diff, axis = 1)
+	dist = np.sqrt(np.einsum('ij,ij->i', diff, diff))
+	dist_safe = np.where(dist == 0.0, 1e-8, dist)
 
-	# get the vectors' direction from gridPoints to points on mesh
+	# get the vector directions from gridPoints to points on mesh
 
-	normDiff = diff / dist.reshape(-1,1) # direction of point relative to cubic grid
+	normDiff = diff / dist_safe.reshape(-1,1) # direction of point relative to cubic grid
 
 	# calculate dot product between the normal at ptON and vector to check if point is inside or outside of mesh
 
@@ -154,11 +197,19 @@ def sigDistMesh(mesh, rotMat, subdivision, scale):
 
 	# get sign for distance from dot product
 
-	sigDist = (dist * np.sign(dot)).reshape(subdivision + 1, subdivision + 1, subdivision + 1)
+	signDist = (dist_safe * np.sign(dot)).reshape(subdivision + 1, subdivision + 1, subdivision + 1)
+
 
 	# convert signed distance array into cubic grid format
 
-	return sp.interpolate.RegularGridInterpolator((elements, elements, elements), sigDist, method = 'cubic', bounds_error = False,  fill_value = -1) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
+	return jax.scipy.interpolate.RegularGridInterpolator((elements, elements, elements), signDist, method = 'linear', fill_value = -1.0) # grid will be initialised in its relative coordinate system from scaled [-size,-size,-size] to [size,size,size]
+
+
+# ========== evaluate SDFs for cost and constraint functions ==========
+
+@jax.jit
+def eval_SDF(SDF,points):
+	return SDF(points)
 
 
 #################################################
@@ -297,7 +348,7 @@ for idx, attr in enumerate(attributes):
 
 # convert keyframes to transformation matrices
 
-localMat = np.stack([np.eye(4)] * frames, axis = 0)	
+localMat = np.tile(np.eye(4), (frames,1,1))
 localMat[:,3,0:3] = keyedArr[:,0:3]
 localMat[:,0:3,0:3] = sp.spatial.transform.Rotation.from_euler('ZYX', keyedArr[:,3:6], degrees = False).as_matrix()[:,::-1,::-1]
 
@@ -321,15 +372,15 @@ counter = 0
 
 for frame in range(frames):
 	
-	signDist = SDF((vtxArr @ localMat[i,:,:])[:,0:3])
+	signDist = eval_SDF(SDF, (vtxArr @ localMat[frame,:,:])[:,0:3])
 
 	# key viable attribute at joint
 
 	if signDist[signDist != -1].min() > 0:
-		viable_curve.addKey(om.MTime(i), 1)
+		viable_curve.addKey(om.MTime(frames), 1)
 		counter += 1
 	else:
-		viable_curve.addKey(om.MTime(i), 0)
+		viable_curve.addKey(om.MTime(frame), 0)
 
 	# log progress
 
@@ -347,5 +398,4 @@ else:
 	print('# Result: Mesh intersection check completed in {0:.3f} seconds! Successfully tested {1} frames and keyed {2} viable frames.'.format(end - part2, frames, counter))
 
 cmds.progressWindow(edit = True, endProgress = True)
-
 
