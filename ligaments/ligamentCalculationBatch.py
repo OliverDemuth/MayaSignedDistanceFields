@@ -7,7 +7,7 @@
 #	accross them to calculate their lengths.
 #
 #	Written by Oliver Demuth and Vittorio la Barbera
-#	Last updated 29.05.2026 - Oliver Demuth
+#	Last updated 26.11.2026 - Oliver Demuth
 #
 #	SYNOPSIS:
 #
@@ -24,7 +24,7 @@
 #		RETURN params:
 #			list	pathLengths:	Return value is a list with the path lengths for all ligaments designated as custom attributes in the 'jointName'
 #			list 	pathPoints:		Return value is a list of lists with the 3D coordinates of the path points in world space for all ligaments designated as custom attributes in the 'jointName'
-#			list 	results: 		Return value is a list of objects of the scipy.optimize.OptimizeResult class. They represent the outputs of the scipy.optimize.minimize() function
+#			list 	results: 		Return value is a list of objects of a custom results class similar to the scipy.optimize.OptimizeResult class
 #
 #
 #	IMPORTANT notes:
@@ -43,8 +43,9 @@
 #	(3)	This script requires several modules for Python, see README file. Make sure to
 #		have the following external modules installed for the mayapy application:
 #
-#			- 'numpy' 	NumPy:			https://numpy.org/about/
-#			- 'scipy'	SciPy:			https://scipy.org/about/
+#			- 'numpy'	NumPy:			https://numpy.org/about/
+#			- 'jax'		JAX:			https://docs.jax.dev/
+#			- 'nlopt'	NLopt:			https://nlopt.readthedocs.io/
 #				
 #		For further information regarding them, please check the website(s) referenced 
 #		above.
@@ -101,6 +102,8 @@ def MayaInstance(function):
 		os.environ["OPENBLAS_NUM_THREADS"] = "1"
 		os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 		os.environ["NUMEXPR_NUM_THREADS"] = "1"
+		os.environ["JAX_ENABLE_X64"] = "True"
+		os.environ["JAX_PLATFORMS"] = "cpu" 
 
 
 		# ==== now import modules into single core enivornment ==== 
@@ -111,7 +114,11 @@ def MayaInstance(function):
 		import maya.api.OpenMaya as om
 		import maya.api.OpenMayaAnim as oma
 		import numpy as np
-		import scipy as sp
+		import nlopt
+		import jax
+		import jax.numpy as jnp
+
+		from jax.tree_util import register_pytree_node_class
 
 
 		# ==== initialise Maya ====
@@ -157,15 +164,13 @@ def processMayaFiles(filePath,args):
 
 	# extract arguments
 
-	[jointName, meshes, gridSubdiv, gridScale, ligSubdiv, frameInterval, maxIter, outDir] = args
+	[jointName, meshes, gridSubdiv, gridScale, ligSubdiv, frameInterval, maxIter, outDir, debug] = args
 
 
 	# ==== calculate signed distance fields ====
 
 
 	start = time.time()
-
-	print('Calculating signed distance fields for {}...'.format(fileName))
 	
 	# get dag path for joint
 
@@ -177,12 +182,40 @@ def processMayaFiles(filePath,args):
 	om.MFnTransform(jDag).setTransformation(eyeMat)
 
 	# calculate signed distance fields
+
+	SDF_names = [filePath.replace('.mb','_proxSDF.npy'), filePath.replace('.mb','_distSDF.npy')]
+
+	# check if SDFs exist
+
+	if os.path.exists(SDF_names[0]) and os.path.exists(SDF_names[1]):
+
+		# load SDF
+
+		SDFs, ligAttributes, oDags, iDags, maxDist, _ = sigDistField(jointName, meshes, gridSubdiv, gridScale, SDF_names)
+		
+		part1 = time.time()
+
+		print('Signed distance fields loaded in {0:.3f} seconds for {1}!'.format(part1 - start, fileName))
 	
-	SDFs, ligAttributes, oDags, iDags, maxDist = sigDistField(jointName, meshes, gridSubdiv, gridScale)
+	else:
 
-	part1 = time.time()
+		# calculate SDF
 
-	print('Signed distance fields calculated in {0:.3f} seconds for {1}!'.format(part1 - start,fileName))
+		print('Calculating signed distance fields for {}...'.format(fileName))
+		
+		SDFs, ligAttributes, oDags, iDags, maxDist, meshDistArr = sigDistField(jointName, meshes, gridSubdiv, gridScale)
+
+		if debug:
+
+			# save SDF as npy file
+
+			for i, SDF in enumerate(meshDistArr):
+
+				np.save(os.path.join(os.path.dirname(filePath),SDF_names[i]),SDF)
+		
+		part1 = time.time()
+
+		print('Signed distance fields calculated in {0:.3f} seconds for {1}!'.format(part1 - start, fileName))
 
 
 	# ==== extract joint transformations from keyframes ====
@@ -201,17 +234,28 @@ def processMayaFiles(filePath,args):
 	# get total number of keyed frames from 'jointName', i.e., max number of frames to be calculated
 
 	attributes = ["translateX","translateY","translateZ","rotateX","rotateY","rotateZ"]
+	attr_curves = []
+
 	maxFrames = 0
 
 	for attr in attributes:
 		attr_node = om.MSelectionList().add(f"{jointName}_{attr}").getDependNode(0)
 		attr_curve = oma.MFnAnimCurve(attr_node)
+		attr_curves.append(attr_curve) 
 		maxFrames = max(maxFrames,attr_curve.numKeys)
 
 	if frameInterval and frameInterval < maxFrames:
 		frames = frameInterval
 	else:
 		frames = maxFrames
+
+	exportCoords = np.empty((frames, 6))
+
+	# get joint transformations
+
+	for idx, attr_curve in enumerate(attr_curves):
+		exportCoords[:,idx] = list(map(attr_curve.value, range(frames)))
+	exportCoords[:,3:6] = np.rad2deg(exportCoords[:,3:6])
 
 	inclMat = np.empty((frames, 16), dtype = np.float64)
 	exclMat = np.empty((frames, 16), dtype = np.float64)
@@ -258,7 +302,7 @@ def processMayaFiles(filePath,args):
 
 	# get inverse of both parent and child rotation matrices
 
-	invTransMat = np.linalg.inv(transMat)
+	invTransMat = jnp.asarray(np.linalg.inv(transMat))
 
 	part2 = time.time()
 
@@ -272,8 +316,8 @@ def processMayaFiles(filePath,args):
 
 	# define constant x coords
 
-	ligArr = np.stack([np.array([0.0,0.0,0.0,1.0])] * numPoints, axis = 0)
-	ligArr[:,0] = np.linspace(0.0, 1.0, num = numPoints, endpoint = True) # constant X coordinates
+	ligArr = jnp.tile(jnp.array([0.0,0.0,0.0,1.0]), (numPoints,1))
+	ligArr = ligArr.at[:,0].set(jnp.linspace(0.0, 1.0, numPoints)) # constant X coordinates
 
 	# maximal offset for path constraint
 
@@ -281,13 +325,7 @@ def processMayaFiles(filePath,args):
 
 	# define initual guess condition for optimiser
 
-	initial_guess = np.zeros(2 * numPoints)
-
-	# set bounds
-
-	bounds = [(-maxDist, maxDist) for _ in range(2 * numPoints)]
-	bounds[0] = bounds[1] = bounds[-2] = bounds[-1] = (0,0)
-	bounds = tuple(bounds)
+	initial_guess = jnp.zeros(2 * (numPoints-2))
 
 	# go through each frame and calculate ligament lengths 
 
@@ -303,11 +341,11 @@ def processMayaFiles(filePath,args):
 
 		# calculate 4x4 transformation matrices for all ligaments
 
-		ligRotMats, offsets = getLigTransMat(oPos[frame,:], iPos[frame,:], jPos[frame,:])
+		ligRotMats, offsets = getLigTransMat(oPos[frame], iPos[frame], jPos[frame])
 
 		# calculate the length of each ligament 
 
-		ligRes[frame,:], *_ = ligCalc(initial_guess, ligArr, SDFs[0], SDFs[1], invTransMat[frame,:,:,:], ligRotMats, offsets, False, maxOffset, numPoints, bounds, maxIter)
+		ligRes[frame,:], *_ = ligCalc(initial_guess, ligArr, SDFs, invTransMat[frame,:,:,:], ligRotMats, offsets, False, maxOffset, numPoints-2, maxIter, maxDist)
 
 		# update progress
 		
@@ -328,8 +366,8 @@ def processMayaFiles(filePath,args):
 
 	# collect output
 
-	exportData = ligRes.tolist()
-	exportData.insert(0,ligAttributes)
+	exportData = np.hstack((exportCoords,ligRes)).tolist() # combine joint transformations with ligament data
+	exportData.insert(0, attributes + ligAttributes) # insert header
 
 	# define outpule file name and path
 
